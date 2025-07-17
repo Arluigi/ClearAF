@@ -1,4 +1,4 @@
-# Clear AF
+# ClearAF
 
 A comprehensive iOS skincare tracking app that helps users monitor their skin progress through photos, manage daily routines, and track their skincare journey.
 
