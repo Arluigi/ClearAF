@@ -105,3 +105,6 @@ iOSInjectionProject/
 
 # TestFlight uploads
 *.ipa
+
+# Development notes and internal documentation
+CLAUDE.md
