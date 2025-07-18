@@ -24,8 +24,14 @@ router.post('/', requireDermatologist, async (req, res, next) => {
 
     const prescription = await prisma.prescription.create({
       data: {
-        ...validatedData,
+        patientId: validatedData.patientId,
+        medicationName: validatedData.medicationName,
+        dosage: validatedData.dosage,
+        instructions: validatedData.instructions,
         expiryDate: validatedData.expiryDate ? new Date(validatedData.expiryDate) : undefined,
+        refillsRemaining: validatedData.refillsRemaining || 0,
+        pharmacy: validatedData.pharmacy,
+        productId: validatedData.productId,
         dermatologistId: req.user!.id
       },
       include: {

@@ -37,7 +37,13 @@ router.post('/', requirePatient, async (req, res, next) => {
         timeOfDay,
         userId: req.user!.id,
         steps: {
-          create: steps
+          create: steps.map(step => ({
+            productName: step.productName,
+            productType: step.productType,
+            instructions: step.instructions,
+            duration: step.duration,
+            orderIndex: step.orderIndex
+          }))
         }
       },
       include: {
