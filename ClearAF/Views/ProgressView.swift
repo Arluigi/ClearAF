@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import CoreData
 
-struct TimelineView: View {
+struct ProgressView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
         entity: SkinPhoto.entity(),
@@ -12,6 +12,7 @@ struct TimelineView: View {
     
     @State private var selectedViewMode = 0
     @State private var showingCamera = false
+    @State private var showingPhotoTakenMessage = false
     
     var body: some View {
         NavigationView {
@@ -22,7 +23,7 @@ struct TimelineView: View {
                 VStack(spacing: .spaceXL) {
                     // Enhanced header with photo count
                     HStack {
-                        Text("Timeline")
+                        Text("Progress")
                             .font(.displayMedium)
                             .foregroundColor(.textPrimary)
                         Spacer()
@@ -44,7 +45,7 @@ struct TimelineView: View {
                     .padding(.horizontal, .spaceXL)
                     
                     if photos.isEmpty {
-                        EnhancedEmptyTimelineView()
+                        EnhancedEmptyProgressView()
                     } else {
                         if selectedViewMode == 0 {
                             EnhancedPhotoGridView(photos: Array(photos))
@@ -60,477 +61,65 @@ struct TimelineView: View {
                 EnhancedFloatingActionButton(showingCamera: $showingCamera)
             }
             .sheet(isPresented: $showingCamera) {
-                CameraView()
-            }
-        }
-    }
-}
-
-struct EmptyTimelineView: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            
-            Image(systemName: "camera")
-                .font(.system(size: 60))
-                .foregroundColor(.gray)
-            
-            Text("No photos yet")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text("Take your first progress photo to start tracking your skin journey")
-                .font(.body)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-            
-            Spacer()
-        }
-    }
-}
-
-struct PhotoGridView: View {
-    let photos: [SkinPhoto]
-    
-    let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(photos, id: \.id) { photo in
-                    PhotoGridItem(photo: photo)
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
-}
-
-struct PhotoGridItem: View {
-    let photo: SkinPhoto
-    @State private var showingPhotoDetail = false
-    @State private var showingEditScore = false
-    @Environment(\.managedObjectContext) private var viewContext
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            if let imageData = photo.photoData,
-               let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 100)
-                    .clipped()
-                    .cornerRadius(8)
-            } else {
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(width: 100, height: 100)
-                    .cornerRadius(8)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
-                    )
-            }
-            
-            Text(formatDate(photo.captureDate))
-                .font(.caption2)
-                .foregroundColor(.gray)
-            
-            HStack {
-                Text("\(photo.skinScore)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(scoreColor(for: photo.skinScore))
-                    .foregroundColor(.white)
-                    .cornerRadius(4)
-            }
-        }
-        .onTapGesture {
-            showingPhotoDetail = true
-        }
-        .contextMenu {
-            Button(action: {
-                showingPhotoDetail = true
-            }) {
-                Label("View Details", systemImage: "eye")
-            }
-            
-            Button(action: {
-                showingEditScore = true
-            }) {
-                Label("Edit Score", systemImage: "pencil")
-            }
-            
-            Button(action: {
-                deletePhoto()
-            }) {
-                Label("Delete", systemImage: "trash")
-            }
-            .foregroundColor(.red)
-        }
-        .sheet(isPresented: $showingPhotoDetail) {
-            PhotoDetailView(photo: photo)
-        }
-        .sheet(isPresented: $showingEditScore) {
-            EditScoreView(photo: photo)
-        }
-    }
-    
-    private func deletePhoto() {
-        withAnimation {
-            viewContext.delete(photo)
-            do {
-                try viewContext.save()
-            } catch {
-                print("Error deleting photo: \(error)")
-            }
-        }
-    }
-    
-    private func formatDate(_ date: Date?) -> String {
-        guard let date = date else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM dd"
-        return formatter.string(from: date)
-    }
-    
-    private func scoreColor(for score: Int16) -> Color {
-        switch score {
-        case 0..<30:
-            return .red
-        case 30..<70:
-            return .orange
-        default:
-            return .green
-        }
-    }
-}
-
-struct PhotoListView: View {
-    let photos: [SkinPhoto]
-    
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                ForEach(photos, id: \.id) { photo in
-                    PhotoListItem(photo: photo)
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
-}
-
-struct PhotoListItem: View {
-    let photo: SkinPhoto
-    @State private var showingPhotoDetail = false
-    @State private var showingEditScore = false
-    @Environment(\.managedObjectContext) private var viewContext
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            if let imageData = photo.photoData,
-               let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 80, height: 80)
-                    .clipped()
-                    .cornerRadius(8)
-            } else {
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(width: 80, height: 80)
-                    .cornerRadius(8)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
-                    )
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(formatFullDate(photo.captureDate))
-                        .font(.headline)
-                    Spacer()
-                    Text("\(photo.skinScore)")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(scoreColor(for: photo.skinScore))
-                        .foregroundColor(.white)
-                        .cornerRadius(6)
-                }
-                
-                if let notes = photo.notes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.body)
-                        .foregroundColor(.gray)
-                        .lineLimit(2)
-                } else {
-                    Text("No notes")
-                        .font(.body)
-                        .foregroundColor(.gray)
-                        .italic()
-                }
-            }
-            
-            Spacer()
-        }
-        .padding()
-        .background(Color(UIColor.systemGray6))
-        .cornerRadius(12)
-        .onTapGesture {
-            showingPhotoDetail = true
-        }
-        .contextMenu {
-            Button(action: {
-                showingPhotoDetail = true
-            }) {
-                Label("View Details", systemImage: "eye")
-            }
-            
-            Button(action: {
-                showingEditScore = true
-            }) {
-                Label("Edit Score", systemImage: "pencil")
-            }
-            
-            Button(action: {
-                deletePhoto()
-            }) {
-                Label("Delete", systemImage: "trash")
-            }
-            .foregroundColor(.red)
-        }
-        .sheet(isPresented: $showingPhotoDetail) {
-            PhotoDetailView(photo: photo)
-        }
-        .sheet(isPresented: $showingEditScore) {
-            EditScoreView(photo: photo)
-        }
-    }
-    
-    private func deletePhoto() {
-        withAnimation {
-            viewContext.delete(photo)
-            do {
-                try viewContext.save()
-            } catch {
-                print("Error deleting photo: \(error)")
-            }
-        }
-    }
-    
-    private func formatFullDate(_ date: Date?) -> String {
-        guard let date = date else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM dd, yyyy"
-        return formatter.string(from: date)
-    }
-    
-    private func scoreColor(for score: Int16) -> Color {
-        switch score {
-        case 0..<30:
-            return .red
-        case 30..<70:
-            return .orange
-        default:
-            return .green
-        }
-    }
-}
-
-struct PhotoDetailView: View {
-    let photo: SkinPhoto
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Photo
-                    if let imageData = photo.photoData,
-                       let uiImage = UIImage(data: imageData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxHeight: 400)
-                            .cornerRadius(16)
-                    }
+                PhotoCaptureView(
+                    title: "Track Your Progress",
+                    subtitle: "Take a photo to track your skin's journey"
+                ) { imageData in
+                    saveProgressPhoto(imageData: imageData)
+                    showingCamera = false
+                    showingPhotoTakenMessage = true
+                    HapticManager.success()
                     
-                    // Score and Date
-                    VStack(spacing: 12) {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("Skin Score")
-                                    .font(.headline)
-                                Text("\(photo.skinScore)")
-                                    .font(.largeTitle)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(scoreColor(for: photo.skinScore))
-                            }
-                            
+                    // Hide message after 2 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        showingPhotoTakenMessage = false
+                    }
+                }
+            }
+            .overlay(
+                // Photo taken confirmation message
+                Group {
+                    if showingPhotoTakenMessage {
+                        VStack {
                             Spacer()
-                            
-                            VStack(alignment: .trailing) {
-                                Text("Date Taken")
-                                    .font(.headline)
-                                Text(formatFullDate(photo.captureDate))
-                                    .font(.title3)
-                                    .fontWeight(.medium)
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.green)
+                                Text("Photo captured!")
+                                    .font(.headlineSmall)
+                                    .foregroundColor(.textPrimary)
                             }
+                            .padding(.spaceLG)
+                            .background(Color.cardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
+                            .softShadow()
+                            .padding(.bottom, 100)
                         }
-                        .padding()
-                        .background(Color(UIColor.systemGray6))
-                        .cornerRadius(12)
-                        
-                        // Notes
-                        if let notes = photo.notes, !notes.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Notes")
-                                    .font(.headline)
-                                Text(notes)
-                                    .font(.body)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color(UIColor.systemGray6))
-                            .cornerRadius(12)
-                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.bouncy, value: showingPhotoTakenMessage)
                     }
-                    
-                    Spacer()
-                }
-                .padding()
-            }
-            .navigationTitle("Photo Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(trailing: 
-                Button("Done") {
-                    dismiss()
                 }
             )
         }
     }
     
-    private func formatFullDate(_ date: Date?) -> String {
-        guard let date = date else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM dd, yyyy"
-        return formatter.string(from: date)
-    }
-    
-    private func scoreColor(for score: Int16) -> Color {
-        switch score {
-        case 0..<30:
-            return .red
-        case 30..<70:
-            return .orange
-        default:
-            return .green
-        }
-    }
-}
-
-struct EditScoreView: View {
-    let photo: SkinPhoto
-    @State private var newScore: Double
-    @Environment(\.managedObjectContext) private var viewContext
-    @Environment(\.dismiss) private var dismiss
-    
-    init(photo: SkinPhoto) {
-        self.photo = photo
-        self._newScore = State(initialValue: Double(photo.skinScore))
-    }
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                // Photo preview
-                if let imageData = photo.photoData,
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .padding(.horizontal)
-                }
-                
-                VStack(spacing: 16) {
-                    Text("Edit Skin Score")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    Text("\(Int(newScore))")
-                        .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(scoreColor(for: Int16(newScore)))
-                    
-                    Slider(value: $newScore, in: 0...100, step: 1)
-                        .accentColor(.purple)
-                        .padding(.horizontal)
-                    
-                    HStack {
-                        Text("0")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        Spacer()
-                        Text("100")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.horizontal)
-                }
-                .padding()
-                .background(Color(UIColor.systemGray6))
-                .cornerRadius(16)
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-            .navigationTitle("Edit Score")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(
-                leading: Button("Cancel") { dismiss() },
-                trailing: Button("Save") { saveScore() }
-                    .fontWeight(.semibold)
-            )
-        }
-    }
-    
-    private func saveScore() {
-        photo.skinScore = Int16(newScore)
+    private func saveProgressPhoto(imageData: Data) {
+        let photo = SkinPhoto(context: viewContext)
+        photo.id = UUID()
+        photo.captureDate = Date()
+        photo.photoData = imageData
+        photo.skinScore = 50 // Default score, user can edit later
+        
         do {
             try viewContext.save()
-            dismiss()
         } catch {
-            print("Error saving score: \(error)")
-        }
-    }
-    
-    private func scoreColor(for score: Int16) -> Color {
-        switch score {
-        case 0..<30:
-            return .red
-        case 30..<70:
-            return .orange
-        default:
-            return .green
+            print("Error saving photo: \(error)")
         }
     }
 }
 
-// MARK: - Enhanced Timeline Components
+// MARK: - Enhanced Progress Components
 
 struct EnhancedSegmentedControl: View {
     @Binding var selection: Int
@@ -577,7 +166,7 @@ struct EnhancedSegmentedControl: View {
     }
 }
 
-struct EnhancedEmptyTimelineView: View {
+struct EnhancedEmptyProgressView: View {
     var body: some View {
         VStack(spacing: .spaceXXL) {
             Spacer()
@@ -616,9 +205,9 @@ struct EnhancedEmptyTimelineView: View {
                     .fontWeight(.medium)
                 
                 VStack(spacing: .spaceXS) {
-                    TimelinePhotoTip(icon: "lightbulb.fill", text: "Take photos in consistent lighting")
-                    TimelinePhotoTip(icon: "clock.fill", text: "Same time each day for accuracy")
-                    TimelinePhotoTip(icon: "face.smiling", text: "Use front camera for face tracking")
+                    ProgressPhotoTip(icon: "lightbulb.fill", text: "Take photos in consistent lighting")
+                    ProgressPhotoTip(icon: "clock.fill", text: "Same time each day for accuracy")
+                    ProgressPhotoTip(icon: "face.smiling", text: "Use front camera for face tracking")
                 }
             }
             .frame(maxWidth: .infinity)
@@ -630,8 +219,8 @@ struct EnhancedEmptyTimelineView: View {
     }
 }
 
-// Timeline Photo Tip Component
-struct TimelinePhotoTip: View {
+// Progress Photo Tip Component
+struct ProgressPhotoTip: View {
     let icon: String
     let text: String
     
@@ -704,6 +293,20 @@ struct EnhancedPhotoGridItem: View {
                                         .padding(.spaceXS)
                                 }
                                 Spacer()
+                                
+                                // Dermatologist visit marker (bottom left)
+                                if isDermatologistVisitDate(photo.captureDate) {
+                                    HStack {
+                                        Image(systemName: "stethoscope")
+                                            .font(.caption)
+                                            .foregroundColor(.white)
+                                            .padding(4)
+                                            .background(Color.primaryTeal)
+                                            .clipShape(Circle())
+                                            .padding(.spaceXS)
+                                        Spacer()
+                                    }
+                                }
                             }
                         )
                 } else {
@@ -736,6 +339,13 @@ struct EnhancedPhotoGridItem: View {
             
             Button(action: { showingEditScore = true }) {
                 Label("Edit Score", systemImage: "pencil")
+            }
+            
+            Button(action: {
+                // TODO: Share with dermatologist
+                HapticManager.light()
+            }) {
+                Label("Share with Dermatologist", systemImage: "square.and.arrow.up")
             }
             
             Button(action: deletePhoto) {
@@ -817,9 +427,25 @@ struct EnhancedPhotoListItem: View {
             // Content
             VStack(alignment: .leading, spacing: .spaceXS) {
                 HStack {
-                    Text(formatFullDate(photo.captureDate))
-                        .font(.headlineSmall)
-                        .foregroundColor(.textPrimary)
+                    VStack(alignment: .leading, spacing: .spaceXS) {
+                        Text(formatFullDate(photo.captureDate))
+                            .font(.headlineSmall)
+                            .foregroundColor(.textPrimary)
+                        
+                        // Dermatologist visit marker
+                        if isDermatologistVisitDate(photo.captureDate) {
+                            HStack(spacing: .spaceXS) {
+                                Image(systemName: "stethoscope")
+                                    .font(.caption2)
+                                    .foregroundColor(.primaryTeal)
+                                Text("Dermatologist Visit")
+                                    .font(.caption2)
+                                    .foregroundColor(.primaryTeal)
+                                    .fontWeight(.medium)
+                            }
+                        }
+                    }
+                    
                     Spacer()
                     Text("\(photo.skinScore)")
                         .font(.bodyLarge)
@@ -858,6 +484,13 @@ struct EnhancedPhotoListItem: View {
             
             Button(action: { showingEditScore = true }) {
                 Label("Edit Score", systemImage: "pencil")
+            }
+            
+            Button(action: {
+                // TODO: Share with dermatologist
+                HapticManager.light()
+            }) {
+                Label("Share with Dermatologist", systemImage: "square.and.arrow.up")
             }
             
             Button(action: deletePhoto) {
@@ -931,8 +564,169 @@ struct EnhancedFloatingActionButton: View {
     }
 }
 
+// MARK: - Photo Detail Views (keep existing PhotoDetailView and EditScoreView from original file)
+
+struct PhotoDetailView: View {
+    let photo: SkinPhoto
+    @State private var showingEditScore = false
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var viewContext
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    if let imageData = photo.photoData,
+                       let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 400)
+                            .cornerRadius(12)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("Skin Score")
+                                .font(.headline)
+                            Spacer()
+                            Button(action: {
+                                showingEditScore = true
+                            }) {
+                                HStack {
+                                    Text("\(photo.skinScore)")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                    Image(systemName: "pencil")
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(scoreColor(for: Int(photo.skinScore)))
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Date")
+                                .font(.headline)
+                            Text(formatDetailDate(photo.captureDate))
+                                .font(.body)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        if let notes = photo.notes, !notes.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Notes")
+                                    .font(.headline)
+                                Text(notes)
+                                    .font(.body)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(UIColor.systemGray6))
+                    .cornerRadius(12)
+                }
+                .padding()
+            }
+            .navigationTitle("Photo Details")
+            .navigationBarItems(trailing: Button("Done") {
+                dismiss()
+            })
+        }
+        .sheet(isPresented: $showingEditScore) {
+            EditScoreView(photo: photo)
+        }
+    }
+    
+    private func formatDetailDate(_ date: Date?) -> String {
+        guard let date = date else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+struct EditScoreView: View {
+    @ObservedObject var photo: SkinPhoto
+    @State private var tempScore: Double
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var viewContext
+    
+    init(photo: SkinPhoto) {
+        self.photo = photo
+        self._tempScore = State(initialValue: Double(photo.skinScore))
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Rate your skin condition")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                Text("\(Int(tempScore))")
+                    .font(.system(size: 48, weight: .bold))
+                    .foregroundColor(scoreColor(for: Int(tempScore)))
+                
+                Slider(value: $tempScore, in: 0...100, step: 1)
+                    .padding(.horizontal, 20)
+                
+                Text("0 = Very poor • 100 = Perfect")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Edit Score")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    dismiss()
+                },
+                trailing: Button("Save") {
+                    saveScore()
+                }
+            )
+        }
+    }
+    
+    private func saveScore() {
+        photo.skinScore = Int16(tempScore)
+        
+        do {
+            try viewContext.save()
+            dismiss()
+        } catch {
+            // Handle error appropriately
+            print("Error saving score: \(error)")
+        }
+    }
+}
+
+
+// MARK: - Helper Functions
+
+/// Checks if a given date is a dermatologist visit date
+/// For now, this is a placeholder that marks certain dates as visit dates
+/// In a real implementation, this would check against Core Data Appointment entities
+private func isDermatologistVisitDate(_ date: Date?) -> Bool {
+    guard let date = date else { return false }
+    
+    // Placeholder logic: Mark every 30th day as a visit date for demo purposes
+    // TODO: Replace with actual Core Data query for Appointment entities
+    let calendar = Calendar.current
+    let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 0
+    return dayOfYear % 30 == 0
+}
+
 #Preview {
-    TimelineView()
+    ProgressView()
         .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
         .preferredColorScheme(.dark)
 }

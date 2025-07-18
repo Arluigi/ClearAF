@@ -30,10 +30,10 @@ struct ContentView: View {
                     }
                     .tag(0)
                 
-                TimelineView()
+                ProgressView()
                     .tabItem {
-                        Image(systemName: "clock.fill")
-                        Text("Timeline")
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                        Text("Progress")
                     }
                     .tag(1)
                 
@@ -44,12 +44,19 @@ struct ContentView: View {
                     }
                     .tag(2)
                 
-                ProfileView()
+                CareView()
                     .tabItem {
-                        Image(systemName: "person.fill")
-                        Text("Profile")
+                        Image(systemName: "stethoscope")
+                        Text("Care")
                     }
                     .tag(3)
+                
+                ShopView()
+                    .tabItem {
+                        Image(systemName: "bag.fill")
+                        Text("Shop")
+                    }
+                    .tag(4)
             }
             .accentColor(.primaryPurple)
         }

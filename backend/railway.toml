@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "always"
+
+[[services]]
+name = "clearaf-api"
+
+[services.variables]
+NODE_ENV = "production"

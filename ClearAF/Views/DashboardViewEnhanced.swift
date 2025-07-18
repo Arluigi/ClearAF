@@ -19,6 +19,8 @@ struct DashboardViewEnhanced: View {
         animation: .default)
     private var users: FetchedResults<User>
     
+    @State private var showingProfile = false
+    
     var body: some View {
         NavigationView {
             ScrollView {
@@ -40,23 +42,26 @@ struct DashboardViewEnhanced: View {
                         Spacer()
                         Button(action: {
                             HapticManager.light()
-                            // TODO: Show notifications sheet
+                            showingProfile = true
                         }) {
-                            Image(systemName: "bell")
-                                .font(.system(size: .iconSize))
-                                .foregroundColor(.textSecondary)
+                            Image(systemName: "person.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.primaryPurple)
                                 .frame(width: .touchTarget, height: .touchTarget)
-                                .contentShape(Rectangle())
+                                .contentShape(Circle())
                         }
-                        .accessibleButton(label: "Notifications", hint: "View your notifications and reminders")
+                        .accessibleButton(label: "Profile", hint: "Open your profile settings")
                     }
                     .padding(.horizontal, .spaceXL)
                     
                     // Daily Photo & Skin Score Card
                     DailyPhotoCardEnhanced(selectedTab: $selectedTab)
                     
-                    // Daily Tasks
-                    DailyTasksCardEnhanced(selectedTab: $selectedTab)
+                    // Prescription Refill Reminders
+                    PrescriptionRemindersCard()
+                    
+                    // Your Dermatologist Section
+                    YourDermatologistCard(selectedTab: $selectedTab)
                     
                     Spacer(minLength: .spaceHuge)
                 }
@@ -64,6 +69,10 @@ struct DashboardViewEnhanced: View {
             }
             .background(Color.backgroundSecondary.ignoresSafeArea())
             .navigationBarBackButtonHidden(true)
+            .sheet(isPresented: $showingProfile) {
+                ProfileView()
+                    .environment(\.managedObjectContext, viewContext)
+            }
         }
     }
     
@@ -99,6 +108,7 @@ struct DailyPhotoCardEnhanced: View {
     private var photos: FetchedResults<SkinPhoto>
     
     @State private var showingCamera = false
+    @State private var showingPhotoTakenMessage = false
     @State private var animatedScore: Double = 0
     
     var body: some View {
@@ -146,8 +156,46 @@ struct DailyPhotoCardEnhanced: View {
         .wellnessCard(style: .elevated)
         .padding(.horizontal, .spaceXL)
         .sheet(isPresented: $showingCamera) {
-            CameraView()
+            PhotoCaptureView(
+                title: "Track Your Progress",
+                subtitle: "Take a photo to track your skin's journey"
+            ) { imageData in
+                saveDailyPhoto(imageData: imageData)
+                showingCamera = false
+                showingPhotoTakenMessage = true
+                HapticManager.success()
+                
+                // Hide message after 2 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    showingPhotoTakenMessage = false
+                }
+            }
         }
+        .overlay(
+            // Photo taken confirmation message
+            Group {
+                if showingPhotoTakenMessage {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.green)
+                            Text("Photo captured!")
+                                .font(.headlineSmall)
+                                .foregroundColor(.textPrimary)
+                        }
+                        .padding(.spaceLG)
+                        .background(Color.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
+                        .softShadow()
+                        .padding(.bottom, 100)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.bouncy, value: showingPhotoTakenMessage)
+                }
+            }
+        )
     }
     
     private func getTodayPhoto() -> SkinPhoto? {
@@ -157,6 +205,20 @@ struct DailyPhotoCardEnhanced: View {
         return photos.first { photo in
             guard let captureDate = photo.captureDate else { return false }
             return captureDate >= today && captureDate < tomorrow
+        }
+    }
+    
+    private func saveDailyPhoto(imageData: Data) {
+        let photo = SkinPhoto(context: viewContext)
+        photo.id = UUID()
+        photo.captureDate = Date()
+        photo.photoData = imageData
+        photo.skinScore = 50 // Default score, user can edit later
+        
+        do {
+            try viewContext.save()
+        } catch {
+            print("Error saving photo: \(error)")
         }
     }
 }
@@ -317,9 +379,6 @@ struct EnhancedTaskRow: View {
         .padding(.horizontal, .spaceMD)
         .background(Color.backgroundSecondary.opacity(0.2))
         .cornerRadius(.radiusMedium)
-        .sheet(isPresented: $showingCamera) {
-            CameraView()
-        }
     }
 }
 
@@ -539,6 +598,124 @@ struct PhotoDisplaySection: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMM d"
         return formatter.string(from: date)
+    }
+}
+
+// Your Dermatologist Card Component
+struct YourDermatologistCard: View {
+    @Binding var selectedTab: Int
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: .spaceLG) {
+            Text("Your Dermatologist")
+                .font(.headlineLarge)
+                .foregroundColor(.textPrimary)
+            
+            HStack(spacing: .spaceLG) {
+                // Dermatologist Photo Placeholder
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.primaryPurple)
+                    .background(Color.skinPeach)
+                    .clipShape(Circle())
+                
+                VStack(alignment: .leading, spacing: .spaceXS) {
+                    Text("Dr. Amit Om")
+                        .font(.headlineMedium)
+                        .foregroundColor(.textPrimary)
+                    
+                    Text("Dermatologist • 8 years exp.")
+                        .font(.bodySmall)
+                        .foregroundColor(.textSecondary)
+                    
+                    HStack(spacing: .spaceMD) {
+                        Button(action: {
+                            HapticManager.light()
+                            selectedTab = 3 // Navigate to Care tab
+                        }) {
+                            HStack(spacing: .spaceXS) {
+                                Image(systemName: "message.fill")
+                                    .font(.caption)
+                                Text("Message")
+                                    .font(.captionLarge)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, .spaceMD)
+                            .padding(.vertical, .spaceXS)
+                            .background(Color.primaryPurple)
+                            .clipShape(RoundedRectangle(cornerRadius: .radiusSmall))
+                        }
+                        
+                        Button(action: {
+                            HapticManager.light()
+                            selectedTab = 3 // Navigate to Care tab
+                        }) {
+                            HStack(spacing: .spaceXS) {
+                                Image(systemName: "calendar.badge.plus")
+                                    .font(.caption)
+                                Text("Book")
+                                    .font(.captionLarge)
+                            }
+                            .foregroundColor(.primaryPurple)
+                            .padding(.horizontal, .spaceMD)
+                            .padding(.vertical, .spaceXS)
+                            .background(Color.buttonSecondary)
+                            .clipShape(RoundedRectangle(cornerRadius: .radiusSmall))
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+        }
+        .wellnessCard()
+        .padding(.horizontal, .spaceXL)
+    }
+}
+
+// Prescription Refill Reminders Card Component
+struct PrescriptionRemindersCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: .spaceLG) {
+            HStack {
+                Text("Prescription Refills")
+                    .font(.headlineLarge)
+                    .foregroundColor(.textPrimary)
+                
+                Spacer()
+                
+                Button(action: {
+                    HapticManager.light()
+                    // TODO: Navigate to Shop tab
+                }) {
+                    Text("View All")
+                        .font(.captionLarge)
+                        .foregroundColor(.primaryPurple)
+                }
+            }
+            
+            VStack(spacing: .spaceMD) {
+                HStack {
+                    Image(systemName: "pills.circle")
+                        .font(.title2)
+                        .foregroundColor(.primaryTeal)
+                    
+                    VStack(alignment: .leading, spacing: .spaceXS) {
+                        Text("No prescriptions yet")
+                            .font(.headlineMedium)
+                            .foregroundColor(.textPrimary)
+                        
+                        Text("Prescribed medications will appear here")
+                            .font(.bodySmall)
+                            .foregroundColor(.textSecondary)
+                    }
+                    
+                    Spacer()
+                }
+            }
+        }
+        .wellnessCard()
+        .padding(.horizontal, .spaceXL)
     }
 }
 

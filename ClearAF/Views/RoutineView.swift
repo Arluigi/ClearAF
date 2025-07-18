@@ -239,7 +239,7 @@ struct RoutineCard: View {
                         .foregroundColor(.gray)
                 }
                 
-                ProgressView(value: Double(completedSteps), total: Double(steps.count))
+                SwiftUI.ProgressView(value: Double(completedSteps), total: Double(steps.count))
                     .progressViewStyle(LinearProgressViewStyle(tint: .purple))
             }
             
@@ -1212,7 +1212,7 @@ struct RoutineSessionView: View {
                         }
                         
                         // Progress bar
-                        ProgressView(value: progress)
+                        SwiftUI.ProgressView(value: progress)
                             .progressViewStyle(LinearProgressViewStyle(tint: .primaryPurple))
                             .scaleEffect(y: 2)
                     }

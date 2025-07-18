@@ -24,6 +24,7 @@
         <attribute name="notes" optional="YES" attributeType="String"/>
         <attribute name="photoData" optional="YES" attributeType="Binary"/>
         <attribute name="skinScore" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="relatedAppointment" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Appointment" inverseName="relatedPhotos" inverseEntity="Appointment"/>
     </entity>
     <entity name="User" representedClassName="User" syncable="YES" codeGenerationType="class">
         <attribute name="currentSkinScore" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
@@ -33,5 +34,92 @@
         <attribute name="onboardingCompleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="skinType" optional="YES" attributeType="String"/>
         <attribute name="streakCount" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="allergies" optional="YES" attributeType="String"/>
+        <attribute name="currentMedications" optional="YES" attributeType="String"/>
+        <attribute name="skinConcerns" optional="YES" attributeType="String"/>
+        <relationship name="assignedDermatologist" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Dermatologist" inverseName="patients" inverseEntity="Dermatologist"/>
+        <relationship name="appointments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Appointment" inverseName="patient" inverseEntity="Appointment"/>
+        <relationship name="prescriptions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Prescription" inverseName="patient" inverseEntity="Prescription"/>
+        <relationship name="messages" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Message" inverseName="sender" inverseEntity="Message"/>
+        <relationship name="subscriptions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Subscription" inverseName="user" inverseEntity="Subscription"/>
+    </entity>
+    <entity name="Dermatologist" representedClassName="Dermatologist" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="specialization" optional="YES" attributeType="String"/>
+        <attribute name="profileImageData" optional="YES" attributeType="Binary"/>
+        <attribute name="email" optional="YES" attributeType="String"/>
+        <attribute name="phone" optional="YES" attributeType="String"/>
+        <attribute name="isAvailable" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <relationship name="patients" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="User" inverseName="assignedDermatologist" inverseEntity="User"/>
+        <relationship name="appointments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Appointment" inverseName="dermatologist" inverseEntity="Appointment"/>
+        <relationship name="prescriptions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Prescription" inverseName="prescribedBy" inverseEntity="Prescription"/>
+    </entity>
+    <entity name="Appointment" representedClassName="Appointment" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="scheduledDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="duration" optional="YES" attributeType="Integer 16" defaultValueString="30" usesScalarValueType="YES"/>
+        <attribute name="type" optional="YES" attributeType="String"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="concern" optional="YES" attributeType="String"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="visitNotes" optional="YES" attributeType="String"/>
+        <attribute name="videoCallURL" optional="YES" attributeType="String"/>
+        <attribute name="createdDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="patient" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="appointments" inverseEntity="User"/>
+        <relationship name="dermatologist" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Dermatologist" inverseName="appointments" inverseEntity="Dermatologist"/>
+        <relationship name="relatedPhotos" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="SkinPhoto" inverseName="relatedAppointment" inverseEntity="SkinPhoto"/>
+    </entity>
+    <entity name="Prescription" representedClassName="Prescription" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="medicationName" optional="YES" attributeType="String"/>
+        <attribute name="dosage" optional="YES" attributeType="String"/>
+        <attribute name="instructions" optional="YES" attributeType="String"/>
+        <attribute name="prescribedDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="expiryDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="refillsRemaining" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="isActive" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="pharmacy" optional="YES" attributeType="String"/>
+        <relationship name="patient" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="prescriptions" inverseEntity="User"/>
+        <relationship name="prescribedBy" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Dermatologist" inverseName="prescriptions" inverseEntity="Dermatologist"/>
+        <relationship name="relatedProduct" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Product" inverseName="prescriptions" inverseEntity="Product"/>
+    </entity>
+    <entity name="Message" representedClassName="Message" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="content" optional="YES" attributeType="String"/>
+        <attribute name="sentDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="isRead" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="messageType" optional="YES" attributeType="String"/>
+        <attribute name="attachmentData" optional="YES" attributeType="Binary"/>
+        <attribute name="attachmentType" optional="YES" attributeType="String"/>
+        <relationship name="sender" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="messages" inverseEntity="User"/>
+        <relationship name="recipient" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Dermatologist"/>
+    </entity>
+    <entity name="Product" representedClassName="Product" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="brand" optional="YES" attributeType="String"/>
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="price" optional="YES" attributeType="Decimal" defaultValueString="0.0"/>
+        <attribute name="productDescription" optional="YES" attributeType="String"/>
+        <attribute name="ingredients" optional="YES" attributeType="String"/>
+        <attribute name="imageData" optional="YES" attributeType="Binary"/>
+        <attribute name="isAvailable" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="isPrescriptionRequired" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <relationship name="subscriptions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Subscription" inverseName="product" inverseEntity="Subscription"/>
+        <relationship name="prescriptions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Prescription" inverseName="relatedProduct" inverseEntity="Prescription"/>
+    </entity>
+    <entity name="Subscription" representedClassName="Subscription" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="nextDeliveryDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="frequency" optional="YES" attributeType="String"/>
+        <attribute name="quantity" optional="YES" attributeType="Integer 16" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="totalPrice" optional="YES" attributeType="Decimal" defaultValueString="0.0"/>
+        <attribute name="isActive" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="subscriptions" inverseEntity="User"/>
+        <relationship name="product" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Product" inverseName="subscriptions" inverseEntity="Product"/>
     </entity>
 </model>
