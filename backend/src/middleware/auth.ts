@@ -75,20 +75,22 @@ export const authenticateToken = async (
       email: decoded.email
     };
 
-    next();
+    return next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({ 
+      res.status(401).json({ 
         error: 'Invalid token',
         code: 'INVALID_TOKEN'
       });
+      return;
     }
     
     console.error('Auth middleware error:', error);
-    return res.status(500).json({ 
+    res.status(500).json({ 
       error: 'Authentication error',
       code: 'AUTH_ERROR'
     });
+    return;
   }
 };
 
@@ -104,7 +106,7 @@ export const requireDermatologist = (
       code: 'INSUFFICIENT_PERMISSIONS'
     });
   }
-  next();
+  return next();
 };
 
 // Middleware to check if user is a patient
@@ -119,5 +121,5 @@ export const requirePatient = (
       code: 'INSUFFICIENT_PERMISSIONS'
     });
   }
-  next();
+  return next();
 };

@@ -49,11 +49,6 @@ router.get('/profile', async (req, res, next) => {
               profileImageUrl: true,
               isAvailable: true
             }
-          },
-          _count: {
-            appointments: true,
-            skinPhotos: true,
-            messages: true
           }
         }
       });
@@ -69,11 +64,7 @@ router.get('/profile', async (req, res, next) => {
           profileImageUrl: true,
           phone: true,
           isAvailable: true,
-          createdAt: true,
-          _count: {
-            patients: true,
-            appointments: true
-          }
+          createdAt: true
         }
       });
     }

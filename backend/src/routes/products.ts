@@ -47,10 +47,7 @@ router.get('/', async (req, res, next) => {
         price: true,
         productDescription: true,
         imageUrl: true,
-        isPrescriptionRequired: true,
-        _count: {
-          subscriptions: true
-        }
+        isPrescriptionRequired: true
       },
       orderBy: [
         { category: 'asc' },
@@ -94,13 +91,7 @@ router.get('/:id', async (req, res, next) => {
     const { id } = req.params;
 
     const product = await prisma.product.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          subscriptions: true,
-          prescriptions: true
-        }
-      }
+      where: { id }
     });
 
     if (!product || !product.isAvailable) {
