@@ -10,58 +10,63 @@ import CoreData
 
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @StateObject private var apiService = APIService.shared
     @State private var selectedTab = 0
+    @State private var showingAuthentication = false
     @State private var showingOnboarding = false
-    @State private var hasCheckedOnboarding = false
-    
-    @FetchRequest(
-        entity: User.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \User.joinDate, ascending: false)],
-        animation: .default)
-    private var users: FetchedResults<User>
+    @State private var hasCheckedAuth = false
     
     var body: some View {
         ZStack {
-            TabView(selection: $selectedTab) {
-                DashboardViewEnhanced(selectedTab: $selectedTab)
-                    .tabItem {
-                        Image(systemName: "house.fill")
-                        Text("Home")
-                    }
-                    .tag(0)
-                
-                ProgressView()
-                    .tabItem {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                        Text("Progress")
-                    }
-                    .tag(1)
-                
-                RoutineView()
-                    .tabItem {
-                        Image(systemName: "list.bullet")
-                        Text("Routines")
-                    }
-                    .tag(2)
-                
-                CareView()
-                    .tabItem {
-                        Image(systemName: "stethoscope")
-                        Text("Care")
-                    }
-                    .tag(3)
-                
-                ShopView()
-                    .tabItem {
-                        Image(systemName: "bag.fill")
-                        Text("Shop")
-                    }
-                    .tag(4)
+            if apiService.isLoggedIn {
+                // Main App Interface
+                TabView(selection: $selectedTab) {
+                    DashboardViewEnhanced(selectedTab: $selectedTab)
+                        .tabItem {
+                            Image(systemName: "house.fill")
+                            Text("Home")
+                        }
+                        .tag(0)
+                    
+                    ProgressView()
+                        .tabItem {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                            Text("Progress")
+                        }
+                        .tag(1)
+                    
+                    RoutineView()
+                        .tabItem {
+                            Image(systemName: "list.bullet")
+                            Text("Routines")
+                        }
+                        .tag(2)
+                    
+                    CareView()
+                        .tabItem {
+                            Image(systemName: "stethoscope")
+                            Text("Care")
+                        }
+                        .tag(3)
+                    
+                    ShopView()
+                        .tabItem {
+                            Image(systemName: "bag.fill")
+                            Text("Shop")
+                        }
+                        .tag(4)
+                }
+                .accentColor(.primaryPurple)
             }
-            .accentColor(.primaryPurple)
         }
         .onAppear {
-            checkOnboardingStatus()
+            checkAuthenticationStatus()
+        }
+        .fullScreenCover(isPresented: $showingAuthentication) {
+            AuthenticationView {
+                showingAuthentication = false
+                checkOnboardingStatus()
+            }
         }
         .fullScreenCover(isPresented: $showingOnboarding) {
             OnboardingView {
@@ -71,14 +76,20 @@ struct ContentView: View {
         }
     }
     
+    private func checkAuthenticationStatus() {
+        guard !hasCheckedAuth else { return }
+        hasCheckedAuth = true
+        
+        if !apiService.isLoggedIn {
+            showingAuthentication = true
+        } else {
+            checkOnboardingStatus()
+        }
+    }
+    
     private func checkOnboardingStatus() {
-        guard !hasCheckedOnboarding else { return }
-        hasCheckedOnboarding = true
-        
-        // Check if any user exists with completed onboarding
-        let hasCompletedUser = users.contains { $0.onboardingCompleted }
-        
-        if !hasCompletedUser {
+        // Check if current API user has completed onboarding
+        if let user = apiService.currentUser, !user.onboardingCompleted {
             showingOnboarding = true
         }
     }

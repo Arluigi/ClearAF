@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import AVFoundation
 import CoreData
+import Combine
 
 struct OnboardingView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -149,26 +150,30 @@ struct OnboardingView: View {
             return
         }
         
-        // Create user profile
-        let newUser = User(context: viewContext)
-        newUser.id = UUID()
-        newUser.name = trimmedName
-        newUser.skinType = selectedSkinType
-        newUser.currentSkinScore = 50 // Starting baseline score
-        newUser.streakCount = 0
-        newUser.joinDate = Date()
-        newUser.onboardingCompleted = true
-        
-        do {
-            try viewContext.save()
-            HapticManager.success()
-            onboardingComplete()
-        } catch {
-            print("Error completing onboarding: \(error)")
-            HapticManager.error()
-            // Could add user-facing error handling here
-        }
+        // Update user profile via API
+        APIService.shared.updateProfile(
+            skinType: selectedSkinType,
+            allergies: nil,
+            currentMedications: nil,
+            skinConcerns: nil
+        )
+        .sink(
+            receiveCompletion: { completion in
+                if case .failure(let error) = completion {
+                    print("Error updating profile: \(error)")
+                    HapticManager.error()
+                }
+            },
+            receiveValue: { updatedUser in
+                print("Profile updated successfully")
+                HapticManager.success()
+                onboardingComplete()
+            }
+        )
+        .store(in: &cancellables)
     }
+    
+    @State private var cancellables = Set<AnyCancellable>()
     
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)

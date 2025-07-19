@@ -55,6 +55,7 @@
         <relationship name="patients" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="User" inverseName="assignedDermatologist" inverseEntity="User"/>
         <relationship name="appointments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Appointment" inverseName="dermatologist" inverseEntity="Appointment"/>
         <relationship name="prescriptions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Prescription" inverseName="prescribedBy" inverseEntity="Prescription"/>
+        <relationship name="receivedMessages" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Message" inverseName="recipient" inverseEntity="Message"/>
     </entity>
     <entity name="Appointment" representedClassName="Appointment" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
@@ -94,7 +95,7 @@
         <attribute name="attachmentData" optional="YES" attributeType="Binary"/>
         <attribute name="attachmentType" optional="YES" attributeType="String"/>
         <relationship name="sender" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="messages" inverseEntity="User"/>
-        <relationship name="recipient" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Dermatologist"/>
+        <relationship name="recipient" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Dermatologist" inverseName="receivedMessages" inverseEntity="Dermatologist"/>
     </entity>
     <entity name="Product" representedClassName="Product" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
