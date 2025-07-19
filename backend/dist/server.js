@@ -17,6 +17,7 @@ const prescriptions_1 = __importDefault(require("./routes/prescriptions"));
 const products_1 = __importDefault(require("./routes/products"));
 const photos_1 = __importDefault(require("./routes/photos"));
 const routines_1 = __importDefault(require("./routes/routines"));
+const dashboard_1 = __importDefault(require("./routes/dashboard"));
 const auth_2 = require("./middleware/auth");
 const errorHandler_1 = require("./middleware/errorHandler");
 dotenv_1.default.config();
@@ -46,6 +47,7 @@ app.use('/api/prescriptions', auth_2.authenticateToken, prescriptions_1.default)
 app.use('/api/products', auth_2.authenticateToken, products_1.default);
 app.use('/api/photos', auth_2.authenticateToken, photos_1.default);
 app.use('/api/routines', auth_2.authenticateToken, routines_1.default);
+app.use('/api/dashboard', auth_2.authenticateToken, dashboard_1.default);
 wss.on('connection', (ws, request) => {
     console.log('New WebSocket connection established');
     ws.on('message', (message) => {

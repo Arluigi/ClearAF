@@ -14,6 +14,7 @@ import prescriptionRoutes from './routes/prescriptions';
 import productRoutes from './routes/products';
 import photoRoutes from './routes/photos';
 import routineRoutes from './routes/routines';
+import dashboardRoutes from './routes/dashboard';
 
 // Import middleware
 import { authenticateToken } from './middleware/auth';
@@ -60,6 +61,7 @@ app.use('/api/prescriptions', authenticateToken, prescriptionRoutes);
 app.use('/api/products', authenticateToken, productRoutes);
 app.use('/api/photos', authenticateToken, photoRoutes);
 app.use('/api/routines', authenticateToken, routineRoutes);
+app.use('/api/dashboard', authenticateToken, dashboardRoutes);
 
 // WebSocket connection handling
 wss.on('connection', (ws, request) => {
