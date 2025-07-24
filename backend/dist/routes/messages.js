@@ -209,8 +209,8 @@ router.post('/reply', auth_1.requireDermatologist, async (req, res, next) => {
         const message = await prisma.message.create({
             data: {
                 content,
-                senderId: patientId,
-                recipientId: req.user.id,
+                senderId: req.user.id,
+                recipientId: patientId,
                 messageType,
                 attachmentUrl,
                 attachmentType: messageType === 'image' ? 'image' : null
@@ -232,10 +232,7 @@ router.post('/reply', auth_1.requireDermatologist, async (req, res, next) => {
                 }
             }
         });
-        res.status(201).json({
-            message: 'Reply sent successfully',
-            data: message
-        });
+        res.status(201).json(message);
     }
     catch (error) {
         next(error);
