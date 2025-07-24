@@ -350,4 +350,126 @@ router.post('/assign-dermatologist', async (req, res, next) => {
   }
 });
 
+// Get all patients (dermatologists only) - for patient management
+router.get('/', async (req, res, next) => {
+  try {
+    if (req.user!.userType !== 'dermatologist') {
+      return res.status(403).json({
+        error: 'Access denied. Dermatologists only.',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      });
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const search = req.query.search as string;
+    const userType = req.query.userType as string;
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: any = {};
+    
+    // Only get patients assigned to this dermatologist
+    where.dermatologistId = req.user!.id;
+
+    // Add search functionality
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    // Get patients with pagination
+    const [patients, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          skinType: true,
+          currentSkinScore: true,
+          streakCount: true,
+          onboardingCompleted: true,
+          allergies: true,
+          currentMedications: true,
+          skinConcerns: true,
+          createdAt: true,
+          updatedAt: true,
+          dermatologistId: true
+        }
+      }),
+      prisma.user.count({ where })
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      data: patients,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get specific patient by ID (dermatologists only)
+router.get('/:id', async (req, res, next) => {
+  try {
+    if (req.user!.userType !== 'dermatologist') {
+      return res.status(403).json({
+        error: 'Access denied. Dermatologists only.',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      });
+    }
+
+    const patientId = req.params.id;
+
+    const patient = await prisma.user.findFirst({
+      where: {
+        id: patientId,
+        dermatologistId: req.user!.id // Ensure dermatologist can only access their patients
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        skinType: true,
+        currentSkinScore: true,
+        streakCount: true,
+        onboardingCompleted: true,
+        allergies: true,
+        currentMedications: true,
+        skinConcerns: true,
+        createdAt: true,
+        updatedAt: true,
+        dermatologistId: true
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        error: 'Patient not found or not assigned to you',
+        code: 'PATIENT_NOT_FOUND'
+      });
+    }
+
+    res.json(patient);
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
