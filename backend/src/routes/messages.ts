@@ -38,26 +38,12 @@ router.post('/send', requirePatient, async (req, res, next) => {
       data: {
         content,
         senderId: req.user!.id,
+        senderType: 'patient',
         recipientId,
+        recipientType: 'dermatologist',
         messageType,
         attachmentUrl,
         attachmentType: messageType === 'image' ? 'image' : null
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        },
-        recipient: {
-          select: {
-            id: true,
-            name: true,
-            title: true
-          }
-        }
       }
     });
 
@@ -85,25 +71,17 @@ router.get('/conversation/:dermatologistId', requirePatient, async (req, res, ne
         OR: [
           {
             senderId: req.user!.id,
-            recipientId: dermatologistId
+            senderType: 'patient',
+            recipientId: dermatologistId,
+            recipientType: 'dermatologist'
+          },
+          {
+            senderId: dermatologistId,
+            senderType: 'dermatologist',
+            recipientId: req.user!.id,
+            recipientType: 'patient'
           }
         ]
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        },
-        recipient: {
-          select: {
-            id: true,
-            name: true,
-            title: true
-          }
-        }
       },
       orderBy: {
         sentDate: 'asc'
@@ -116,7 +94,9 @@ router.get('/conversation/:dermatologistId', requirePatient, async (req, res, ne
     await prisma.message.updateMany({
       where: {
         senderId: dermatologistId,
+        senderType: 'dermatologist',
         recipientId: req.user!.id,
+        recipientType: 'patient',
         isRead: false
       },
       data: {
@@ -141,39 +121,73 @@ router.get('/conversation/:dermatologistId', requirePatient, async (req, res, ne
 // Get all conversations for dermatologist
 router.get('/conversations', requireDermatologist, async (req, res, next) => {
   try {
-    // Get all patients who have sent messages to this dermatologist
-    const conversations = await prisma.message.groupBy({
-      by: ['senderId'],
+    // Get all unique patient IDs who have communicated with this dermatologist
+    const messageData = await prisma.message.findMany({
       where: {
-        recipientId: req.user!.id
+        OR: [
+          {
+            recipientId: req.user!.id,
+            recipientType: 'dermatologist'
+          },
+          {
+            senderId: req.user!.id,
+            senderType: 'dermatologist'
+          }
+        ]
       },
-      _max: {
+      select: {
+        senderId: true,
+        senderType: true,
+        recipientId: true,
+        recipientType: true,
         sentDate: true
       },
       orderBy: {
-        _max: {
-          sentDate: 'desc'
-        }
+        sentDate: 'desc'
+      }
+    });
+
+    // Extract unique patient IDs
+    const patientIds = new Set<string>();
+    messageData.forEach(msg => {
+      if (msg.senderType === 'patient') {
+        patientIds.add(msg.senderId);
+      }
+      if (msg.recipientType === 'patient') {
+        patientIds.add(msg.recipientId);
       }
     });
 
     // Get patient details and last message for each conversation
     const conversationsWithDetails = await Promise.all(
-      conversations.map(async (conv) => {
+      Array.from(patientIds).map(async (patientId) => {
         const patient = await prisma.user.findUnique({
-          where: { id: conv.senderId },
+          where: { id: patientId },
           select: {
             id: true,
             name: true,
             email: true,
-            currentSkinScore: true
+            currentSkinScore: true,
+            skinType: true
           }
         });
 
         const lastMessage = await prisma.message.findFirst({
           where: {
-            senderId: conv.senderId,
-            recipientId: req.user!.id
+            OR: [
+              {
+                senderId: patientId,
+                senderType: 'patient',
+                recipientId: req.user!.id,
+                recipientType: 'dermatologist'
+              },
+              {
+                senderId: req.user!.id,
+                senderType: 'dermatologist',
+                recipientId: patientId,
+                recipientType: 'patient'
+              }
+            ]
           },
           orderBy: {
             sentDate: 'desc'
@@ -182,14 +196,18 @@ router.get('/conversations', requireDermatologist, async (req, res, next) => {
             content: true,
             sentDate: true,
             isRead: true,
-            messageType: true
+            messageType: true,
+            senderId: true,
+            senderType: true
           }
         });
 
         const unreadCount = await prisma.message.count({
           where: {
-            senderId: conv.senderId,
+            senderId: patientId,
+            senderType: 'patient',
             recipientId: req.user!.id,
+            recipientType: 'dermatologist',
             isRead: false
           }
         });
@@ -202,8 +220,18 @@ router.get('/conversations', requireDermatologist, async (req, res, next) => {
       })
     );
 
+    // Filter out conversations where patient was not found
+    const validConversations = conversationsWithDetails.filter(conv => conv.patient);
+
+    // Sort by last message date
+    validConversations.sort((a, b) => {
+      if (!a.lastMessage) return 1;
+      if (!b.lastMessage) return -1;
+      return new Date(b.lastMessage.sentDate).getTime() - new Date(a.lastMessage.sentDate).getTime();
+    });
+
     res.json({
-      conversations: conversationsWithDetails
+      conversations: validConversations
     });
 
   } catch (error) {
@@ -242,26 +270,12 @@ router.post('/reply', requireDermatologist, async (req, res, next) => {
       data: {
         content,
         senderId: req.user!.id, // Dermatologist is sending the reply
+        senderType: 'dermatologist',
         recipientId: patientId, // Patient is receiving the reply
+        recipientType: 'patient',
         messageType,
         attachmentUrl,
         attachmentType: messageType === 'image' ? 'image' : null
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        },
-        recipient: {
-          select: {
-            id: true,
-            name: true,
-            title: true
-          }
-        }
       }
     });
 
@@ -273,7 +287,7 @@ router.post('/reply', requireDermatologist, async (req, res, next) => {
 });
 
 // Get messages (for dermatologist to see conversation with patient)
-router.get('/', async (req, res, next) => {
+router.get('/', requireDermatologist, async (req, res, next) => {
   try {
     const user = req.user;
     const page = parseInt(req.query.page as string) || 1;
@@ -297,29 +311,17 @@ router.get('/', async (req, res, next) => {
           OR: [
             {
               senderId: user!.id,
-              recipientId: receiverId
+              senderType: 'dermatologist',
+              recipientId: receiverId,
+              recipientType: 'patient'
             },
             {
-              senderId: receiverId, 
-              recipientId: user!.id
+              senderId: receiverId,
+              senderType: 'patient', 
+              recipientId: user!.id,
+              recipientType: 'dermatologist'
             }
           ]
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              name: true,
-              email: true
-            }
-          },
-          recipient: {
-            select: {
-              id: true,
-              name: true,
-              title: true
-            }
-          }
         },
         orderBy: {
           sentDate: 'asc'
@@ -332,7 +334,9 @@ router.get('/', async (req, res, next) => {
       await prisma.message.updateMany({
         where: {
           senderId: receiverId,
+          senderType: 'patient',
           recipientId: user!.id,
+          recipientType: 'dermatologist',
           isRead: false
         },
         data: {
@@ -345,11 +349,15 @@ router.get('/', async (req, res, next) => {
           OR: [
             {
               senderId: user!.id,
-              recipientId: receiverId
+              senderType: 'dermatologist',
+              recipientId: receiverId,
+              recipientType: 'patient'
             },
             {
               senderId: receiverId,
-              recipientId: user!.id
+              senderType: 'patient',
+              recipientId: user!.id,
+              recipientType: 'dermatologist'
             }
           ]
         }

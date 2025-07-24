@@ -25,7 +25,6 @@ model User {
   updatedAt             DateTime       @updatedAt
   dermatologistId       String?
   appointments          Appointment[]
-  messages              Message[]
   prescriptions         Prescription[]
   skinPhotos            SkinPhoto[]
   subscriptions         Subscription[]
@@ -47,7 +46,6 @@ model Dermatologist {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   appointments    Appointment[]
-  sentMessages    Message[]      @relation("DermatologistMessages")
   prescriptions   Prescription[]
   patients        User[]
 
@@ -99,19 +97,19 @@ model Prescription {
 }
 
 model Message {
-  id             String        @id @default(uuid())
+  id             String    @id @default(uuid())
   content        String
-  sentDate       DateTime      @default(now())
-  isRead         Boolean       @default(false)
-  messageType    String        @default("text")
+  sentDate       DateTime  @default(now())
+  isRead         Boolean   @default(false)
+  messageType    String    @default("text")
   attachmentUrl  String?
   attachmentType String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   senderId       String
+  senderType     String    // 'patient' or 'dermatologist'
   recipientId    String
-  recipient      Dermatologist @relation("DermatologistMessages", fields: [recipientId], references: [id])
-  sender         User          @relation(fields: [senderId], references: [id])
+  recipientType  String    // 'patient' or 'dermatologist'
 
   @@map("messages")
 }

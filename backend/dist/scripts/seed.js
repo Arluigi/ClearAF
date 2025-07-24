@@ -100,11 +100,24 @@ async function main() {
     console.log('✅ Created sample appointment');
     await prisma.message.create({
         data: {
-            content: 'Welcome to Clear AF! I\'m Dr. Amit Om, your assigned dermatologist. Feel free to reach out with any questions about your skincare routine.',
+            content: 'Hi Dr. Om, I have some questions about my skincare routine. When should I apply the retinol cream?',
             messageType: 'text',
             senderId: demoPatient.id,
+            senderType: 'patient',
             recipientId: drAmit.id,
+            recipientType: 'dermatologist',
             isRead: false
+        }
+    });
+    await prisma.message.create({
+        data: {
+            content: 'Hello! Great question. Apply the retinol cream at night, starting with 2-3 times per week. Always use sunscreen during the day when using retinol products.',
+            messageType: 'text',
+            senderId: drAmit.id,
+            senderType: 'dermatologist',
+            recipientId: demoPatient.id,
+            recipientType: 'patient',
+            isRead: true
         }
     });
     console.log('✅ Created welcome message');
