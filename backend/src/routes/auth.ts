@@ -50,7 +50,13 @@ router.post('/register', async (req, res, next) => {
 
     let user;
     if (userType === 'patient') {
-      // Create patient user
+      // Auto-assign patient to the first available dermatologist (Dr. Amit Om)
+      const defaultDermatologist = await prisma.dermatologist.findFirst({
+        where: { isAvailable: true },
+        orderBy: { createdAt: 'asc' } // First created dermatologist
+      });
+
+      // Create patient user with auto-assignment
       user = await prisma.user.create({
         data: {
           name,
@@ -58,7 +64,8 @@ router.post('/register', async (req, res, next) => {
           password: hashedPassword,
           skinType,
           skinConcerns,
-          onboardingCompleted: false
+          onboardingCompleted: false,
+          dermatologistId: defaultDermatologist?.id // Auto-assign to dermatologist
         },
         select: {
           id: true,
@@ -66,7 +73,16 @@ router.post('/register', async (req, res, next) => {
           email: true,
           skinType: true,
           onboardingCompleted: true,
-          createdAt: true
+          createdAt: true,
+          dermatologistId: true,
+          assignedDermatologist: {
+            select: {
+              id: true,
+              name: true,
+              title: true,
+              specialization: true
+            }
+          }
         }
       });
     } else {
@@ -90,6 +106,13 @@ router.post('/register', async (req, res, next) => {
           createdAt: true
         }
       });
+
+      // If patient creation successful and dermatologist assignment made, log it
+      if (user.dermatologistId) {
+        console.log(`✅ New patient ${user.name} auto-assigned to dermatologist ${user.assignedDermatologist?.name}`);
+      } else {
+        console.log(`⚠️  New patient ${user.name} registered but no dermatologist available for assignment`);
+      }
     }
 
     // Generate JWT token

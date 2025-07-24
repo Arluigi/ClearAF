@@ -1,10 +1,48 @@
 import express from 'express';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
-import { requirePatient } from '../middleware/auth';
+import { requirePatient, requireDermatologist } from '../middleware/auth';
+import multer from 'multer';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/photos/');
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename: userId_timestamp_uuid.extension
+    const ext = path.extname(file.originalname);
+    const userId = (req as any).user?.id || 'unknown';
+    const timestamp = Date.now();
+    const uniqueId = uuidv4().split('-')[0]; // First part of UUID for brevity
+    cb(null, `${userId}_${timestamp}_${uniqueId}${ext}`);
+  }
+});
+
+// File filter for images only
+const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+  }
+};
+
+// Multer configuration
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 1 // Single file upload
+  }
+});
 
 // Validation schemas
 const uploadPhotoSchema = z.object({
@@ -19,7 +57,98 @@ const updatePhotoSchema = z.object({
   notes: z.string().optional()
 });
 
-// Upload/create photo record
+// File upload endpoint - handles actual image upload
+router.post('/upload', requirePatient, upload.single('photo'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No photo file provided',
+        code: 'NO_FILE'
+      });
+    }
+
+    // Parse optional form data
+    const skinScore = req.body.skinScore ? parseInt(req.body.skinScore) : 0;
+    const notes = req.body.notes || '';
+    const appointmentId = req.body.appointmentId || null;
+
+    // Validate skin score if provided
+    if (skinScore < 0 || skinScore > 100) {
+      return res.status(400).json({
+        error: 'Skin score must be between 0 and 100',
+        code: 'INVALID_SKIN_SCORE'
+      });
+    }
+
+    // Verify appointment belongs to user if provided
+    if (appointmentId) {
+      const appointment = await prisma.appointment.findUnique({
+        where: { 
+          id: appointmentId,
+          patientId: req.user!.id
+        }
+      });
+
+      if (!appointment) {
+        return res.status(404).json({
+          error: 'Appointment not found or access denied',
+          code: 'APPOINTMENT_NOT_FOUND'
+        });
+      }
+    }
+
+    // Generate photo URL (served by Express static middleware)
+    const photoUrl = `/uploads/photos/${req.file.filename}`;
+
+    // Create photo record in database
+    const photo = await prisma.skinPhoto.create({
+      data: {
+        photoUrl,
+        skinScore,
+        notes,
+        userId: req.user!.id,
+        appointmentId
+      },
+      include: {
+        relatedAppointment: {
+          select: {
+            id: true,
+            scheduledDate: true,
+            type: true
+          }
+        }
+      }
+    });
+
+    // Update user's current skin score and streak if skin score provided
+    if (skinScore > 0) {
+      await prisma.user.update({
+        where: { id: req.user!.id },
+        data: {
+          currentSkinScore: skinScore,
+          streakCount: {
+            increment: 1
+          }
+        }
+      });
+    }
+
+    res.status(201).json({
+      message: 'Photo uploaded successfully',
+      photo: {
+        ...photo,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        originalName: req.file.originalname
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Upload/create photo record (existing endpoint - for URL-based uploads)
 router.post('/', requirePatient, async (req, res, next) => {
   try {
     const validatedData = uploadPhotoSchema.parse(req.body);
@@ -349,6 +478,143 @@ router.get('/timeline/progress', requirePatient, async (req, res, next) => {
       timeline: {
         photos,
         weeklyData,
+        stats: {
+          totalPhotos: photos.length,
+          averageScore,
+          trend: trend > 0 ? 'improving' : trend < 0 ? 'declining' : 'stable',
+          trendValue: trend
+        }
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get patient photos (dermatologists only)
+router.get('/patient/:patientId', requireDermatologist, async (req, res, next) => {
+  try {
+    const { patientId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    // Verify patient is assigned to this dermatologist
+    const patient = await prisma.user.findUnique({
+      where: { 
+        id: patientId,
+        dermatologistId: req.user!.id // Ensure patient belongs to this dermatologist
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        error: 'Patient not found or not assigned to you',
+        code: 'PATIENT_NOT_FOUND'
+      });
+    }
+
+    // Fetch patient's photos
+    const photos = await prisma.skinPhoto.findMany({
+      where: { userId: patientId },
+      include: {
+        relatedAppointment: {
+          select: {
+            id: true,
+            scheduledDate: true,
+            type: true,
+            status: true
+          }
+        }
+      },
+      orderBy: { captureDate: 'desc' },
+      skip,
+      take: limit
+    });
+
+    const total = await prisma.skinPhoto.count({
+      where: { userId: patientId }
+    });
+
+    res.json({
+      data: photos,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get patient photo timeline (dermatologists only)
+router.get('/patient/:patientId/timeline', requireDermatologist, async (req, res, next) => {
+  try {
+    const { patientId } = req.params;
+    const days = parseInt(req.query.days as string) || 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Verify patient is assigned to this dermatologist
+    const patient = await prisma.user.findUnique({
+      where: { 
+        id: patientId,
+        dermatologistId: req.user!.id
+      }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        error: 'Patient not found or not assigned to you',
+        code: 'PATIENT_NOT_FOUND'
+      });
+    }
+
+    const photos = await prisma.skinPhoto.findMany({
+      where: {
+        userId: patientId,
+        captureDate: {
+          gte: startDate
+        }
+      },
+      select: {
+        id: true,
+        skinScore: true,
+        captureDate: true,
+        notes: true,
+        photoUrl: true
+      },
+      orderBy: {
+        captureDate: 'asc'
+      }
+    });
+
+    // Calculate stats
+    const scores = photos.map(p => p.skinScore);
+    const averageScore = scores.length > 0 
+      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+      : 0;
+
+    // Calculate trend
+    let trend = 0;
+    if (scores.length > 1) {
+      const n = scores.length;
+      const sumX = (n * (n - 1)) / 2;
+      const sumY = scores.reduce((a, b) => a + b, 0);
+      const sumXY = scores.reduce((sum, score, index) => sum + (score * index), 0);
+      const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
+      
+      trend = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    }
+
+    res.json({
+      timeline: {
+        photos,
         stats: {
           totalPhotos: photos.length,
           averageScore,

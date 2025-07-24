@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import Combine
 
 // MARK: - Photo Capture Manager
 
@@ -109,6 +110,8 @@ struct DailyPhotoCaptureView: View {
     @State private var showingImagePicker = false
     @State private var selectedImage: UIImage?
     @State private var showingPhotoTakenMessage = false
+    @State private var isUploading = false
+    @State private var cancellables = Set<AnyCancellable>()
     
     var body: some View {
         NavigationView {
@@ -187,6 +190,51 @@ struct DailyPhotoCaptureView: View {
     }
     
     private func saveDailyPhoto(image: UIImage) {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            HapticManager.error()
+            print("Failed to convert image to data")
+            return
+        }
+        
+        isUploading = true
+        
+        // Upload photo to API
+        APIService.shared.uploadPhoto(imageData, skinScore: 50, notes: "Daily progress photo")
+            .sink(
+                receiveCompletion: { [self] completion in
+                    isUploading = false
+                    switch completion {
+                    case .failure(let error):
+                        HapticManager.error()
+                        print("Error uploading photo: \(error)")
+                        
+                        // Fallback to Core Data if API fails
+                        saveDailyPhotoLocally(image: image)
+                        
+                    case .finished:
+                        break
+                    }
+                },
+                receiveValue: { [self] response in
+                    HapticManager.success()
+                    showingPhotoTakenMessage = true
+                    print("Photo uploaded successfully: \(response.photo.id)")
+                    
+                    // Hide message after 2 seconds, then close
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        showingPhotoTakenMessage = false
+                        // Close after message disappears
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            dismiss()
+                        }
+                    }
+                }
+            )
+            .store(in: &cancellables)
+    }
+    
+    // Fallback method for offline storage
+    private func saveDailyPhotoLocally(image: UIImage) {
         let photo = SkinPhoto(context: viewContext)
         photo.id = UUID()
         photo.captureDate = Date()
@@ -208,7 +256,7 @@ struct DailyPhotoCaptureView: View {
             }
         } catch {
             HapticManager.error()
-            print("Error saving photo: \(error)")
+            print("Error saving photo locally: \(error)")
         }
     }
 }

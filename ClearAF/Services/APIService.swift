@@ -78,6 +78,24 @@ struct ValidationError: Codable {
     let message: String
 }
 
+// MARK: - Photo Models
+struct APIPhoto: Codable {
+    let id: String
+    let photoUrl: String
+    let skinScore: Int
+    let notes: String?
+    let userId: String
+    let captureDate: String
+    let appointmentId: String?
+    let fileSize: Int?
+    let mimeType: String?
+}
+
+struct PhotoUploadResponse: Codable {
+    let message: String
+    let photo: APIPhoto
+}
+
 // MARK: - API Service
 class APIService: ObservableObject {
     static let shared = APIService()
@@ -283,8 +301,71 @@ class APIService: ObservableObject {
 
 // MARK: - API Service Extensions for Future Features
 extension APIService {
-    // Placeholder methods for future API integrations
+    // MARK: - Photo Upload
+    func uploadPhoto(_ imageData: Data, skinScore: Int = 0, notes: String = "", appointmentId: String? = nil) -> AnyPublisher<PhotoUploadResponse, Error> {
+        guard let url = URL(string: baseURL + "/photos/upload") else {
+            return Fail(error: URLError(.badURL))
+                .eraseToAnyPublisher()
+        }
+        
+        guard let token = authToken else {
+            return Fail(error: URLError(.userAuthenticationRequired))
+                .eraseToAnyPublisher()
+        }
+        
+        // Create multipart form data
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        var body = Data()
+        
+        // Add image data
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        
+        // Add skin score
+        if skinScore > 0 {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"skinScore\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(skinScore)".data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        
+        // Add notes
+        if !notes.isEmpty {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"notes\"\r\n\r\n".data(using: .utf8)!)
+            body.append(notes.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        
+        // Add appointment ID if provided
+        if let appointmentId = appointmentId {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"appointmentId\"\r\n\r\n".data(using: .utf8)!)
+            body.append(appointmentId.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        
+        // Close boundary
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        
+        return session.dataTaskPublisher(for: request)
+            .map(\.data)
+            .decode(type: PhotoUploadResponse.self, decoder: JSONDecoder())
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
+    }
     
+    // Placeholder methods for future API integrations
     func fetchAppointments() -> AnyPublisher<[String], Error> {
         // TODO: Implement when appointments API is ready
         return Just([])
