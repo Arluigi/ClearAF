@@ -275,4 +275,110 @@ router.post('/reply', requireDermatologist, async (req, res, next) => {
   }
 });
 
+// Get messages (for dermatologist to see conversation with patient)
+router.get('/', async (req, res, next) => {
+  try {
+    const user = req.user;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const receiverId = req.query.receiverId as string;
+
+    const skip = (page - 1) * limit;
+
+    if (user!.userType === 'dermatologist') {
+      // Dermatologist getting messages with a specific patient
+      if (!receiverId) {
+        return res.status(400).json({
+          error: 'receiverId is required for dermatologists',
+          code: 'MISSING_RECEIVER_ID'
+        });
+      }
+
+      // Get messages between dermatologist and patient
+      const messages = await prisma.message.findMany({
+        where: {
+          OR: [
+            {
+              senderId: user!.id,
+              recipientId: receiverId
+            },
+            {
+              senderId: receiverId, 
+              recipientId: user!.id
+            }
+          ]
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          recipient: {
+            select: {
+              id: true,
+              name: true,
+              title: true
+            }
+          }
+        },
+        orderBy: {
+          sentDate: 'asc'
+        },
+        skip,
+        take: limit
+      });
+
+      // Mark unread messages from patient as read
+      await prisma.message.updateMany({
+        where: {
+          senderId: receiverId,
+          recipientId: user!.id,
+          isRead: false
+        },
+        data: {
+          isRead: true
+        }
+      });
+
+      const total = await prisma.message.count({
+        where: {
+          OR: [
+            {
+              senderId: user!.id,
+              recipientId: receiverId
+            },
+            {
+              senderId: receiverId,
+              recipientId: user!.id
+            }
+          ]
+        }
+      });
+
+      res.json({
+        data: messages,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+
+    } else {
+      // Patient getting their messages (existing logic could go here)
+      return res.status(403).json({
+        error: 'Access denied',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      });
+    }
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

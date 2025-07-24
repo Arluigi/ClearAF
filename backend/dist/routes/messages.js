@@ -241,5 +241,99 @@ router.post('/reply', auth_1.requireDermatologist, async (req, res, next) => {
         next(error);
     }
 });
+router.get('/', async (req, res, next) => {
+    try {
+        const user = req.user;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const receiverId = req.query.receiverId;
+        const skip = (page - 1) * limit;
+        if (user.userType === 'dermatologist') {
+            if (!receiverId) {
+                return res.status(400).json({
+                    error: 'receiverId is required for dermatologists',
+                    code: 'MISSING_RECEIVER_ID'
+                });
+            }
+            const messages = await prisma.message.findMany({
+                where: {
+                    OR: [
+                        {
+                            senderId: user.id,
+                            recipientId: receiverId
+                        },
+                        {
+                            senderId: receiverId,
+                            recipientId: user.id
+                        }
+                    ]
+                },
+                include: {
+                    sender: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true
+                        }
+                    },
+                    recipient: {
+                        select: {
+                            id: true,
+                            name: true,
+                            title: true
+                        }
+                    }
+                },
+                orderBy: {
+                    sentDate: 'asc'
+                },
+                skip,
+                take: limit
+            });
+            await prisma.message.updateMany({
+                where: {
+                    senderId: receiverId,
+                    recipientId: user.id,
+                    isRead: false
+                },
+                data: {
+                    isRead: true
+                }
+            });
+            const total = await prisma.message.count({
+                where: {
+                    OR: [
+                        {
+                            senderId: user.id,
+                            recipientId: receiverId
+                        },
+                        {
+                            senderId: receiverId,
+                            recipientId: user.id
+                        }
+                    ]
+                }
+            });
+            res.json({
+                data: messages,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages: Math.ceil(total / limit)
+                }
+            });
+        }
+        else {
+            return res.status(403).json({
+                error: 'Access denied',
+                code: 'INSUFFICIENT_PERMISSIONS'
+            });
+        }
+    }
+    catch (error) {
+        next(error);
+    }
+});
 exports.default = router;
 //# sourceMappingURL=messages.js.map
