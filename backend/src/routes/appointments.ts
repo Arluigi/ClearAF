@@ -105,7 +105,6 @@ router.post('/', requirePatient, async (req, res, next) => {
           select: {
             id: true,
             name: true,
-            email: true,
             skinType: true,
             currentSkinScore: true
           }
@@ -158,7 +157,6 @@ router.get('/', async (req, res, next) => {
           select: {
             id: true,
             name: true,
-            email: true,
             skinType: true,
             currentSkinScore: true
           }
@@ -218,7 +216,6 @@ router.get('/:id', async (req, res, next) => {
           select: {
             id: true,
             name: true,
-            email: true,
             skinType: true,
             currentSkinScore: true,
             allergies: true,
@@ -232,7 +229,6 @@ router.get('/:id', async (req, res, next) => {
             name: true,
             title: true,
             specialization: true,
-            email: true,
             phone: true
           }
         },
@@ -346,7 +342,6 @@ router.patch('/:id', async (req, res, next) => {
           select: {
             id: true,
             name: true,
-            email: true,
             skinType: true
           }
         },

@@ -104,8 +104,7 @@ router.get('/stats', async (req, res) => {
         patient: {
           select: {
             id: true,
-            name: true,
-            email: true
+            name: true
           }
         }
       },

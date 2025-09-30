@@ -166,7 +166,6 @@ router.get('/conversations', requireDermatologist, async (req, res, next) => {
           select: {
             id: true,
             name: true,
-            email: true,
             currentSkinScore: true,
             skinType: true
           }

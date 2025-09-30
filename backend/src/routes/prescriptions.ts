@@ -36,7 +36,7 @@ router.post('/', requireDermatologist, async (req, res, next) => {
       },
       include: {
         patient: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true }
         },
         prescribedBy: {
           select: { id: true, name: true, title: true }
@@ -87,7 +87,7 @@ router.get('/', async (req, res, next) => {
       where: whereClause,
       include: {
         patient: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true }
         },
         prescribedBy: {
           select: { id: true, name: true, title: true }
@@ -144,7 +144,7 @@ router.patch('/:id', requireDermatologist, async (req, res, next) => {
       },
       include: {
         patient: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true }
         },
         prescribedBy: {
           select: { id: true, name: true, title: true }
