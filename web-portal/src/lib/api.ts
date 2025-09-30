@@ -1,9 +1,10 @@
 // API Service for Clear AF Web Portal
 // Connects to the existing backend at https://clearaf.onrender.com
 
+import { createClient } from '@supabase/supabase-js';
 import {
   User,
-  Dermatologist,  
+  Dermatologist,
   Appointment,
   Message,
   Prescription,
@@ -18,15 +19,27 @@ import {
   APIResponse
 } from '@/types/api';
 
+const supabaseUrl = 'https://glrfxjydebnilsptlksg.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdscmZ4anlkZWJuaWxzcHRsa3NnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzUyNTksImV4cCI6MjA3MTExMTI1OX0.CqVuJxORUU6PgL-o7ElT_0j9M2wmX65FOuvp8wP7K6E';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 class APIService {
   private baseURL: string;
   private token: string | null = null;
 
   constructor() {
     this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'https://clearaf.onrender.com/api';
-    // Load token from localStorage if available
+    // Load token from Supabase session
+    this.initializeAuth();
+  }
+
+  private async initializeAuth() {
     if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('auth_token');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        this.token = session.access_token;
+      }
     }
   }
 
@@ -87,17 +100,35 @@ class APIService {
 
   // Authentication Methods
   async login(email: string, password: string): Promise<LoginResponse> {
-    const response = await this.request<LoginResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({
-        email,
-        password,
-        userType: 'dermatologist'
-      }),
+    // Use Supabase Auth for login
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
     });
 
-    this.setToken(response.token);
-    return response;
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data.session) {
+      throw new Error('No session returned from login');
+    }
+
+    // Set token for API requests
+    this.token = data.session.access_token;
+
+    // Return in the expected format
+    return {
+      message: 'Login successful',
+      token: data.session.access_token,
+      userType: 'dermatologist',
+      user: {
+        id: data.user.id,
+        name: data.user.user_metadata?.name || '',
+        email: data.user.email || '',
+        userType: 'dermatologist'
+      }
+    };
   }
 
   async register(data: Omit<RegisterRequest, 'userType'>): Promise<RegisterResponse> {
