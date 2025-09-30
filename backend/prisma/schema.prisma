@@ -12,8 +12,6 @@ datasource db {
 model User {
   id                    String         @id @default(uuid())
   name                  String?
-  email                 String         @unique
-  password              String
   skinType              String?
   currentSkinScore      Int            @default(0)
   streakCount           Int            @default(0)
@@ -31,7 +29,7 @@ model User {
   subscriptions         Subscription[]
   assignedDermatologist Dermatologist? @relation(fields: [dermatologistId], references: [id])
 
-  @@map("users")
+  @@map("user_profiles")
 }
 
 model Dermatologist {

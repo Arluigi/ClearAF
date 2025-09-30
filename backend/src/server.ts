@@ -6,7 +6,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 
 // Import routes
-import authRoutes from './routes/auth';
+import authRoutes from './routes/auth-supabase';
 import userRoutes from './routes/users';
 import appointmentRoutes from './routes/appointments';
 import messageRoutes from './routes/messages';
@@ -50,7 +50,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.2',
+    version: '2.0.0',
+    auth: 'supabase',
     supabaseEnabled: !!process.env.SUPABASE_URL,
     storageReady: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
   });

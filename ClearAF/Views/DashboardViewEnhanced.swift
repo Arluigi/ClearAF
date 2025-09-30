@@ -9,6 +9,7 @@
 import SwiftUI
 import UIKit
 import CoreData
+import Combine
 
 struct DashboardViewEnhanced: View {
     @Binding var selectedTab: Int
@@ -110,6 +111,7 @@ struct DailyPhotoCardEnhanced: View {
     @State private var showingCamera = false
     @State private var showingPhotoTakenMessage = false
     @State private var animatedScore: Double = 0
+    @State private var cancellables = Set<AnyCancellable>()
     
     var body: some View {
         VStack(spacing: .spaceXL) {
@@ -209,16 +211,41 @@ struct DailyPhotoCardEnhanced: View {
     }
     
     private func saveDailyPhoto(imageData: Data) {
+        // Upload photo to backend (Supabase Storage)
+        APIService.shared.uploadPhoto(imageData, skinScore: 50, notes: "Daily photo", appointmentId: nil)
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { completion in
+                    if case .failure(let error) = completion {
+                        print("Error uploading photo: \(error)")
+                        // Still save locally to Core Data as fallback
+                        self.savePhotoToCoreData(imageData: imageData)
+                    }
+                },
+                receiveValue: { response in
+                    print("Photo uploaded successfully: \(response.photo.photoUrl)")
+                    showingPhotoTakenMessage = true
+                    HapticManager.success()
+
+                    // Optionally save to Core Data with URL reference
+                    self.savePhotoToCoreData(imageData: imageData, photoUrl: response.photo.photoUrl)
+                }
+            )
+            .store(in: &cancellables)
+    }
+
+    private func savePhotoToCoreData(imageData: Data, photoUrl: String? = nil) {
         let photo = SkinPhoto(context: viewContext)
         photo.id = UUID()
         photo.captureDate = Date()
         photo.photoData = imageData
-        photo.skinScore = 50 // Default score, user can edit later
-        
+        photo.skinScore = 50
+        // Note: photoUrl is stored in Supabase, shown in derm portal
+
         do {
             try viewContext.save()
         } catch {
-            print("Error saving photo: \(error)")
+            print("Error saving photo to Core Data: \(error)")
         }
     }
 }
@@ -527,13 +554,36 @@ struct PhotoDisplaySection: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 280)
+                        .frame(height: 240)
                         .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
                         .overlay(
                             VStack {
                                 Spacer()
                                 HStack {
+                                    // "Take Another" button on bottom-left
+                                    Button(action: {
+                                        HapticManager.light()
+                                        showingCamera = true
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "camera.fill")
+                                                .font(.system(size: 11))
+                                            Text("Take Another")
+                                                .fontWeight(.semibold)
+                                                .font(.system(size: 12))
+                                        }
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.primaryPurple)
+                                        .clipShape(Capsule())
+                                    }
+                                    .padding(.spaceMD)
+                                    .accessibleButton(label: "Take another photo", hint: "Upload an additional progress photo")
+
                                     Spacer()
+
+                                    // Score badge on bottom-right
                                     Text("\(todayPhoto.skinScore)")
                                         .font(.captionLarge)
                                         .fontWeight(.bold)
@@ -570,7 +620,7 @@ struct PhotoDisplaySection: View {
                         .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 280)
+                    .frame(height: 240)
                     .background(Color.backgroundTertiary)
                     .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
                 }

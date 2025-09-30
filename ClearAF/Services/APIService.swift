@@ -99,17 +99,24 @@ struct PhotoUploadResponse: Codable {
 // MARK: - API Service
 class APIService: ObservableObject {
     static let shared = APIService()
-    
+
+    // Production API URL
     private let baseURL = "https://clearaf.onrender.com/api"
+    // For local testing: "http://192.168.68.70:3001/api"
     private let session = URLSession.shared
-    
+
     @Published var currentUser: APIUser?
-    @Published var authToken: String?
     @Published var isLoggedIn: Bool = false
-    
+
     private init() {
-        // Load saved auth token
-        loadAuthToken()
+        // Check if we have a Supabase session
+        checkAuthState()
+    }
+
+    private func checkAuthState() {
+        if SupabaseService.shared.getAccessToken() != nil {
+            isLoggedIn = true
+        }
     }
     
     // MARK: - Authentication
@@ -149,10 +156,12 @@ class APIService: ObservableObject {
     }
     
     func logout() {
-        authToken = nil
         currentUser = nil
         isLoggedIn = false
-        removeAuthToken()
+        // Supabase handles session cleanup
+        Task {
+            try? await SupabaseService.shared.signOut()
+        }
     }
     
     // MARK: - User Profile
@@ -230,20 +239,21 @@ class APIService: ObservableObject {
         body: T? = nil,
         responseType: U.Type
     ) -> AnyPublisher<U, Error> {
-        
+
         guard let url = URL(string: baseURL + endpoint) else {
             return Fail(error: URLError(.badURL))
                 .eraseToAnyPublisher()
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        if let token = authToken {
+
+        // Use Supabase token for authentication
+        if let token = SupabaseService.shared.getAccessToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        
+
         if let body = body {
             do {
                 request.httpBody = try JSONEncoder().encode(body)
@@ -260,43 +270,12 @@ class APIService: ObservableObject {
             .eraseToAnyPublisher()
     }
     
-    // MARK: - Auth Helpers
+    // MARK: - Deprecated Auth Methods (kept for backward compatibility)
+    // These are no longer used - Supabase handles authentication now
     private func handleAuthSuccess(_ response: AuthResponse) {
-        self.authToken = response.token
         self.currentUser = response.user
         self.isLoggedIn = true
-        saveAuthToken(response.token)
     }
-    
-    private func saveAuthToken(_ token: String) {
-        UserDefaults.standard.set(token, forKey: "auth_token")
-    }
-    
-    private func loadAuthToken() {
-        if let token = UserDefaults.standard.string(forKey: "auth_token") {
-            self.authToken = token
-            self.isLoggedIn = true
-            
-            // Optionally fetch current user data
-            getCurrentUser()
-                .sink(
-                    receiveCompletion: { completion in
-                        if case .failure = completion {
-                            // Token might be expired, logout
-                            self.logout()
-                        }
-                    },
-                    receiveValue: { _ in }
-                )
-                .store(in: &cancellables)
-        }
-    }
-    
-    private func removeAuthToken() {
-        UserDefaults.standard.removeObject(forKey: "auth_token")
-    }
-    
-    private var cancellables = Set<AnyCancellable>()
 }
 
 // MARK: - API Service Extensions for Future Features
@@ -308,11 +287,11 @@ extension APIService {
                 .eraseToAnyPublisher()
         }
         
-        guard let token = authToken else {
+        guard let token = SupabaseService.shared.getAccessToken() else {
             return Fail(error: URLError(.userAuthenticationRequired))
                 .eraseToAnyPublisher()
         }
-        
+
         // Create multipart form data
         let boundary = UUID().uuidString
         var request = URLRequest(url: url)

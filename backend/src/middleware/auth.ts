@@ -1,13 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import { supabaseAdmin } from '../config/supabase';
 
 const prisma = new PrismaClient();
 
-interface JwtPayload {
-  userId: string;
-  userType: 'patient' | 'dermatologist';
+interface SupabaseJwtPayload {
+  sub: string; // user id
   email: string;
+  role: string;
+  aud: string;
+  exp: number;
 }
 
 // Extend Express Request type
@@ -33,60 +36,48 @@ export const authenticateToken = async (
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Access token required',
         code: 'NO_TOKEN'
       });
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET not configured');
+    // Verify Supabase JWT token
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({
+        error: 'Invalid or expired token',
+        code: 'INVALID_TOKEN'
+      });
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-    
-    // Verify user still exists
-    let user;
-    if (decoded.userType === 'patient') {
-      user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        select: { id: true, email: true, name: true }
-      });
+    // Check if user is a dermatologist or patient
+    // Dermatologists have separate table, patients use user_profiles
+    const dermatologist = await prisma.dermatologist.findUnique({
+      where: { email: user.email! },
+      select: { id: true, email: true, name: true }
+    });
+
+    if (dermatologist) {
+      req.user = {
+        id: dermatologist.id,
+        userType: 'dermatologist',
+        email: dermatologist.email
+      };
     } else {
-      user = await prisma.dermatologist.findUnique({
-        where: { id: decoded.userId },
-        select: { id: true, email: true, name: true }
-      });
+      // Patient - use Supabase auth user ID
+      req.user = {
+        id: user.id,
+        userType: 'patient',
+        email: user.email!
+      };
     }
-
-    if (!user) {
-      return res.status(401).json({ 
-        error: 'User not found',
-        code: 'USER_NOT_FOUND'
-      });
-    }
-
-    // Add user info to request
-    req.user = {
-      id: decoded.userId,
-      userType: decoded.userType,
-      email: decoded.email
-    };
 
     return next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({ 
-        error: 'Invalid token',
-        code: 'INVALID_TOKEN'
-      });
-      return;
-    }
-    
     console.error('Auth middleware error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Authentication error',
       code: 'AUTH_ERROR'
     });

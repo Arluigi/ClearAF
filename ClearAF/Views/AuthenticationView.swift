@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 
 struct AuthenticationView: View {
-    @StateObject private var apiService = APIService.shared
+    @StateObject private var supabaseService = SupabaseService.shared
     @State private var isRegistering = false
     @State private var email = ""
     @State private var password = ""
@@ -11,11 +11,9 @@ struct AuthenticationView: View {
     @State private var isLoading = false
     @State private var errorMessage = ""
     @State private var showError = false
-    
+
     let skinTypes = ["Normal", "Dry", "Oily", "Combination", "Sensitive"]
     let onAuthenticationSuccess: () -> Void
-    
-    @State private var cancellables = Set<AnyCancellable>()
     
     var body: some View {
         ZStack {
@@ -151,45 +149,56 @@ struct AuthenticationView: View {
     
     private func registerUser() {
         isLoading = true
-        
-        apiService.register(
-            name: name,
-            email: email,
-            password: password,
-            skinType: selectedSkinType
-        )
-        .sink(
-            receiveCompletion: { [self] completion in
-                isLoading = false
-                if case .failure(let error) = completion {
-                    handleError(error)
-                }
-            },
-            receiveValue: { [self] response in
-                print("Registration successful: \(response.user.name ?? "Unknown")")
-                onAuthenticationSuccess()
-            }
-        )
-        .store(in: &cancellables)
-    }
-    
-    private func loginUser() {
-        isLoading = true
-        
-        apiService.login(email: email, password: password)
-            .sink(
-                receiveCompletion: { [self] completion in
+
+        Task {
+            do {
+                let user = try await supabaseService.signUp(
+                    email: email,
+                    password: password,
+                    name: name,
+                    skinType: selectedSkinType
+                )
+
+                await MainActor.run {
                     isLoading = false
-                    if case .failure(let error) = completion {
-                        handleError(error)
-                    }
-                },
-                receiveValue: { [self] response in
-                    print("Login successful: \(response.user.name ?? "Unknown")")
+                    print("Registration successful: \(user.email ?? "Unknown")")
+                    // Update APIService to reflect logged in state
+                    APIService.shared.isLoggedIn = true
                     onAuthenticationSuccess()
                 }
-            )
-            .store(in: &cancellables)
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    handleError(error)
+                }
+            }
+        }
+    }
+
+    private func loginUser() {
+        isLoading = true
+
+        Task {
+            do {
+                let session = try await supabaseService.signIn(
+                    email: email,
+                    password: password
+                )
+
+                await MainActor.run {
+                    isLoading = false
+                    print("Login successful: \(session.user.email ?? "Unknown")")
+                    // Update APIService to reflect logged in state
+                    APIService.shared.isLoggedIn = true
+                    onAuthenticationSuccess()
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    handleError(error)
+                }
+            }
+        }
     }
     
     private func handleError(_ error: Error) {

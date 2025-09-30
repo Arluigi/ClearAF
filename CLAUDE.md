@@ -1,21 +1,75 @@
 # Clear AF - Dermatology Platform Development
 
 ## Current Session Status
-- **Status**: Phase 3 In Progress ⏳ | Web Portal API Integration & Bug Fixes
+- **Status**: ✅ Supabase Auth Migration Complete | iOS Integration Ready
 - **Repository**: https://github.com/Arluigi/ClearAF
 - **API URL**: https://clearaf.onrender.com
 - **Web Portal**: http://localhost:3000 (Next.js development server)
-- **Database**: Prisma Studio at http://localhost:5555
-- **Last Updated**: Web portal connected to live API with messaging issues being resolved
+- **Database**: Supabase PostgreSQL (glrfxjydebnilsptlksg.supabase.co)
+- **Last Updated**: Backend and iOS code updated for Supabase Auth
 
 ## Quick Commands
 - **iOS Build**: `xcodebuild -scheme ClearAF -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build`
 - **iOS Run**: Cmd+R in Xcode
 - **Web Portal**: `cd web-portal && npm run dev` (runs on http://localhost:3000)
-- **Backend**: Located in `/backend` directory with live deployment
+- **Backend Dev**: `cd backend && npm run dev` (runs on http://localhost:3001)
+- **Supabase Dashboard**: https://supabase.com/dashboard/project/glrfxjydebnilsptlksg
 
 ## Latest Session Progress 🔄
-**Web Portal API Integration**: Successfully connected dermatologist web portal to live backend API. Dashboard, patient management, and appointments systems fully functional with real data. Currently resolving messaging system issues including UI alignment and database constraints. Authentication and core workflows operational.
+**✅ SUPABASE AUTH + PHOTO UPLOAD COMPLETE**
+
+Successfully migrated to Supabase Auth AND implemented end-to-end photo upload system from iOS to Supabase Storage.
+
+**Key Accomplishments This Session**:
+- ✅ **Database Migration**: Converted all TEXT IDs to UUIDs for Supabase compatibility
+- ✅ **Auth System**: Replaced custom JWT with Supabase Auth
+- ✅ **Auto-Profile Creation**: Database trigger creates user_profiles on signup
+- ✅ **Backend Integration**: Auth middleware validates Supabase tokens
+- ✅ **iOS Swift SDK**: Added Supabase SDK, created SupabaseService, updated AuthenticationView
+- ✅ **Photo Upload**: iOS app uploads photos to Supabase Storage via backend API
+- ✅ **Backend Photos Route**: Updated to use Supabase Storage and user_profiles table
+- ✅ **iOS UI**: Added "Take Another" button for multiple daily photos
+- ✅ **Local Testing**: Verified complete flow works with local backend
+
+**Test Credentials**:
+- **Test User**: test@clearaf.com / test123456
+- **Supabase URL**: https://glrfxjydebnilsptlksg.supabase.co
+- **Storage Bucket**: patient-photos (public access)
+- **Backend Local**: http://192.168.68.70:3001 (for testing on physical device)
+
+**⏳ CURRENT TASK**:
+Deploying updated backend to Render production with Supabase credentials
+
+---
+
+## 🚀 Adding Supabase Swift SDK to iOS Project
+
+**IMPORTANT**: Before running the iOS app, you must add the Supabase Swift SDK via Xcode:
+
+### Steps:
+1. **Open Xcode**: Open `ClearAF.xcodeproj`
+2. **Add Package**:
+   - File → Add Package Dependencies...
+   - Enter URL: `https://github.com/supabase/supabase-swift`
+   - Click "Add Package"
+3. **Select Products**:
+   - ✅ Check **Supabase** (main library)
+   - ✅ Check **Auth** (authentication)
+   - Click "Add Package"
+4. **Verify Installation**:
+   - Build the project (Cmd+B)
+   - If successful, run the app (Cmd+R)
+
+### Files Already Created:
+- [SupabaseConfig.swift](ClearAF/Config/SupabaseConfig.swift) - Supabase credentials
+- [SupabaseService.swift](ClearAF/Services/SupabaseService.swift) - Authentication service
+- [AuthenticationView.swift](ClearAF/Views/AuthenticationView.swift) - Updated for Supabase
+- [APIService.swift](ClearAF/Services/APIService.swift) - Uses Supabase tokens
+
+### After Adding SDK:
+- Test login with: test@clearaf.com / test123456
+- Registration will automatically create user_profiles via database trigger
+- All API requests will use Supabase JWT tokens
 
 ---
 
