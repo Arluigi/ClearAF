@@ -11,7 +11,7 @@ async function setupS3Bucket() {
       await s3Client.send(new CreateBucketCommand({ 
         Bucket: s3Config.bucketName,
         CreateBucketConfiguration: s3Config.region !== 'us-east-1' ? {
-          LocationConstraint: s3Config.region
+          LocationConstraint: s3Config.region as any
         } : undefined
       }));
       console.log('✅ Bucket created successfully');

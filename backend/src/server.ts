@@ -47,11 +47,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
+  res.json({
+    status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.1',
-    s3Enabled: !!process.env.AWS_ACCESS_KEY_ID
+    version: '1.0.2',
+    supabaseEnabled: !!process.env.SUPABASE_URL,
+    storageReady: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
   });
 });
 

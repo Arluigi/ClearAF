@@ -5,13 +5,12 @@ import { requirePatient, requireDermatologist } from '../middleware/auth';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client, generatePhotoKey, getS3PublicUrl } from '../config/s3';
+import { supabaseAdmin, PHOTO_BUCKET, generatePhotoPath, getPublicUrl } from '../config/supabase';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Configure multer for memory storage (S3 upload)
+// Configure multer for memory storage (Supabase Storage upload)
 const storage = multer.memoryStorage();
 
 // File filter for images only
@@ -24,7 +23,7 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
   }
 };
 
-// Multer configuration for S3 upload
+// Multer configuration for Supabase Storage upload
 const upload = multer({
   storage,
   fileFilter,
@@ -47,7 +46,7 @@ const updatePhotoSchema = z.object({
   notes: z.string().optional()
 });
 
-// File upload endpoint - uploads to S3 and stores URL in database
+// File upload endpoint - uploads to Supabase Storage and stores URL in database
 router.post('/upload', requirePatient, upload.single('photo'), async (req, res, next) => {
   try {
     if (!req.file) {
@@ -73,7 +72,7 @@ router.post('/upload', requirePatient, upload.single('photo'), async (req, res, 
     // Verify appointment belongs to user if provided
     if (appointmentId) {
       const appointment = await prisma.appointment.findUnique({
-        where: { 
+        where: {
           id: appointmentId,
           patientId: req.user!.id
         }
@@ -87,35 +86,33 @@ router.post('/upload', requirePatient, upload.single('photo'), async (req, res, 
       }
     }
 
-    // Generate S3 key for the photo
-    const s3Key = generatePhotoKey(req.user!.id, req.file.originalname);
+    // Generate file path for Supabase Storage
+    const filePath = generatePhotoPath(req.user!.id, req.file.originalname);
 
-    // Upload to S3
-    const uploadCommand = new PutObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME!,
-      Key: s3Key,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype,
-      Metadata: {
-        userId: req.user!.id,
-        originalName: req.file.originalname,
-        skinScore: skinScore.toString(),
-        uploadDate: new Date().toISOString()
-      }
-    });
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from(PHOTO_BUCKET)
+      .upload(filePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        metadata: {
+          userId: req.user!.id,
+          originalName: req.file.originalname,
+          skinScore: skinScore.toString(),
+          uploadDate: new Date().toISOString()
+        }
+      });
 
-    try {
-      await s3Client.send(uploadCommand);
-    } catch (s3Error) {
-      console.error('S3 upload failed:', s3Error);
+    if (uploadError) {
+      console.error('Supabase Storage upload failed:', uploadError);
       return res.status(500).json({
         error: 'Failed to upload photo to storage',
-        code: 'S3_UPLOAD_FAILED'
+        code: 'STORAGE_UPLOAD_FAILED',
+        details: uploadError.message
       });
     }
 
-    // Get public S3 URL
-    const photoUrl = getS3PublicUrl(s3Key);
+    // Get public URL
+    const photoUrl = getPublicUrl(PHOTO_BUCKET, filePath);
 
     // Create photo record in database
     const photo = await prisma.skinPhoto.create({
@@ -151,13 +148,13 @@ router.post('/upload', requirePatient, upload.single('photo'), async (req, res, 
     }
 
     res.status(201).json({
-      message: 'Photo uploaded successfully to S3',
+      message: 'Photo uploaded successfully to Supabase Storage',
       photo: {
         ...photo,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
         originalName: req.file.originalname,
-        s3Key: s3Key
+        storagePath: filePath
       }
     });
 

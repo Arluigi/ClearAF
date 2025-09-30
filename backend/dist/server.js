@@ -36,7 +36,9 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: '1.0.0'
+        version: '1.0.2',
+        supabaseEnabled: !!process.env.SUPABASE_URL,
+        storageReady: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
     });
 });
 app.use('/api/auth', auth_1.default);

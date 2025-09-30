@@ -38,6 +38,10 @@ router.post('/register', async (req, res, next) => {
         const hashedPassword = await bcryptjs_1.default.hash(password, saltRounds);
         let user;
         if (userType === 'patient') {
+            const defaultDermatologist = await prisma.dermatologist.findFirst({
+                where: { isAvailable: true },
+                orderBy: { createdAt: 'asc' }
+            });
             user = await prisma.user.create({
                 data: {
                     name,
@@ -45,7 +49,8 @@ router.post('/register', async (req, res, next) => {
                     password: hashedPassword,
                     skinType,
                     skinConcerns,
-                    onboardingCompleted: false
+                    onboardingCompleted: false,
+                    dermatologistId: defaultDermatologist?.id
                 },
                 select: {
                     id: true,
@@ -53,7 +58,16 @@ router.post('/register', async (req, res, next) => {
                     email: true,
                     skinType: true,
                     onboardingCompleted: true,
-                    createdAt: true
+                    createdAt: true,
+                    dermatologistId: true,
+                    assignedDermatologist: {
+                        select: {
+                            id: true,
+                            name: true,
+                            title: true,
+                            specialization: true
+                        }
+                    }
                 }
             });
         }
@@ -77,6 +91,12 @@ router.post('/register', async (req, res, next) => {
                     createdAt: true
                 }
             });
+            if (user.dermatologistId) {
+                console.log(`✅ New patient ${user.name} auto-assigned to dermatologist ${user.assignedDermatologist?.name}`);
+            }
+            else {
+                console.log(`⚠️  New patient ${user.name} registered but no dermatologist available for assignment`);
+            }
         }
         const token = generateToken(user.id, userType, email);
         res.status(201).json({
