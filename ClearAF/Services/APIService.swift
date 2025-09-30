@@ -96,6 +96,24 @@ struct PhotoUploadResponse: Codable {
     let photo: APIPhoto
 }
 
+struct SyncProfileResponse: Codable {
+    let success: Bool
+    let user: SyncedUser
+    let assignedDermatologist: AssignedDerm
+
+    struct SyncedUser: Codable {
+        let id: String
+        let name: String?
+        let skinType: String?
+        let dermatologistId: String?
+    }
+
+    struct AssignedDerm: Codable {
+        let id: String
+        let name: String
+    }
+}
+
 // MARK: - API Service
 class APIService: ObservableObject {
     static let shared = APIService()
@@ -163,8 +181,19 @@ class APIService: ObservableObject {
             try? await SupabaseService.shared.signOut()
         }
     }
-    
+
     // MARK: - User Profile
+    func syncProfile() -> AnyPublisher<SyncProfileResponse, Error> {
+        return performAuthenticatedRequest(
+            endpoint: "/auth/sync-profile",
+            method: "POST",
+            body: EmptyBody(),
+            responseType: SyncProfileResponse.self
+        )
+        .eraseToAnyPublisher()
+    }
+
+    struct EmptyBody: Codable {}
     func updateProfile(skinType: String?, allergies: String?, currentMedications: String?, skinConcerns: String?) -> AnyPublisher<APIUser, Error> {
         let request = UpdateProfileRequest(
             skinType: skinType,

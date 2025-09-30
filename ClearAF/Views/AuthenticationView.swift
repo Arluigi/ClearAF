@@ -159,9 +159,18 @@ struct AuthenticationView: View {
                     skinType: selectedSkinType
                 )
 
+                print("Registration successful: \(user.email ?? "Unknown")")
+
+                // Sync profile with backend to assign dermatologist
+                let syncResult = await syncProfileWithBackend()
+                if syncResult {
+                    print("✅ Profile synced and assigned to dermatologist")
+                } else {
+                    print("⚠️ Profile sync failed, but registration succeeded")
+                }
+
                 await MainActor.run {
                     isLoading = false
-                    print("Registration successful: \(user.email ?? "Unknown")")
                     // Update APIService to reflect logged in state
                     APIService.shared.isLoggedIn = true
                     onAuthenticationSuccess()
@@ -172,6 +181,27 @@ struct AuthenticationView: View {
                     handleError(error)
                 }
             }
+        }
+    }
+
+    private func syncProfileWithBackend() async -> Bool {
+        return await withCheckedContinuation { continuation in
+            var cancellable: AnyCancellable?
+            cancellable = APIService.shared.syncProfile()
+                .sink(
+                    receiveCompletion: { completion in
+                        if case .failure(let error) = completion {
+                            print("Profile sync error: \(error)")
+                            continuation.resume(returning: false)
+                        }
+                        cancellable?.cancel()
+                    },
+                    receiveValue: { response in
+                        print("Profile synced: Assigned to \(response.assignedDermatologist.name)")
+                        continuation.resume(returning: true)
+                        cancellable?.cancel()
+                    }
+                )
         }
     }
 
