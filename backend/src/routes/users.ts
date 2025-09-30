@@ -472,4 +472,77 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
+// Get all patients for a dermatologist (with photos)
+router.get('/patients', async (req, res, next) => {
+  try {
+    // Only dermatologists can access this endpoint
+    if (req.user!.userType !== 'dermatologist') {
+      return res.status(403).json({
+        error: 'Only dermatologists can access patient list',
+        code: 'FORBIDDEN'
+      });
+    }
+
+    const patients = await prisma.user.findMany({
+      where: {
+        dermatologistId: req.user!.id
+      },
+      select: {
+        id: true,
+        name: true,
+        skinType: true,
+        currentSkinScore: true,
+        streakCount: true,
+        joinDate: true,
+        createdAt: true,
+        allergies: true,
+        currentMedications: true,
+        skinConcerns: true,
+        skinPhotos: {
+          orderBy: { captureDate: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            photoUrl: true,
+            skinScore: true,
+            captureDate: true,
+            notes: true
+          }
+        },
+        appointments: {
+          orderBy: { scheduledDate: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            scheduledDate: true,
+            type: true,
+            status: true,
+            concern: true
+          }
+        },
+        prescriptions: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            medicationName: true,
+            dosage: true,
+            prescribedDate: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.json({
+      patients,
+      total: patients.length
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
