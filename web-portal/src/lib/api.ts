@@ -29,6 +29,7 @@ class APIService {
   private token: string | null = null;
 
   constructor() {
+    // Use production backend on Render
     this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'https://clearaf.onrender.com/api';
     // Load token from Supabase session
     this.initializeAuth();
@@ -49,7 +50,11 @@ class APIService {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    
+
+    // Get current Supabase session token
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || this.token;
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
@@ -59,10 +64,10 @@ class APIService {
     };
 
     // Add auth token if available
-    if (this.token) {
+    if (token) {
       config.headers = {
         ...config.headers,
-        Authorization: `Bearer ${this.token}`,
+        Authorization: `Bearer ${token}`,
       };
     }
 

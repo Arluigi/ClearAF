@@ -75,7 +75,6 @@ router.get('/stats', async (req, res) => {
       select: {
         id: true,
         name: true,
-        email: true,
         skinType: true,
         currentSkinScore: true,
         updatedAt: true,
