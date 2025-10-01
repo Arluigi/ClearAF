@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "clean": "rm -rf dist",
-    "build": "npm run clean && npx prisma generate && tsc",
+    "prebuild": "rm -rf dist",
+    "build": "npx prisma generate && tsc",
     "start": "node dist/server.js",
     "db:migrate": "npx prisma migrate dev",
     "db:deploy": "npx prisma migrate deploy",
