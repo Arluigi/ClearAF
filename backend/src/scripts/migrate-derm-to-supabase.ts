@@ -1,3 +1,4 @@
+import { developmentPassword } from './development-password';
 import { PrismaClient } from '@prisma/client';
 import { supabaseAdmin } from '../config/supabase';
 
@@ -20,7 +21,7 @@ async function migrateDermToSupabase() {
     // Create Supabase Auth user for Dr. Amit Om
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: drAmit.email,
-      password: 'amit123',
+      password: developmentPassword,
       email_confirm: true,
       user_metadata: {
         name: drAmit.name,
@@ -41,7 +42,6 @@ async function migrateDermToSupabase() {
           console.log('✅ Found existing Supabase Auth user:', amitUser.id);
           console.log('\nLogin credentials:');
           console.log('Email: dr.amitom@clearaf.com');
-          console.log('Password: amit123');
         }
       } else {
         throw error;
@@ -51,7 +51,6 @@ async function migrateDermToSupabase() {
       console.log('User ID:', data.user?.id);
       console.log('\nLogin credentials:');
       console.log('Email: dr.amitom@clearaf.com');
-      console.log('Password: amit123');
     }
 
     console.log('\n🎉 Dermatologist migration complete!');

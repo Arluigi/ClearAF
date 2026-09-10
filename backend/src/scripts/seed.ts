@@ -1,3 +1,4 @@
+import { developmentPassword } from './development-password';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -7,8 +8,8 @@ async function main() {
   console.log('🌱 Starting database seed...');
 
   // Create Dr. Amit Om (default dermatologist from iOS app)
-  const hashedPassword = await bcrypt.hash('demo123456', 12);
-  
+  const hashedPassword = await bcrypt.hash(developmentPassword, 12);
+
   const drAmit = await prisma.dermatologist.upsert({
     where: { email: 'amit.om@clearaf.com' },
     update: {},

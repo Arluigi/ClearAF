@@ -1,10 +1,10 @@
 import express from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 import { requireDermatologist, requirePatient } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Create prescription (dermatologists only)
 router.post('/', requireDermatologist, async (req, res, next) => {
@@ -21,6 +21,9 @@ router.post('/', requireDermatologist, async (req, res, next) => {
     });
 
     const validatedData = createSchema.parse(req.body);
+
+    const patient = await prisma.user.findUnique({ where: { id: validatedData.patientId, dermatologistId: req.user!.id } });
+    if (!patient) return res.status(404).json({ error: 'Patient not found or not assigned to you', code: 'PATIENT_NOT_FOUND' });
 
     const prescription = await prisma.prescription.create({
       data: {
@@ -71,6 +74,7 @@ router.get('/', async (req, res, next) => {
       whereClause.patientId = req.user!.id;
     } else {
       whereClause.dermatologistId = req.user!.id;
+      whereClause.patient = { dermatologistId: req.user!.id };
     }
 
     if (status === 'active') {
@@ -134,9 +138,10 @@ router.patch('/:id', requireDermatologist, async (req, res, next) => {
     const { id } = req.params;
 
     const prescription = await prisma.prescription.update({
-      where: { 
+      where: {
         id,
-        dermatologistId: req.user!.id  // Ensure dermatologist owns this prescription
+        dermatologistId: req.user!.id,
+        patient: { dermatologistId: req.user!.id }
       },
       data: {
         ...validatedData,

@@ -1,0 +1,96 @@
+// Creates only uniquely named synthetic accounts; cleanup is limited to their IDs.
+// Run from backend: node scripts/security-live.cjs prepare|verify|cleanup
+const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const {Client}=require('pg');const{createClient}=require('@supabase/supabase-js');
+require('dotenv').config({quiet:true});
+const statePath=process.env.SECURITY_FIXTURE_STATE||'/tmp/clearaf-security-fixtures.json';
+const base=process.env.SECURITY_API_URL||'https://clearaf-api.vercel.app/api';
+const admin=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+const publicClient=()=>createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+const db=new Client({connectionString:process.env.DATABASE_URL});
+function save(s){fs.writeFileSync(statePath,JSON.stringify(s),{mode:0o600});fs.chmodSync(statePath,0o600)}
+async function run(){
+ await db.connect();const mode=process.argv[2];
+ if(mode==='prepare'){
+  assert(!fs.existsSync(statePath),'Existing fixture state must be cleaned up first');
+  const s={run:crypto.randomUUID(),accounts:[],photoIds:[],paths:[]};save(s);
+  for(const role of ['patientA','patientB','doctorA','doctorB']){
+   const account={role,email:`clearaf-security-${s.run}-${role.toLowerCase()}@example.invalid`,password:crypto.randomBytes(30).toString('base64url')};
+   const {data,error}=await admin.auth.admin.createUser({email:account.email,password:account.password,email_confirm:true,user_metadata:{name:'Synthetic Security Test'}});
+   if(error)throw error;account.id=data.user.id;s.accounts.push(account);save(s);
+   if(role.startsWith('doctor'))await db.query('insert into public.dermatologists (id,name,email,password,"createdAt","updatedAt") values ($1,$2,$3,$4,now(),now())',[account.id,'Synthetic Security Clinician',account.email,'UNUSED_SUPABASE_AUTH']);
+  }
+  const [a,b,d,e]=s.accounts;await db.query('update public.user_profiles set "dermatologistId"=case when id=$1::uuid then $3::uuid else $4::uuid end where id in ($1::uuid,$2::uuid)',[a.id,b.id,d.id,e.id]);
+  console.log('Prepared four isolated synthetic accounts; auth trigger/profile creation passed.');
+ }else if(mode==='verify'){
+  const s=JSON.parse(fs.readFileSync(statePath));const [a,b,d,e]=s.accounts;
+  for(const account of s.accounts){const{data,error}=await publicClient().auth.signInWithPassword({email:account.email,password:account.password});if(error)throw error;account.token=data.session.access_token;}
+  const results=[];function ok(name){results.push(name);console.log('PASS '+name)}
+  async function call(path,account,method='GET',body){const r=await fetch(base+path,{method,headers:{...(account?{Authorization:`Bearer ${account.token}`}:{}) ,...(body&&! (body instanceof FormData)?{'Content-Type':'application/json'}:{})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined});return r}
+  assert.equal((await call('/photos')).status,401);ok('anonymous API access denied');
+  assert.equal((await call('/users/profile',a)).status,200);ok('patient authenticated profile access');
+  const dr=await call('/users/profile',d);assert.equal(dr.status,200);assert.equal((await dr.json()).user.userType,'dermatologist');ok('clinician role resolved from trusted database');
+  for(const account of [a,d])assert.equal((await call('/users/assign-dermatologist',account,'POST',{patientId:b.id,dermatologistId:d.id})).status,403);ok('client reassignment denied');
+  assert.equal((await call('/auth/sync-profile',a,'POST',{})).status,200);const assignment=await db.query('select "dermatologistId" from user_profiles where id=$1',[a.id]);assert.equal(assignment.rows[0].dermatologistId,d.id);ok('profile sync preserves assignment');
+  assert.equal((await call('/prescriptions',e,'POST',{patientId:a.id,medicationName:'Synthetic only',dosage:'test',instructions:'test'})).status,404);ok('unassigned prescription denied');
+  assert.equal((await call('/messages/reply',e,'POST',{patientId:a.id,content:'Synthetic only'})).status,404);ok('unassigned reply denied');
+  const form=new FormData();form.set('photo',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII=','base64')],{type:'image/png'}),'synthetic.png');form.set('notes','Synthetic security verification; remove after test.');
+  const upload=await call('/photos/upload',a,'POST',form);assert.equal(upload.status,201,'upload failed: '+upload.status);const photo=(await upload.json()).photo;s.photoIds.push(photo.id);s.paths.push(photo.storagePath);save({...s,accounts:s.accounts.map(({token,...x})=>x)});ok('patient upload stored successfully');
+  assert.match(photo.photoUrl,/\/object\/sign\//);assert.equal((await fetch(photo.photoUrl)).status,200);ok('authorized signed image downloads');
+  const owner=await call('/photos/'+photo.id,a);assert.equal(owner.status,200);assert.equal(owner.headers.get('cache-control'),'no-store');ok('owner photo access; no-store response');
+  assert.equal((await call('/photos/'+photo.id,b)).status,404);assert.equal((await call('/photos/'+photo.id,b,'PATCH',{notes:'not allowed'})).status,404);assert.equal((await call('/photos/'+photo.id,b,'DELETE')).status,404);ok('other patient read/edit/delete denied');
+  assert.equal((await call('/photos/patient/'+a.id,e)).status,404);ok('unassigned clinician photo list denied');
+  const assigned=await call('/photos/patient/'+a.id,d);assert.equal(assigned.status,200);const gallery=await assigned.json();assert(gallery.data.some(p=>p.id===photo.id));assert.equal((await fetch(gallery.data.find(p=>p.id===photo.id).photoUrl)).status,200);ok('assigned clinician can retrieve shared photo');
+  const nested=await call('/users/patients',d);assert.equal(nested.status,200);const nestedBody=await nested.json();assert.match(nestedBody.patients.find(p=>p.id===a.id).skinPhotos[0].photoUrl,/\/object\/sign\//);ok('portal nested photo links are signed');
+  const intent=await call('/photos/upload-url',a,'POST',{mimeType:'image/png'});assert.equal(intent.status,200);const uploadIntent=await intent.json();assert(uploadIntent.storagePath.startsWith(a.id+'/'));
+  const largeImage=Buffer.alloc(5*1024*1024);Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII=','base64').copy(largeImage);
+  s.paths.push(uploadIntent.storagePath);save({...s,accounts:s.accounts.map(({token,...x})=>x)});
+  const put=await fetch(uploadIntent.signedUrl,{method:'PUT',headers:{'Content-Type':'image/png'},body:largeImage});assert.equal(put.status,200);ok('5 MB synthetic image uploaded directly to private Storage');
+  assert.equal((await call('/photos/complete-upload',b,'POST',{storagePath:uploadIntent.storagePath})).status,400);ok('another patient cannot finalize uploaded object');
+  const beforeScore=await db.query('select "streakCount" from user_profiles where id=$1',[a.id]);
+  const completions=await Promise.all([1,2].map(()=>call('/photos/complete-upload',a,'POST',{storagePath:uploadIntent.storagePath,skinScore:42,notes:'Synthetic large upload verification'})));
+  assert.deepEqual(completions.map(r=>r.status).sort(),[200,201]);
+  const completed=await Promise.all(completions.map(r=>r.json()));assert.equal(completed[0].photo.id,completed[1].photo.id);
+  const largePhoto=completed[0].photo;s.photoIds.push(largePhoto.id);save({...s,accounts:s.accounts.map(({token,...x})=>x)});
+  const afterScore=await db.query('select "streakCount", "currentSkinScore" from user_profiles where id=$1',[a.id]);
+  assert.equal(afterScore.rows[0].streakCount,beforeScore.rows[0].streakCount+1);assert.equal(afterScore.rows[0].currentSkinScore,42);ok('concurrent completion creates one photo and applies score once');
+  const repeated=await call('/photos/complete-upload',a,'POST',{storagePath:uploadIntent.storagePath});assert.equal(repeated.status,200);assert.equal((await repeated.json()).photo.id,largePhoto.id);ok('direct upload finalizes once and repeat completion is idempotent');
+  const largeGallery=await call('/photos/patient/'+a.id,d);assert((await largeGallery.json()).data.some(p=>p.id===largePhoto.id));ok('assigned clinician sees large direct upload');
+  // Data API privileges are tested with no real rows selected or changed.
+  for(const token of [process.env.SUPABASE_ANON_KEY,a.token,d.token])for(const table of ['_prisma_migrations','appointments','dermatologists','messages','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles']){
+   const r=await fetch(`${process.env.SUPABASE_URL}/rest/v1/${table}?select=id&limit=0`,{headers:{apikey:process.env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`}});assert([401,403].includes(r.status),`direct ${table} access: ${r.status}`);
+  }ok('all 11 tables deny anonymous, patient and clinician direct reads');
+  for(const token of [process.env.SUPABASE_ANON_KEY,a.token,d.token])for(const method of ['POST','PATCH','DELETE']){
+   const url=`${process.env.SUPABASE_URL}/rest/v1/skin_photos${method==='POST'?'':`?id=eq.${photo.id}`}`;
+   const r=await fetch(url,{method,headers:{apikey:process.env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:method==='DELETE'?undefined:JSON.stringify(method==='POST'?{id:crypto.randomUUID(),userId:a.id,photoUrl:'synthetic'}:{notes:'must not update'})});assert([401,403].includes(r.status),`direct write ${method}: ${r.status}`);
+  }ok('anonymous/patient/clinician direct create, update and delete denied');
+  const legacy=`${process.env.SUPABASE_URL}/storage/v1/object/public/patient-photos/${photo.storagePath}`;assert.notEqual((await fetch(legacy)).status,200);ok('public photo URL cannot download private object');
+  for(const account of [undefined,a,b,d]){
+   const c=account?createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY,{global:{headers:{Authorization:`Bearer ${account.token}`}},auth:{persistSession:false}}):publicClient();
+   const {data:list}=await c.storage.from('patient-photos').list(a.id);assert(!list?.length,'direct listing exposed objects');
+   const{error:downloadError}=await c.storage.from('patient-photos').download(photo.storagePath);assert(downloadError,'direct download succeeded');
+   const{error:writeError}=await c.storage.from('patient-photos').upload(`${a.id}/denied-${crypto.randomUUID()}.png`,Buffer.from('synthetic'),{contentType:'image/png'});assert(writeError,'direct upload succeeded');
+   await c.storage.from('patient-photos').remove([photo.storagePath]);const{error:stillThere}=await admin.storage.from('patient-photos').info(photo.storagePath);assert(!stillThere,'unauthorized delete removed object');
+  }ok('direct storage list/read/upload/delete blocked for client roles');
+  const {data:short,error:shortError}=await admin.storage.from('patient-photos').createSignedUrl(photo.storagePath,1);assert(!shortError);await new Promise(r=>setTimeout(r,2200));assert.notEqual((await fetch(short.signedUrl)).status,200);ok('expired signed URL denied');
+  const deletion=await call('/photos/'+photo.id,a,'DELETE');assert.equal(deletion.status,200);const{error:missing}=await admin.storage.from('patient-photos').info(photo.storagePath);assert(missing);ok('owner deletion removes stored object');
+  const logout=await admin.auth.admin.signOut(b.token,'global');assert(!logout.error);assert.equal((await call('/users/profile',b)).status,401);ok('revoked session JWT cannot access API');
+  const extra=await admin.auth.admin.createUser({email:`clearaf-security-${s.run}-postmigration@example.invalid`,password:crypto.randomBytes(32).toString('hex'),email_confirm:true});assert(!extra.error);const profileCreated=await db.query('select exists(select 1 from public.user_profiles where id=$1) as present',[extra.data.user.id]);assert(profileCreated.rows[0].present);await admin.auth.admin.deleteUser(extra.data.user.id);await db.query('delete from public.user_profiles where id=$1',[extra.data.user.id]);ok('signup profile trigger works after permission hardening');
+  fs.writeFileSync('../docs/security/live-verification.json' ,JSON.stringify({date:new Date().toISOString(),api:base,passed:results},null,2));
+ }else if(mode==='cleanup'){
+  if(!fs.existsSync(statePath)){console.log('No fixture state to clean');return}
+  const s=JSON.parse(fs.readFileSync(statePath));assert(s.run&&s.accounts.every(a=>a.email.startsWith(`clearaf-security-${s.run}-`)),'Invalid fixture identity');
+  if(s.paths.length){const{error}=await admin.storage.from('patient-photos').remove(s.paths);if(error)throw error}
+  for(const a of s.accounts){const{data,error}=await admin.auth.admin.getUserById(a.id);if(error||data.user.email!==a.email)throw Error('Fixture identity mismatch; cleanup stopped')}
+  const ids=s.accounts.map(a=>a.id);
+  await db.query('delete from public.user_profiles where name=$1 and not exists(select 1 from auth.users where auth.users.id=user_profiles.id)',[`clearaf-security-${s.run}-postmigration@example.invalid`]);
+  await db.query('delete from public.skin_photos where "userId"=any($1::uuid[])',[ids]);
+  await db.query('delete from public.messages where "senderId"=any($1::text[]) or "recipientId"=any($1::text[])',[ids]);
+  await db.query('delete from public.prescriptions where "patientId"=any($1::uuid[])',[ids]);
+  await db.query('delete from public.user_profiles where id=any($1::uuid[])',[ids]);
+  await db.query('delete from public.dermatologists where id=any($1::uuid[])',[ids]);
+  for(const a of s.accounts){const{error}=await admin.auth.admin.deleteUser(a.id);if(error)throw error}
+  fs.unlinkSync(statePath);console.log('Removed only this run’s synthetic accounts, rows and objects.');
+ }else throw Error('Expected prepare|verify|cleanup');
+}
+run().catch(e=>{console.error('Verification failed:',e.code||e.message);process.exitCode=1}).finally(()=>db.end());

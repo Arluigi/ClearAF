@@ -1,3 +1,4 @@
+import { developmentPassword } from './development-password';
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
@@ -16,7 +17,7 @@ async function testSupabasePhotoUpload() {
     try {
       const registerResponse = await axios.post(`${API_URL}/api/auth/register`, {
         email: 'test.supabase@clearaf.com',
-        password: 'test123',
+        password: developmentPassword,
         name: 'Supabase Test User',
         userType: 'patient'
       });
@@ -27,7 +28,7 @@ async function testSupabasePhotoUpload() {
         // User exists, try logging in
         const loginResponse = await axios.post(`${API_URL}/api/auth/login`, {
           email: 'test.supabase@clearaf.com',
-          password: 'test123'
+          password: developmentPassword
         });
         authToken = loginResponse.data.token;
         console.log('✅ User logged in successfully');

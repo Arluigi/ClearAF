@@ -1,17 +1,17 @@
 import express from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Validation schemas
 const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message content is required'),
   recipientId: z.string().uuid('Invalid recipient ID'),
-  messageType: z.enum(['text', 'image']).default('text'),
-  attachmentUrl: z.string().url().optional()
+  messageType: z.literal('text').default('text'),
+  attachmentUrl: z.never().optional()
 });
 
 // Send message (patients to dermatologists)
@@ -20,6 +20,8 @@ router.post('/send', requirePatient, async (req, res, next) => {
     const validatedData = sendMessageSchema.parse(req.body);
     const { content, recipientId, messageType, attachmentUrl } = validatedData;
 
+    const patient = await prisma.user.findUnique({ where: { id: req.user!.id, dermatologistId: recipientId } });
+    if (!patient) return res.status(404).json({ error: 'Assigned clinician not found', code: 'RECIPIENT_NOT_FOUND' });
     // Verify recipient is a dermatologist
     const dermatologist = await prisma.dermatologist.findUnique({
       where: { id: recipientId },
@@ -43,7 +45,7 @@ router.post('/send', requirePatient, async (req, res, next) => {
         recipientType: 'dermatologist',
         messageType,
         attachmentUrl,
-        attachmentType: messageType === 'image' ? 'image' : null
+        attachmentType: null
       }
     });
 
@@ -65,6 +67,8 @@ router.get('/conversation/:dermatologistId', requirePatient, async (req, res, ne
     const limit = parseInt(req.query.limit as string) || 50;
     const skip = (page - 1) * limit;
 
+    const patient = await prisma.user.findUnique({ where: { id: req.user!.id, dermatologistId } });
+    if (!patient) return res.status(404).json({ error: 'Assigned clinician not found', code: 'RECIPIENT_NOT_FOUND' });
     // Get messages between current user and dermatologist
     const messages = await prisma.message.findMany({
       where: {
@@ -105,7 +109,7 @@ router.get('/conversation/:dermatologistId', requirePatient, async (req, res, ne
     });
 
     res.json({
-      messages,
+      messages: messages.map(message => ({ ...message, attachmentUrl: null, attachmentType: null })),
       pagination: {
         page,
         limit,
@@ -162,7 +166,7 @@ router.get('/conversations', requireDermatologist, async (req, res, next) => {
     const conversationsWithDetails = await Promise.all(
       Array.from(patientIds).map(async (patientId) => {
         const patient = await prisma.user.findUnique({
-          where: { id: patientId },
+          where: { id: patientId, dermatologistId: req.user!.id },
           select: {
             id: true,
             name: true,
@@ -244,8 +248,8 @@ router.post('/reply', requireDermatologist, async (req, res, next) => {
     const replySchema = z.object({
       content: z.string().min(1, 'Message content is required'),
       patientId: z.string().uuid('Invalid patient ID'),
-      messageType: z.enum(['text', 'image']).default('text'),
-      attachmentUrl: z.string().url().optional()
+      messageType: z.literal('text').default('text'),
+      attachmentUrl: z.never().optional()
     });
 
     const validatedData = replySchema.parse(req.body);
@@ -253,7 +257,7 @@ router.post('/reply', requireDermatologist, async (req, res, next) => {
 
     // Verify patient exists
     const patient = await prisma.user.findUnique({
-      where: { id: patientId },
+      where: { id: patientId, dermatologistId: req.user!.id },
       select: { id: true, name: true }
     });
 
@@ -274,7 +278,7 @@ router.post('/reply', requireDermatologist, async (req, res, next) => {
         recipientType: 'patient',
         messageType,
         attachmentUrl,
-        attachmentType: messageType === 'image' ? 'image' : null
+        attachmentType: null
       }
     });
 
@@ -304,6 +308,8 @@ router.get('/', requireDermatologist, async (req, res, next) => {
         });
       }
 
+      const patient = await prisma.user.findUnique({ where: { id: receiverId, dermatologistId: user!.id } });
+      if (!patient) return res.status(404).json({ error: 'Patient not found or not assigned to you', code: 'PATIENT_NOT_FOUND' });
       // Get messages between dermatologist and patient
       const messages = await prisma.message.findMany({
         where: {
@@ -316,7 +322,7 @@ router.get('/', requireDermatologist, async (req, res, next) => {
             },
             {
               senderId: receiverId,
-              senderType: 'patient', 
+              senderType: 'patient',
               recipientId: user!.id,
               recipientType: 'dermatologist'
             }
@@ -363,7 +369,7 @@ router.get('/', requireDermatologist, async (req, res, next) => {
       });
 
       res.json({
-        data: messages,
+        data: messages.map(message => ({ ...message, attachmentUrl: null, attachmentType: null })),
         pagination: {
           page,
           limit,

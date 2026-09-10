@@ -1,9 +1,9 @@
 import express from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Get products
 router.get('/', async (req, res, next) => {

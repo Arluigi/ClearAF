@@ -1,10 +1,10 @@
 import express from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 import { requirePatient } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Validation schemas
 const createRoutineSchema = z.object({
@@ -107,7 +107,7 @@ router.get('/:id', requirePatient, async (req, res, next) => {
     const { id } = req.params;
 
     const routine = await prisma.routine.findUnique({
-      where: { 
+      where: {
         id,
         userId: req.user!.id
       },
@@ -139,7 +139,7 @@ router.patch('/:id', requirePatient, async (req, res, next) => {
     const validatedData = updateRoutineSchema.parse(req.body);
 
     const routine = await prisma.routine.update({
-      where: { 
+      where: {
         id,
         userId: req.user!.id
       },
@@ -167,7 +167,7 @@ router.delete('/:id', requirePatient, async (req, res, next) => {
     const { id } = req.params;
 
     await prisma.routine.delete({
-      where: { 
+      where: {
         id,
         userId: req.user!.id
       }
@@ -189,7 +189,7 @@ router.post('/:routineId/steps/:stepId/complete', requirePatient, async (req, re
 
     // Verify routine belongs to user
     const routine = await prisma.routine.findUnique({
-      where: { 
+      where: {
         id: routineId,
         userId: req.user!.id
       }
@@ -204,7 +204,7 @@ router.post('/:routineId/steps/:stepId/complete', requirePatient, async (req, re
 
     // Update step completion
     const step = await prisma.routineStep.update({
-      where: { 
+      where: {
         id: stepId,
         routineId
       },

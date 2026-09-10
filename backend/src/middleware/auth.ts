@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 import { supabaseAdmin } from '../config/supabase';
 
-const prisma = new PrismaClient();
+
 
 interface SupabaseJwtPayload {
   sub: string; // user id
@@ -45,12 +45,24 @@ export const authenticateToken = async (
     // Verify Supabase JWT token
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
-    if (error || !user) {
+    if (error || !user || !user.email || !user.email_confirmed_at) {
       return res.status(401).json({
         error: 'Invalid or expired token',
         code: 'INVALID_TOKEN'
       });
     }
+
+    // getUser verifies the token first. Check its session ID as well so sign-out
+    // and credential retirement take effect before the access JWT expires.
+    let sessionId: string | undefined;
+    try { sessionId = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).session_id; } catch { /* reject below */ }
+    if (!sessionId || !/^[a-f0-9-]{36}$/i.test(sessionId)) {
+      return res.status(401).json({ error: 'Active session required', code: 'INVALID_SESSION' });
+    }
+    const sessions = await prisma.$queryRaw<Array<{ active: boolean }>>`
+      SELECT EXISTS (SELECT 1 FROM auth.sessions WHERE id = ${sessionId}::uuid AND user_id = ${user.id}::uuid) AS active
+    `;
+    if (!sessions[0]?.active) return res.status(401).json({ error: 'Session has ended', code: 'INVALID_SESSION' });
 
     // Check if user is a dermatologist or patient
     // Dermatologists have separate table, patients use user_profiles
@@ -76,7 +88,7 @@ export const authenticateToken = async (
 
     return next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    console.error('Operation failed');
     res.status(500).json({
       error: 'Authentication error',
       code: 'AUTH_ERROR'
@@ -92,7 +104,7 @@ export const requireDermatologist = (
   next: NextFunction
 ) => {
   if (!req.user || req.user.userType !== 'dermatologist') {
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: 'Dermatologist access required',
       code: 'INSUFFICIENT_PERMISSIONS'
     });
@@ -107,7 +119,7 @@ export const requirePatient = (
   next: NextFunction
 ) => {
   if (!req.user || req.user.userType !== 'patient') {
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: 'Patient access required',
       code: 'INSUFFICIENT_PERMISSIONS'
     });

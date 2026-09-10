@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+@layer base {
+  :root {
+    /* Clear AF Dark Theme - Default */
+    --background: 0 0% 0%;                    /* #000000 - Pure black */
+    --foreground: 0 0% 100%;                  /* #FFFFFF - White text */
+    --card: 0 0% 12%;                         /* #1F1F1F - Card background */
+    --card-foreground: 0 0% 100%;             /* #FFFFFF - Card text */
+    --popover: 0 0% 18%;                      /* #2D2D2D - Popover background */
+    --popover-foreground: 0 0% 100%;          /* #FFFFFF - Popover text */
+    --primary: 258 90% 66%;                   /* #8B5CF6 - Clear AF Purple */
+    --primary-foreground: 0 0% 100%;          /* #FFFFFF - White on purple */
+    --secondary: 0 0% 18%;                    /* #2D2D2D - Secondary background */
+    --secondary-foreground: 0 0% 100%;        /* #FFFFFF - Secondary text */
+    --muted: 0 0% 12%;                        /* #1F1F1F - Muted background */
+    --muted-foreground: 240 5% 65%;           /* #A1A1AA - Muted text */
+    --accent: 172 77% 40%;                    /* #14B8A6 - Clear AF Teal */
+    --accent-foreground: 0 0% 100%;           /* #FFFFFF - White on teal */
+    --destructive: 0 84% 60%;                 /* #EF4444 - Red for errors */
+    --destructive-foreground: 0 0% 100%;      /* #FFFFFF - White on red */
+    --border: 240 4% 46%;                     /* #71717A - Border color */
+    --input: 0 0% 18%;                        /* #2D2D2D - Input background */
+    --ring: 258 90% 66%;                      /* #8B5CF6 - Focus ring (purple) */
+    --chart-1: 258 90% 66%;                   /* #8B5CF6 - Purple */
+    --chart-2: 172 77% 40%;                   /* #14B8A6 - Teal */
+    --chart-3: 221 91% 60%;                   /* #3B82F6 - Blue */
+    --chart-4: 142 76% 36%;                   /* #10B981 - Green */
+    --chart-5: 38 92% 50%;                    /* #F59E0B - Orange */
+    --radius: 0.75rem;
+  }
+
+  /* Light theme (unused but kept for compatibility) */
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 20 14.3% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14.3% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14.3% 4.1%;
+    --primary: 258 90% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 60 4.8% 95.9%;
+    --secondary-foreground: 24 9.8% 10%;
+    --muted: 60 4.8% 95.9%;
+    --muted-foreground: 25 5.3% 44.7%;
+    --accent: 172 77% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 20 5.9% 90%;
+    --input: 20 5.9% 90%;
+    --ring: 258 90% 66%;
+    --chart-1: 258 90% 66%;
+    --chart-2: 172 77% 40%;
+    --chart-3: 221 91% 60%;
+    --chart-4: 142 76% 36%;
+    --chart-5: 38 92% 50%;
+    --radius: 0.75rem;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

@@ -1,14 +1,14 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Get dashboard statistics for dermatologist
 router.get('/stats', async (req, res) => {
   try {
     const user = req.user;
-    
+
     if (!user || user.userType !== 'dermatologist') {
       return res.status(403).json({ error: 'Access denied. Dermatologists only.' });
     }
@@ -28,6 +28,7 @@ router.get('/stats', async (req, res) => {
     const appointmentsToday = await prisma.appointment.count({
       where: {
         dermatologistId: user.id,
+        patient: { dermatologistId: user.id },
         scheduledDate: {
           gte: startOfDay,
           lte: endOfDay
@@ -38,10 +39,14 @@ router.get('/stats', async (req, res) => {
       }
     });
 
+    const assignedPatients = await prisma.user.findMany({ where: { dermatologistId: user.id }, select: { id: true } });
     // Get unread messages count
     const unreadMessages = await prisma.message.count({
       where: {
         recipientId: user.id,
+        recipientType: 'dermatologist',
+        senderType: 'patient',
+        senderId: { in: assignedPatients.map(patient => patient.id) },
         isRead: false
       }
     });
@@ -59,7 +64,7 @@ router.get('/stats', async (req, res) => {
       }
     });
 
-    const avgImprovement = patientsWithScores.length > 0 
+    const avgImprovement = patientsWithScores.length > 0
       ? Math.round(patientsWithScores.reduce((sum, patient) => sum + (patient.currentSkinScore || 0), 0) / patientsWithScores.length)
       : 0;
 
@@ -92,6 +97,7 @@ router.get('/stats', async (req, res) => {
     const upcomingAppointments = await prisma.appointment.findMany({
       where: {
         dermatologistId: user.id,
+        patient: { dermatologistId: user.id },
         scheduledDate: {
           gte: startOfDay,
           lte: endOfDay
@@ -124,7 +130,7 @@ router.get('/stats', async (req, res) => {
 
     res.json(dashboardStats);
   } catch (error) {
-    console.error('Dashboard stats error:', error);
+    console.error('Operation failed');
     res.status(500).json({ error: 'Failed to load dashboard statistics' });
   }
 });
