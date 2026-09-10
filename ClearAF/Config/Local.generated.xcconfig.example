@@ -1,0 +1,3 @@
+// Copy the local ANON_KEY reported by supabase status (never service_role).
+// Local.generated.xcconfig is ignored by git.
+CLEARAF_LOCAL_SUPABASE_ANON_KEY = replace-with-local-anon-jwt

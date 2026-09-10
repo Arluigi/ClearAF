@@ -1,3 +1,5 @@
+> Development setup, canonical database migrations, and recovery instructions: [T1 runbook](docs/baseline/README.md). The feature descriptions below are historical and are not a release-readiness statement.
+
 # ClearAF
 
 A comprehensive iOS skincare tracking app that helps users monitor their skin progress through photos, manage daily routines, and track their skincare journey.

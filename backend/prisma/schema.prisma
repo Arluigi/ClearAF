@@ -9,8 +9,11 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Supabase owns auth.users and the user_profiles.id -> auth.users.id cascade FK.
+// Canonical SQL also owns RLS, grants, signup triggers/functions and migration metadata.
+// Prisma must not replace those platform objects.
 model User {
-  id                    String         @id @default(uuid())
+  id                    String         @id @db.Uuid
   name                  String?
   skinType              String?
   currentSkinScore      Int            @default(0)
@@ -19,21 +22,24 @@ model User {
   allergies             String?
   currentMedications    String?
   skinConcerns          String?
-  joinDate              DateTime       @default(now())
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  dermatologistId       String?
+  joinDate              DateTime       @default(now()) @db.Timestamp(3)
+  createdAt             DateTime       @default(now()) @db.Timestamp(3)
+  updatedAt             DateTime       @default(now()) @updatedAt @db.Timestamp(3)
+  dermatologistId       String?        @db.Uuid
   appointments          Appointment[]
   prescriptions         Prescription[]
   skinPhotos            SkinPhoto[]
   subscriptions         Subscription[]
-  assignedDermatologist Dermatologist? @relation(fields: [dermatologistId], references: [id])
+  assignedDermatologist Dermatologist? @relation(fields: [dermatologistId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  routines Routine[]
+
+  @@index([dermatologistId], map: "idx_user_profiles_dermatologist")
   @@map("user_profiles")
 }
 
 model Dermatologist {
-  id              String         @id @default(uuid())
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name            String
   email           String         @unique
   password        String
@@ -42,8 +48,8 @@ model Dermatologist {
   profileImageUrl String?
   phone           String?
   isAvailable     Boolean        @default(true)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime       @default(now()) @db.Timestamp(3)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamp(3)
   appointments    Appointment[]
   prescriptions   Prescription[]
   patients        User[]
@@ -52,8 +58,8 @@ model Dermatologist {
 }
 
 model Appointment {
-  id              String        @id @default(uuid())
-  scheduledDate   DateTime
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scheduledDate   DateTime      @db.Timestamp(3)
   duration        Int           @default(30)
   type            String
   status          String        @default("scheduled")
@@ -61,71 +67,74 @@ model Appointment {
   notes           String?
   visitNotes      String?
   videoCallURL    String?
-  createdDate     DateTime      @default(now())
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  patientId       String
-  dermatologistId String
-  dermatologist   Dermatologist @relation(fields: [dermatologistId], references: [id])
-  patient         User          @relation(fields: [patientId], references: [id])
+  createdDate     DateTime      @default(now()) @db.Timestamp(3)
+  createdAt       DateTime      @default(now()) @db.Timestamp(3)
+  updatedAt       DateTime      @default(now()) @updatedAt @db.Timestamp(3)
+  patientId       String        @db.Uuid
+  dermatologistId String        @db.Uuid
+  dermatologist   Dermatologist @relation(fields: [dermatologistId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  patient         User          @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   relatedPhotos   SkinPhoto[]
 
+  @@index([dermatologistId], map: "idx_appointments_dermatologist")
+  @@index([patientId], map: "idx_appointments_patient")
   @@map("appointments")
 }
 
 model Prescription {
-  id               String        @id @default(uuid())
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   medicationName   String
   dosage           String
   instructions     String
-  prescribedDate   DateTime      @default(now())
-  expiryDate       DateTime?
+  prescribedDate   DateTime      @default(now()) @db.Timestamp(3)
+  expiryDate       DateTime?     @db.Timestamp(3)
   refillsRemaining Int           @default(0)
   isActive         Boolean       @default(true)
   pharmacy         String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  patientId        String
-  dermatologistId  String
-  productId        String?
-  prescribedBy     Dermatologist @relation(fields: [dermatologistId], references: [id])
-  patient          User          @relation(fields: [patientId], references: [id])
-  relatedProduct   Product?      @relation(fields: [productId], references: [id])
+  createdAt        DateTime      @default(now()) @db.Timestamp(3)
+  updatedAt        DateTime      @default(now()) @updatedAt @db.Timestamp(3)
+  patientId        String        @db.Uuid
+  dermatologistId  String        @db.Uuid
+  productId        String?       @db.Uuid
+  prescribedBy     Dermatologist @relation(fields: [dermatologistId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  patient          User          @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  relatedProduct   Product?      @relation(fields: [productId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([patientId], map: "idx_prescriptions_patient")
   @@map("prescriptions")
 }
 
 model Message {
-  id             String    @id @default(uuid())
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   content        String
-  sentDate       DateTime  @default(now())
-  isRead         Boolean   @default(false)
-  messageType    String    @default("text")
+  sentDate       DateTime @default(now()) @db.Timestamp(3)
+  isRead         Boolean  @default(false)
+  messageType    String   @default("text")
   attachmentUrl  String?
   attachmentType String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now()) @db.Timestamp(3)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamp(3)
   senderId       String
-  senderType     String    // 'patient' or 'dermatologist'
+  senderType     String   @default("patient") // 'patient' or 'dermatologist'
   recipientId    String
-  recipientType  String    // 'patient' or 'dermatologist'
+  recipientType  String   @default("dermatologist") // 'patient' or 'dermatologist'
 
   @@map("messages")
 }
 
 model Product {
-  id                     String         @id @default(uuid())
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                   String
   brand                  String?
   category               String
-  price                  Decimal
+  price                  Decimal        @db.Decimal(65, 30)
   productDescription     String?
   ingredients            String?
   imageUrl               String?
   isAvailable            Boolean        @default(true)
   isPrescriptionRequired Boolean        @default(false)
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
+  createdAt              DateTime       @default(now()) @db.Timestamp(3)
+  updatedAt              DateTime       @default(now()) @updatedAt @db.Timestamp(3)
   prescriptions          Prescription[]
   subscriptions          Subscription[]
 
@@ -133,66 +142,69 @@ model Product {
 }
 
 model Subscription {
-  id               String   @id @default(uuid())
-  startDate        DateTime @default(now())
-  nextDeliveryDate DateTime
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  startDate        DateTime @default(now()) @db.Timestamp(3)
+  nextDeliveryDate DateTime @db.Timestamp(3)
   frequency        String
   quantity         Int      @default(1)
   status           String   @default("active")
-  totalPrice       Decimal
+  totalPrice       Decimal  @db.Decimal(65, 30)
   isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  userId           String
-  productId        String
-  product          Product  @relation(fields: [productId], references: [id])
-  user             User     @relation(fields: [userId], references: [id])
+  createdAt        DateTime @default(now()) @db.Timestamp(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamp(3)
+  userId           String   @db.Uuid
+  productId        String   @db.Uuid
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@map("subscriptions")
 }
 
 model SkinPhoto {
-  id                 String       @id @default(uuid())
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   photoUrl           String
   skinScore          Int          @default(0)
   notes              String?
-  captureDate        DateTime     @default(now())
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  userId             String
-  appointmentId      String?
-  relatedAppointment Appointment? @relation(fields: [appointmentId], references: [id])
-  user               User         @relation(fields: [userId], references: [id])
+  captureDate        DateTime     @default(now()) @db.Timestamp(3)
+  createdAt          DateTime     @default(now()) @db.Timestamp(3)
+  updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamp(3)
+  userId             String       @db.Uuid
+  appointmentId      String?      @db.Uuid
+  relatedAppointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  user               User         @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([userId], map: "idx_skin_photos_user")
   @@map("skin_photos")
 }
 
 model Routine {
-  id             String        @id @default(uuid())
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name           String
   timeOfDay      String
   isActive       Boolean       @default(true)
   completedToday Boolean       @default(false)
-  userId         String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  userId         String        @db.Uuid
+  createdAt      DateTime      @default(now()) @db.Timestamp(3)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamp(3)
   steps          RoutineStep[]
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@map("routines")
 }
 
 model RoutineStep {
-  id           String   @id @default(uuid())
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   productName  String
   productType  String?
   instructions String?
   duration     Int      @default(0)
   orderIndex   Int      @default(0)
   isCompleted  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  routineId    String
-  routine      Routine  @relation(fields: [routineId], references: [id])
+  createdAt    DateTime @default(now()) @db.Timestamp(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamp(3)
+  routineId    String   @db.Uuid
+  routine      Routine  @relation(fields: [routineId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@map("routine_steps")
 }

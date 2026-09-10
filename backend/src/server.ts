@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
+import { createDatabaseProbe, createDependencyProbes, createReadiness, installHealthRoutes } from './services/readiness';
 
 // Import routes
 import authRoutes from './routes/auth-supabase';
@@ -41,17 +42,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // Note: Photo serving now handled by S3 - no local static files needed
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: '2.1.0-security',
-    auth: 'supabase',
-    supabaseEnabled: !!process.env.SUPABASE_URL,
-    storageReady: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
-  });
-});
+// Liveness is dependency-free; readiness performs bounded, metadata-only probes.
+installHealthRoutes(app, createReadiness(createDependencyProbes({
+  database: createDatabaseProbe(process.env.DATABASE_URL!),
+  url: process.env.SUPABASE_URL!,
+  serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!
+})));
 
 // API Routes
 app.use('/api', (_req, res, next) => {

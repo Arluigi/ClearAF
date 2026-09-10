@@ -9,11 +9,12 @@
     "prebuild": "rm -rf dist",
     "build": "npx prisma generate && tsc",
     "start": "node dist/server.js",
-    "db:migrate": "npx prisma migrate dev",
-    "db:deploy": "npx prisma migrate deploy",
+    "db:migrate": "node ../scripts/migrations.cjs apply",
+    "db:deploy": "node ../scripts/migrations.cjs apply",
     "db:seed": "tsx src/scripts/seed.ts",
     "postinstall": "npx prisma generate",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "db:status": "node ../scripts/migrations.cjs status"
   },
   "dependencies": {
     "@prisma/client": "^5.6.0",
@@ -35,6 +36,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.3.0",
     "node-fetch": "^2.7.0",
+    "pg": "8.23.0",
     "uuid": "^11.1.1",
     "ws": "^8.21.3",
     "zod": "^3.22.4"
@@ -47,9 +49,9 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/multer": "^1.4.13",
     "@types/node": "^20.9.0",
+    "@types/pg": "^8.23.1",
     "@types/ws": "^8.5.9",
     "form-data": "^4.0.6",
-    "pg": "8.23.0",
     "prisma": "^5.6.0",
     "tsx": "^4.1.1",
     "typescript": "^5.2.2"
