@@ -13,13 +13,8 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  console.error('Error occurred:', {
-    message: error.message,
-    stack: error.stack,
-    url: req.url,
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
+  // Do not log request paths, payloads, database arguments or signed image URLs.
+  console.error('Request failed', { name: error.name, code: error.code || 'UNEXPECTED_ERROR', method: req.method });
 
   // Prisma database errors
   if (error instanceof PrismaClientKnownRequestError) {

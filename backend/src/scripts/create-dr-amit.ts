@@ -1,3 +1,4 @@
+import { developmentPassword } from './development-password';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -18,7 +19,7 @@ async function createDrAmit() {
     }
 
     // Create Dr. Amit Om
-    const hashedPassword = await bcrypt.hash('amit123', 10);
+    const hashedPassword = await bcrypt.hash(developmentPassword, 10);
 
     const drAmit = await prisma.dermatologist.create({
       data: {
@@ -39,7 +40,6 @@ async function createDrAmit() {
     console.log('Email:', drAmit.email);
     console.log('\nLogin credentials:');
     console.log('Email: dr.amitom@clearaf.com');
-    console.log('Password: amit123');
 
     return drAmit;
   } catch (error) {

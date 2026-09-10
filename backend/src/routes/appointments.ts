@@ -1,10 +1,11 @@
 import express from 'express';
+import { privatePhotos } from '../services/photoAccess';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Validation schemas
 const createAppointmentSchema = z.object({
@@ -45,7 +46,10 @@ router.post('/', requirePatient, async (req, res, next) => {
       });
     }
 
-    const targetDermatologistId = dermatologistId || user.assignedDermatologist?.id;
+    if (dermatologistId && dermatologistId !== user.dermatologistId) {
+      return res.status(403).json({ error: 'Only your assigned clinician can be booked', code: 'ACCESS_DENIED' });
+    }
+    const targetDermatologistId = user.dermatologistId;
 
     if (!targetDermatologistId) {
       return res.status(400).json({
@@ -144,6 +148,7 @@ router.get('/', async (req, res, next) => {
       whereClause.patientId = req.user!.id;
     } else {
       whereClause.dermatologistId = req.user!.id;
+      whereClause.patient = { dermatologistId: req.user!.id };
     }
 
     if (status) {
@@ -190,7 +195,7 @@ router.get('/', async (req, res, next) => {
     });
 
     res.json({
-      appointments,
+      appointments: await Promise.all(appointments.map(async appointment => ({ ...appointment, relatedPhotos: await privatePhotos(appointment.relatedPhotos, appointment.patientId) }))),
       pagination: {
         page,
         limit,
@@ -257,7 +262,7 @@ router.get('/:id', async (req, res, next) => {
     // Verify user has access to this appointment
     const hasAccess = (
       (req.user!.userType === 'patient' && appointment.patientId === req.user!.id) ||
-      (req.user!.userType === 'dermatologist' && appointment.dermatologistId === req.user!.id)
+      (req.user!.userType === 'dermatologist' && appointment.dermatologistId === req.user!.id && !!await prisma.user.findUnique({ where: { id: appointment.patientId, dermatologistId: req.user!.id } }))
     );
 
     if (!hasAccess) {
@@ -267,7 +272,7 @@ router.get('/:id', async (req, res, next) => {
       });
     }
 
-    res.json({ appointment });
+    res.json({ appointment: { ...appointment, relatedPhotos: await privatePhotos(appointment.relatedPhotos, appointment.patientId) } });
 
   } catch (error) {
     next(error);
@@ -301,7 +306,7 @@ router.patch('/:id', async (req, res, next) => {
     // Check permissions
     const hasAccess = (
       (req.user!.userType === 'patient' && existingAppointment.patientId === req.user!.id) ||
-      (req.user!.userType === 'dermatologist' && existingAppointment.dermatologistId === req.user!.id)
+      (req.user!.userType === 'dermatologist' && existingAppointment.dermatologistId === req.user!.id && !!await prisma.user.findUnique({ where: { id: existingAppointment.patientId, dermatologistId: req.user!.id } }))
     );
 
     if (!hasAccess) {
@@ -392,7 +397,7 @@ router.delete('/:id', async (req, res, next) => {
     // Check permissions
     const hasAccess = (
       (req.user!.userType === 'patient' && appointment.patientId === req.user!.id) ||
-      (req.user!.userType === 'dermatologist' && appointment.dermatologistId === req.user!.id)
+      (req.user!.userType === 'dermatologist' && appointment.dermatologistId === req.user!.id && !!await prisma.user.findUnique({ where: { id: appointment.patientId, dermatologistId: req.user!.id } }))
     );
 
     if (!hasAccess) {

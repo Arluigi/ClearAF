@@ -1,9 +1,10 @@
 import express from 'express';
+import { authenticateToken, requirePatient } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Note: Actual authentication (signup/login) is handled by Supabase Auth
 // These endpoints are for backend-specific operations
@@ -47,7 +48,7 @@ router.get('/health', async (req, res) => {
 });
 
 // Sync user profile after Supabase registration
-router.post('/sync-profile', async (req, res, next) => {
+router.post('/sync-profile', authenticateToken, requirePatient, async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1];
@@ -63,46 +64,25 @@ router.post('/sync-profile', async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    // Get Dr. Amit Om's ID (find first available dermatologist)
-    const drAmit = await prisma.dermatologist.findFirst({
-      where: { email: 'dr.amitom@clearaf.com' }
-    });
-
-    if (!drAmit) {
-      return res.status(500).json({ error: 'No dermatologist available' });
-    }
-
-    // Create or update user profile with dermatologist assignment
+    // Never let profile synchronization change a practice-managed assignment.
     const userProfile = await prisma.user.upsert({
       where: { id: user.id },
-      update: {
-        // Update existing profile if needed
-        dermatologistId: drAmit.id
-      },
+      update: {},
       create: {
         id: user.id,
         name: user.user_metadata?.name || null,
         skinType: user.user_metadata?.skinType || null,
-        dermatologistId: drAmit.id,  // Auto-assign to Dr. Amit Om
         onboardingCompleted: false
-      }
+      },
+      include: { assignedDermatologist: { select: { id: true, name: true } } }
     });
-
     res.json({
       success: true,
-      user: {
-        id: userProfile.id,
-        name: userProfile.name,
-        skinType: userProfile.skinType,
-        dermatologistId: userProfile.dermatologistId
-      },
-      assignedDermatologist: {
-        id: drAmit.id,
-        name: drAmit.name
-      }
+      user: { id: userProfile.id, name: userProfile.name, skinType: userProfile.skinType, dermatologistId: userProfile.dermatologistId },
+      assignedDermatologist: userProfile.assignedDermatologist ?? null
     });
   } catch (error) {
-    console.error('Error syncing profile:', error);
+    console.error('Operation failed');
     next(error);
   }
 });

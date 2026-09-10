@@ -1,0 +1,10 @@
+.env
+.env.*
+node_modules
+.git
+*.log
+tests
+docs
+backend-logs.txt
+src/scripts
+scripts

@@ -7,11 +7,16 @@
 
 import SwiftUI
 import CoreData
+import Combine
 
 struct AppointmentBookingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
-    
+
+    @State private var cancellables = Set<AnyCancellable>()
+    @State private var isBooking = false
+    @State private var bookingError: String?
+
     @State private var currentStep = 0
     @State private var selectedConcern = ""
     @State private var selectedPhotos: [Data] = []
@@ -21,7 +26,7 @@ struct AppointmentBookingView: View {
     @State private var showingImagePicker = false
     @State private var showingCamera = false
     @State private var showingPhotoTakenMessage = false
-    
+
     private let concerns = [
         "Acne breakout",
         "Skin irritation",
@@ -32,23 +37,23 @@ struct AppointmentBookingView: View {
         "Follow-up visit",
         "Other concern"
     ]
-    
+
     private let timeSlots = [
         "9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM",
         "11:00 AM", "11:30 AM", "2:00 PM", "2:30 PM",
         "3:00 PM", "3:30 PM", "4:00 PM", "4:30 PM"
     ]
-    
+
     var body: some View {
         NavigationView {
             ZStack {
                 Color.backgroundSecondary.ignoresSafeArea()
-                
+
                 VStack(spacing: .spaceXL) {
                     // Progress indicator
                     BookingProgressIndicator(currentStep: currentStep, totalSteps: 4)
                         .padding(.horizontal, .spaceXL)
-                    
+
                     // Step content
                     switch currentStep {
                     case 0:
@@ -76,13 +81,14 @@ struct AppointmentBookingView: View {
                     default:
                         EmptyView()
                     }
-                    
+
                     Spacer()
-                    
+
                     // Navigation buttons
                     BookingNavigationButtons(
                         currentStep: $currentStep,
                         canProceed: canProceed,
+                        isLoading: isBooking,
                         onComplete: bookAppointment
                     )
                 }
@@ -93,6 +99,14 @@ struct AppointmentBookingView: View {
             .navigationBarItems(
                 leading: Button("Cancel") { dismiss() }
             )
+            .alert("Booking Error", isPresented: .constant(bookingError != nil)) {
+                Button("OK") { bookingError = nil }
+            } message: {
+                if let error = bookingError {
+                    Text(error)
+                }
+            }
+            .disabled(isBooking)
         }
         .sheet(isPresented: $showingCamera) {
             PhotoCaptureView(
@@ -103,7 +117,7 @@ struct AppointmentBookingView: View {
                 showingCamera = false
                 showingPhotoTakenMessage = true
                 HapticManager.success()
-                
+
                 // Hide message after 2 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     showingPhotoTakenMessage = false
@@ -136,7 +150,7 @@ struct AppointmentBookingView: View {
             }
         )
     }
-    
+
     private var canProceed: Bool {
         switch currentStep {
         case 0: return !selectedConcern.isEmpty
@@ -146,28 +160,53 @@ struct AppointmentBookingView: View {
         default: return false
         }
     }
-    
+
     private func bookAppointment() {
-        // TODO: Create Appointment entity in Core Data
-        let appointment = Appointment(context: viewContext)
-        appointment.id = UUID()
-        appointment.concern = selectedConcern
-        appointment.scheduledDate = combineDateAndTime()
-        appointment.status = "scheduled"
-        appointment.type = "virtual"
-        appointment.notes = additionalNotes
-        appointment.createdDate = Date()
-        
-        do {
-            try viewContext.save()
-            HapticManager.success()
-            dismiss()
-        } catch {
-            HapticManager.error()
-            print("Error booking appointment: \(error)")
+        isBooking = true
+        bookingError = nil
+
+        let scheduledDateTime = combineDateAndTime()
+
+        // Map concern to appointment type
+        let appointmentType: String
+        switch selectedConcern.lowercased() {
+        case let c where c.contains("follow"):
+            appointmentType = "follow-up"
+        case let c where c.contains("emergency") || c.contains("urgent"):
+            appointmentType = "emergency"
+        case let c where c.contains("routine") || c.contains("check"):
+            appointmentType = "consultation"
+        default:
+            appointmentType = "consultation"
         }
+
+        // Create appointment via API
+        APIService.shared.createAppointment(
+            scheduledDate: scheduledDateTime,
+            type: appointmentType,
+            concern: selectedConcern,
+            notes: additionalNotes.isEmpty ? nil : additionalNotes
+        )
+        .sink(
+            receiveCompletion: { [self] completion in
+                isBooking = false
+                switch completion {
+                case .finished:
+                    HapticManager.success()
+                    dismiss()
+                case .failure(let error):
+                    HapticManager.error()
+                    bookingError = error.localizedDescription
+                    print("Error booking appointment: \(error)")
+                }
+            },
+            receiveValue: { response in
+                print("Appointment created successfully: \(response.id)")
+            }
+        )
+        .store(in: &cancellables)
     }
-    
+
     private func combineDateAndTime() -> Date {
         let calendar = Calendar.current
         let timeComponents = selectedTimeSlot.components(separatedBy: " ")
@@ -176,7 +215,7 @@ struct AppointmentBookingView: View {
         let minute = Int(timePart[1]) ?? 0
         let isPM = timeComponents.count > 1 && timeComponents[1] == "PM"
         let adjustedHour = isPM && hour != 12 ? hour + 12 : (hour == 12 && !isPM ? 0 : hour)
-        
+
         return calendar.date(bySettingHour: adjustedHour, minute: minute, second: 0, of: selectedDate) ?? selectedDate
     }
 }
@@ -186,7 +225,7 @@ struct AppointmentBookingView: View {
 struct BookingProgressIndicator: View {
     let currentStep: Int
     let totalSteps: Int
-    
+
     var body: some View {
         VStack(spacing: .spaceMD) {
             HStack {
@@ -198,7 +237,7 @@ struct BookingProgressIndicator: View {
                             Circle()
                                 .stroke(Color.primaryPurple, lineWidth: step == currentStep ? 2 : 0)
                         )
-                    
+
                     if step < totalSteps - 1 {
                         Rectangle()
                             .fill(step < currentStep ? Color.primaryPurple : Color.backgroundSecondary)
@@ -206,7 +245,7 @@ struct BookingProgressIndicator: View {
                     }
                 }
             }
-            
+
             Text("Step \(currentStep + 1) of \(totalSteps)")
                 .font(.captionLarge)
                 .foregroundColor(.textSecondary)
@@ -219,20 +258,20 @@ struct BookingProgressIndicator: View {
 struct ConcernSelectionStep: View {
     @Binding var selectedConcern: String
     let concerns: [String]
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceXL) {
             VStack(alignment: .leading, spacing: .spaceMD) {
                 Text("What brings you in today?")
                     .font(.headlineLarge)
                     .foregroundColor(.textPrimary)
-                
+
                 Text("Select your primary concern to help us prepare for your visit")
                     .font(.bodyMedium)
                     .foregroundColor(.textSecondary)
             }
             .padding(.horizontal, .spaceXL)
-            
+
             ScrollView {
                 VStack(spacing: .spaceMD) {
                     ForEach(concerns, id: \.self) { concern in
@@ -255,7 +294,7 @@ struct ConcernOptionCard: View {
     let concern: String
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack {
@@ -263,9 +302,9 @@ struct ConcernOptionCard: View {
                     .font(.bodyLarge)
                     .foregroundColor(.textPrimary)
                     .multilineTextAlignment(.leading)
-                
+
                 Spacer()
-                
+
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
@@ -295,20 +334,20 @@ struct PhotoUploadStep: View {
     @Binding var selectedPhotos: [Data]
     @Binding var showingImagePicker: Bool
     @Binding var showingCamera: Bool
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceXL) {
             VStack(alignment: .leading, spacing: .spaceMD) {
                 Text("Share photos (optional)")
                     .font(.headlineLarge)
                     .foregroundColor(.textPrimary)
-                
+
                 Text("Upload photos of your concern to help your dermatologist prepare")
                     .font(.bodyMedium)
                     .foregroundColor(.textSecondary)
             }
             .padding(.horizontal, .spaceXL)
-            
+
             VStack(spacing: .spaceLG) {
                 // Photo upload button
                 PhotoUploadButton(
@@ -317,7 +356,7 @@ struct PhotoUploadStep: View {
                     action: { showingCamera = true }
                 )
                 .padding(.horizontal, .spaceXL)
-                
+
                 // Selected photos preview
                 if !selectedPhotos.isEmpty {
                     VStack(alignment: .leading, spacing: .spaceMD) {
@@ -325,7 +364,7 @@ struct PhotoUploadStep: View {
                             .font(.headlineSmall)
                             .foregroundColor(.textPrimary)
                             .padding(.horizontal, .spaceXL)
-                        
+
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: .spaceMD) {
                                 ForEach(0..<selectedPhotos.count, id: \.self) { index in
@@ -339,7 +378,7 @@ struct PhotoUploadStep: View {
                     }
                 }
             }
-            
+
             Spacer()
         }
     }
@@ -349,20 +388,20 @@ struct PhotoUploadButton: View {
     let title: String
     let icon: String
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack {
                 Image(systemName: icon)
                     .font(.title2)
                     .foregroundColor(.primaryPurple)
-                
+
                 Text(title)
                     .font(.headlineMedium)
                     .foregroundColor(.primaryPurple)
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(.primaryPurple)
@@ -381,7 +420,7 @@ struct PhotoUploadButton: View {
 struct PhotoThumbnail: View {
     let data: Data
     let onRemove: () -> Void
-    
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             if let uiImage = UIImage(data: data) {
@@ -391,7 +430,7 @@ struct PhotoThumbnail: View {
                     .frame(width: 80, height: 80)
                     .clipShape(RoundedRectangle(cornerRadius: .radiusMedium))
             }
-            
+
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
@@ -410,20 +449,20 @@ struct DateTimeSelectionStep: View {
     @Binding var selectedDate: Date
     @Binding var selectedTimeSlot: String
     let timeSlots: [String]
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceXL) {
             VStack(alignment: .leading, spacing: .spaceMD) {
                 Text("Choose date & time")
                     .font(.headlineLarge)
                     .foregroundColor(.textPrimary)
-                
+
                 Text("Select your preferred appointment time")
                     .font(.bodyMedium)
                     .foregroundColor(.textSecondary)
             }
             .padding(.horizontal, .spaceXL)
-            
+
             VStack(spacing: .spaceLG) {
                 // Date picker
                 VStack(alignment: .leading, spacing: .spaceMD) {
@@ -431,7 +470,7 @@ struct DateTimeSelectionStep: View {
                         .font(.headlineSmall)
                         .foregroundColor(.textPrimary)
                         .padding(.horizontal, .spaceXL)
-                    
+
                     DatePicker(
                         "",
                         selection: $selectedDate,
@@ -441,14 +480,14 @@ struct DateTimeSelectionStep: View {
                     .datePickerStyle(.compact)
                     .padding(.horizontal, .spaceXL)
                 }
-                
+
                 // Time slot selection
                 VStack(alignment: .leading, spacing: .spaceMD) {
                     Text("Available Times")
                         .font(.headlineSmall)
                         .foregroundColor(.textPrimary)
                         .padding(.horizontal, .spaceXL)
-                    
+
                     ScrollView {
                         LazyVGrid(columns: [
                             GridItem(.flexible()),
@@ -477,7 +516,7 @@ struct TimeSlotButton: View {
     let timeSlot: String
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Text(timeSlot)
@@ -510,26 +549,26 @@ struct ConfirmationStep: View {
     let timeSlot: String
     let photosCount: Int
     @Binding var additionalNotes: String
-    
+
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .full
         return formatter
     }()
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceXL) {
             VStack(alignment: .leading, spacing: .spaceMD) {
                 Text("Confirm appointment")
                     .font(.headlineLarge)
                     .foregroundColor(.textPrimary)
-                
+
                 Text("Review your appointment details")
                     .font(.bodyMedium)
                     .foregroundColor(.textSecondary)
             }
             .padding(.horizontal, .spaceXL)
-            
+
             ScrollView {
                 VStack(spacing: .spaceLG) {
                     // Appointment summary
@@ -541,13 +580,13 @@ struct ConfirmationStep: View {
                     }
                     .wellnessCard()
                     .padding(.horizontal, .spaceXL)
-                    
+
                     // Additional notes
                     VStack(alignment: .leading, spacing: .spaceMD) {
                         Text("Additional Notes (Optional)")
                             .font(.headlineSmall)
                             .foregroundColor(.textPrimary)
-                        
+
                         TextField("Any additional details...", text: $additionalNotes, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(3...6)
@@ -562,15 +601,15 @@ struct ConfirmationStep: View {
 struct ConfirmationRow: View {
     let label: String
     let value: String
-    
+
     var body: some View {
         HStack {
             Text(label)
                 .font(.bodyMedium)
                 .foregroundColor(.textSecondary)
-            
+
             Spacer()
-            
+
             Text(value)
                 .font(.bodyMedium)
                 .foregroundColor(.textPrimary)
@@ -585,8 +624,9 @@ struct ConfirmationRow: View {
 struct BookingNavigationButtons: View {
     @Binding var currentStep: Int
     let canProceed: Bool
+    let isLoading: Bool
     let onComplete: () -> Void
-    
+
     var body: some View {
         HStack(spacing: .spaceMD) {
             // Back button
@@ -601,8 +641,9 @@ struct BookingNavigationButtons: View {
                 .padding(.spaceLG)
                 .background(Color.buttonSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
+                .disabled(isLoading)
             }
-            
+
             // Next/Complete button
             Button(currentStep == 3 ? "Book Appointment" : "Next") {
                 if currentStep == 3 {
@@ -617,9 +658,15 @@ struct BookingNavigationButtons: View {
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.spaceLG)
-            .background(canProceed ? AnyView(Color.primaryGradient) : AnyView(Color.textTertiary))
+            .background(canProceed && !isLoading ? AnyView(Color.primaryGradient) : AnyView(Color.textTertiary))
             .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-            .disabled(!canProceed)
+            .disabled(!canProceed || isLoading)
+            .overlay {
+                if isLoading && currentStep == 3 {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
         }
         .padding(.horizontal, .spaceXL)
         .padding(.bottom, .spaceXL)

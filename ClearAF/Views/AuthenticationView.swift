@@ -14,11 +14,11 @@ struct AuthenticationView: View {
 
     let skinTypes = ["Normal", "Dry", "Oily", "Combination", "Sensitive"]
     let onAuthenticationSuccess: () -> Void
-    
+
     var body: some View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea()
-            
+
             ScrollView {
                 VStack(spacing: 32) {
                     // Header
@@ -26,18 +26,18 @@ struct AuthenticationView: View {
                         Image(systemName: "cross.case.fill")
                             .font(.system(size: 60))
                             .foregroundColor(.blue)
-                        
+
                         Text("Clear AF")
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
-                        
+
                         Text(isRegistering ? "Create your account" : "Welcome back")
                             .font(.title2)
                             .foregroundColor(.secondary)
                     }
                     .padding(.top, 50)
-                    
+
                     // Form
                     VStack(spacing: 20) {
                         if isRegistering {
@@ -47,7 +47,7 @@ struct AuthenticationView: View {
                                 placeholder: "Enter your full name"
                             )
                         }
-                        
+
                         CustomTextField(
                             title: "Email",
                             text: $email,
@@ -55,20 +55,20 @@ struct AuthenticationView: View {
                         )
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
-                        
+
                         CustomTextField(
                             title: "Password",
                             text: $password,
                             placeholder: "Enter your password",
                             isSecure: true
                         )
-                        
+
                         if isRegistering {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Skin Type")
                                     .font(.headline)
                                     .foregroundColor(.primary)
-                                
+
                                 Picker("Skin Type", selection: $selectedSkinType) {
                                     ForEach(skinTypes, id: \.self) { type in
                                         Text(type).tag(type)
@@ -82,7 +82,7 @@ struct AuthenticationView: View {
                         }
                     }
                     .padding(.horizontal, 24)
-                    
+
                     // Action Button
                     Button(action: {
                         if isRegistering {
@@ -111,7 +111,7 @@ struct AuthenticationView: View {
                     }
                     .disabled(!isFormValid || isLoading)
                     .padding(.horizontal, 24)
-                    
+
                     // Toggle Authentication Mode
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
@@ -127,7 +127,7 @@ struct AuthenticationView: View {
                                 .fontWeight(.semibold)
                         }
                     }
-                    
+
                     Spacer(minLength: 50)
                 }
             }
@@ -138,7 +138,7 @@ struct AuthenticationView: View {
             Text(errorMessage)
         }
     }
-    
+
     private var isFormValid: Bool {
         if isRegistering {
             return !name.isEmpty && !email.isEmpty && !password.isEmpty && password.count >= 6
@@ -146,7 +146,7 @@ struct AuthenticationView: View {
             return !email.isEmpty && !password.isEmpty
         }
     }
-    
+
     private func registerUser() {
         isLoading = true
 
@@ -196,8 +196,7 @@ struct AuthenticationView: View {
                         }
                         cancellable?.cancel()
                     },
-                    receiveValue: { response in
-                        print("Profile synced: Assigned to \(response.assignedDermatologist.name)")
+                    receiveValue: { _ in
                         continuation.resume(returning: true)
                         cancellable?.cancel()
                     }
@@ -230,12 +229,12 @@ struct AuthenticationView: View {
             }
         }
     }
-    
+
     private func handleError(_ error: Error) {
         errorMessage = error.localizedDescription
         showError = true
     }
-    
+
     private func clearForm() {
         email = ""
         password = ""
@@ -253,13 +252,13 @@ struct CustomTextField: View {
     var isSecure: Bool = false
     var keyboardType: UIKeyboardType = .default
     var autocapitalization: TextInputAutocapitalization = .words
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.headline)
                 .foregroundColor(.primary)
-            
+
             Group {
                 if isSecure {
                     SecureField(placeholder, text: $text)

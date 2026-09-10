@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Select,
   SelectContent,
@@ -63,12 +63,12 @@ export default function PatientsPage() {
     try {
       setLoading(true);
       setError('');
-      
+
       const response = await apiService.getPatients(page, 20, searchQuery);
       setPatients(response.data);
       setTotalPages(response.pagination.totalPages);
     } catch (error) {
-      console.error('Failed to fetch patients:', error);
+
       setError('Failed to load patients. Please try again.');
     } finally {
       setLoading(false);
@@ -123,11 +123,11 @@ export default function PatientsPage() {
 
   const filteredPatients = patients.filter(patient => {
     const matchesSearch = patient.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         patient.email.toLowerCase().includes(searchQuery.toLowerCase());
+                         patient.email?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSkinType = skinTypeFilter === 'all' || patient.skinType === skinTypeFilter;
     const patientStatus = getPatientStatus(patient);
     const matchesStatus = statusFilter === 'all' || patientStatus === statusFilter;
-    
+
     return matchesSearch && matchesSkinType && matchesStatus;
   });
 
@@ -221,7 +221,7 @@ export default function PatientsPage() {
                   className="pl-9"
                 />
               </div>
-              
+
               <div className="flex gap-2">
                 <Select value={skinTypeFilter} onValueChange={setSkinTypeFilter}>
                   <SelectTrigger className="w-40">
@@ -288,11 +288,9 @@ export default function PatientsPage() {
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <Avatar className="h-10 w-10">
-                                <AvatarImage 
-                                  src={patient.name ? `https://api.dicebear.com/7.x/initials/svg?seed=${patient.name}` : undefined} 
-                                />
+
                                 <AvatarFallback className="bg-primary/10 text-primary border border-primary/20">
-                                  {patient.name ? patient.name.split(' ').map(n => n[0]).join('').toUpperCase() : patient.email[0].toUpperCase()}
+                                  {patient.name ? patient.name.split(' ').map(n => n[0]).join('').toUpperCase() : patient.email?.[0]?.toUpperCase() || '?'}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
@@ -309,8 +307,8 @@ export default function PatientsPage() {
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">{patient.currentSkinScore}</span>
                                 <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-clearaf-green rounded-full transition-all" 
+                                  <div
+                                    className="h-full bg-clearaf-green rounded-full transition-all"
                                     style={{ width: `${patient.currentSkinScore}%` }}
                                   />
                                 </div>
@@ -325,7 +323,7 @@ export default function PatientsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {new Date(patient.createdAt).toLocaleDateString()}
+                            {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : 'Not available'}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -339,11 +337,11 @@ export default function PatientsPage() {
                                   <PatientDetailDialog patient={patient} />
                                 </DialogContent>
                               </Dialog>
-                              
+
                               <Button variant="ghost" size="sm">
                                 <MessageCircle className="h-4 w-4" />
                               </Button>
-                              
+
                               <Button variant="ghost" size="sm">
                                 <Calendar className="h-4 w-4" />
                               </Button>
@@ -364,16 +362,16 @@ export default function PatientsPage() {
                   Showing {((page - 1) * 10) + 1} to {Math.min(page * 10, patients.length)} of {patients.length} patients
                 </p>
                 <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
                   >
                     Previous
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
@@ -395,27 +393,27 @@ function PatientDetailDialog({ patient }: { patient: User }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
-  const [photoTimeline, setPhotoTimeline] = useState<any>(null);
+  const [photoTimeline, setPhotoTimeline] = useState<Awaited<ReturnType<typeof apiService.getPhotoTimeline>>['timeline'] | null>(null);
 
-  const status = patient.currentSkinScore ? 
-    (patient.currentSkinScore >= 85 ? 'excellent' : 
-     patient.currentSkinScore >= 70 ? 'good' : 
+  const status = patient.currentSkinScore ?
+    (patient.currentSkinScore >= 85 ? 'excellent' :
+     patient.currentSkinScore >= 70 ? 'good' :
      patient.currentSkinScore >= 50 ? 'fair' : 'needs_attention') : 'new';
 
   const fetchPatientPhotos = async () => {
     if (photos.length > 0) return; // Already loaded
-    
+
     try {
       setPhotosLoading(true);
       const [photosResponse, timelineResponse] = await Promise.all([
         apiService.getPatientPhotos(patient.id, 1, 10),
         apiService.getPhotoTimeline(patient.id, 30)
       ]);
-      
+
       setPhotos(photosResponse.data);
       setPhotoTimeline(timelineResponse.timeline);
     } catch (error) {
-      console.error('Failed to fetch patient photos:', error);
+
     } finally {
       setPhotosLoading(false);
     }
@@ -444,11 +442,9 @@ function PatientDetailDialog({ patient }: { patient: User }) {
       <DialogHeader>
         <DialogTitle className="flex items-center gap-3">
           <Avatar className="h-12 w-12">
-            <AvatarImage 
-              src={patient.name ? `https://api.dicebear.com/7.x/initials/svg?seed=${patient.name}` : undefined} 
-            />
+
             <AvatarFallback className="bg-primary/10 text-primary border border-primary/20">
-              {patient.name ? patient.name.split(' ').map(n => n[0]).join('').toUpperCase() : patient.email[0].toUpperCase()}
+              {patient.name ? patient.name.split(' ').map(n => n[0]).join('').toUpperCase() : patient.email?.[0]?.toUpperCase() || '?'}
             </AvatarFallback>
           </Avatar>
           <div>
@@ -460,7 +456,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
           Patient details and medical information from Clear AF mobile app
         </DialogDescription>
       </DialogHeader>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <div className="space-y-4">
           <div>
@@ -481,7 +477,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Status:</span>
                 <Badge className={getStatusColor(status)}>
-                  {status === 'excellent' ? 'Excellent' : 
+                  {status === 'excellent' ? 'Excellent' :
                    status === 'good' ? 'Good Progress' :
                    status === 'fair' ? 'Stable' :
                    status === 'needs_attention' ? 'Needs Attention' : 'New Patient'}
@@ -490,7 +486,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
             </div>
           </div>
         </div>
-        
+
         <div className="space-y-4">
           <div>
             <h4 className="font-medium mb-2">Medical Information</h4>
@@ -509,13 +505,13 @@ function PatientDetailDialog({ patient }: { patient: User }) {
               </div>
             </div>
           </div>
-          
+
           <div>
             <h4 className="font-medium mb-2">Account Details</h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Registered:</span>
-                <span>{new Date(patient.createdAt).toLocaleDateString()}</span>
+                <span>{patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : 'Not available'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Onboarding:</span>
@@ -566,7 +562,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
               <div className="text-center py-8 text-muted-foreground">
                 <Camera className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No photos uploaded yet</p>
-                <p className="text-sm">Patient hasn't taken any progress photos</p>
+                <p className="text-sm">Patient hasn&apos;t taken any progress photos</p>
               </div>
             ) : (
               <>
@@ -584,7 +580,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
                       <div className={`text-2xl font-bold ${
                         photoTimeline.stats.trend === 'improving' ? 'text-clearaf-green' :
-                        photoTimeline.stats.trend === 'declining' ? 'text-clearaf-red' : 
+                        photoTimeline.stats.trend === 'declining' ? 'text-clearaf-red' :
                         'text-clearaf-orange'
                       }`}>
                         {photoTimeline.stats.trend === 'improving' ? '↗' :
@@ -601,12 +597,13 @@ function PatientDetailDialog({ patient }: { patient: User }) {
                     <div key={photo.id} className="relative group">
                       <div className="aspect-square bg-muted rounded-lg overflow-hidden">
                         <img
+                          referrerPolicy="no-referrer"
                           src={photo.photoUrl}
                           alt={`Progress photo from ${new Date(photo.captureDate).toLocaleDateString()}`}
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             // Fallback for broken images
-                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${photo.id}`;
+                            e.currentTarget.hidden = true;
                           }}
                         />
                       </div>
@@ -635,7 +632,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
           </div>
         )}
       </div>
-      
+
       <div className="flex gap-2 mt-6">
         <Button className="flex-1">
           <MessageCircle className="h-4 w-4 mr-2" />

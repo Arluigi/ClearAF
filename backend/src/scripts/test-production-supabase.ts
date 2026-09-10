@@ -1,3 +1,4 @@
+import { developmentPassword } from './development-password';
 import axios from 'axios';
 import FormData from 'form-data';
 
@@ -24,7 +25,7 @@ async function testProductionSupabase() {
     try {
       const registerResponse = await axios.post(`${API_URL}/api/auth/register`, {
         email: 'prod.supabase.test@clearaf.com',
-        password: 'test123',
+        password: developmentPassword,
         name: 'Production Supabase Test',
         userType: 'patient'
       });
@@ -34,7 +35,7 @@ async function testProductionSupabase() {
       if (error.response?.status === 400) {
         const loginResponse = await axios.post(`${API_URL}/api/auth/login`, {
           email: 'prod.supabase.test@clearaf.com',
-          password: 'test123'
+          password: developmentPassword
         });
         authToken = loginResponse.data.token;
         console.log('✅ User logged in successfully');

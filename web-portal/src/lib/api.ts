@@ -1,7 +1,8 @@
 // API Service for Clear AF Web Portal
-// Connects to the existing backend at https://clearaf.onrender.com
+// Connects to the configured ClearAF API.
 
 import { createClient } from '@supabase/supabase-js';
+import { createAuthStorage } from './auth-storage';
 import {
   User,
   Dermatologist,
@@ -9,38 +10,42 @@ import {
   Message,
   Prescription,
   Photo,
-  LoginRequest,
   LoginResponse,
   RegisterRequest,
   RegisterResponse,
-  APIError,
   DashboardStats,
-  PaginatedResponse,
-  APIResponse
+  PaginatedResponse
 } from '@/types/api';
 
-const supabaseUrl = 'https://glrfxjydebnilsptlksg.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdscmZ4anlkZWJuaWxzcHRsa3NnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzUyNTksImV4cCI6MjA3MTExMTI1OX0.CqVuJxORUU6PgL-o7ElT_0j9M2wmX65FOuvp8wP7K6E';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Supabase public URL and anonymous key must be configured.');
+}
+
+export const authStorageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
+export const authStorage = createAuthStorage(authStorageKey, () => typeof window === 'undefined' ? null : window.localStorage);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { storageKey: authStorageKey, storage: authStorage },
+});
 
 class APIService {
   private baseURL: string;
   private token: string | null = null;
+  private signingOut = false;
 
   constructor() {
-    // Use production backend on Render
-    this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'https://clearaf.onrender.com/api';
-    // Load token from Supabase session
-    this.initializeAuth();
+    // Hosting URL is provided at build time.
+    this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
   }
 
-  private async initializeAuth() {
+  async initializeAuth() {
+    if (this.signingOut || authStorage.isLoggedOut()) { this.token = null; return; }
     if (typeof window !== 'undefined') {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        this.token = session.access_token;
-      }
+      this.token = this.signingOut || authStorage.isLoggedOut() ? null : session?.access_token ?? null;
     }
   }
 
@@ -51,9 +56,11 @@ class APIService {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
 
+    if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
     // Get current Supabase session token
     const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || this.token;
+    if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
+    const token = session?.access_token;
 
     const config: RequestInit = {
       headers: {
@@ -61,6 +68,8 @@ class APIService {
         ...options.headers,
       },
       ...options,
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer',
     };
 
     // Add auth token if available
@@ -73,7 +82,7 @@ class APIService {
 
     try {
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({
           error: `HTTP ${response.status}: ${response.statusText}`
@@ -83,7 +92,7 @@ class APIService {
 
       return await response.json();
     } catch (error) {
-      console.error(`API Request failed: ${endpoint}`, error);
+
       throw error;
     }
   }
@@ -105,6 +114,8 @@ class APIService {
 
   // Authentication Methods
   async login(email: string, password: string): Promise<LoginResponse> {
+    authStorage.beginLogin();
+    this.signingOut = false;
     // Use Supabase Auth for login
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -122,18 +133,16 @@ class APIService {
     // Set token for API requests
     this.token = data.session.access_token;
 
-    // Return in the expected format
-    return {
-      message: 'Login successful',
-      token: data.session.access_token,
-      userType: 'dermatologist',
-      user: {
-        id: data.user.id,
-        name: data.user.user_metadata?.name || '',
-        email: data.user.email || '',
-        userType: 'dermatologist'
+    try {
+      const user = await this.getCurrentUser();
+      if (user.userType !== 'dermatologist') {
+        throw new Error('A verified dermatologist account is required.');
       }
-    };
+      return { message: 'Login successful', token: data.session.access_token, userType: user.userType, user };
+    } catch (error) {
+      await this.logout();
+      throw error;
+    }
   }
 
   async register(data: Omit<RegisterRequest, 'userType'>): Promise<RegisterResponse> {
@@ -150,17 +159,27 @@ class APIService {
   }
 
   async logout(): Promise<void> {
-    this.clearToken();
+    this.signingOut = true;
+    this.token = null;
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw error;
+    } finally {
+      authStorage.clearSession();
+    }
   }
 
   // Check if user is authenticated
   isAuthenticated(): boolean {
-    return !!this.token;
+    return !this.signingOut && !authStorage.isLoggedOut() && !!this.token;
   }
 
   // Get current dermatologist profile
   async getCurrentUser(): Promise<Dermatologist> {
     const response = await this.request<{user: Dermatologist}>('/users/profile');
+    if (response.user.userType !== 'dermatologist') {
+      throw new Error('A verified dermatologist account is required.');
+    }
     return response.user;
   }
 
@@ -191,10 +210,10 @@ class APIService {
     return {
       data: paginatedPatients,
       pagination: {
-        currentPage: page,
+        page: page,
         totalPages: Math.ceil(filteredPatients.length / limit),
-        totalItems: filteredPatients.length,
-        itemsPerPage: limit
+        total: filteredPatients.length,
+        limit: limit
       }
     };
   }
@@ -228,11 +247,12 @@ class APIService {
       page: page.toString(),
       limit: limit.toString()
     });
-    
-    if (status) params.append('status', status);
+
+    if (status && status !== 'all') params.append('status', status);
     if (date) params.append('date', date);
 
-    return this.request<PaginatedResponse<Appointment>>(`/appointments?${params}`);
+    const response = await this.request<{ appointments: Appointment[]; pagination: { page: number; limit: number; total: number; pages: number } }>(`/appointments?${params}`);
+    return { data: response.appointments, pagination: { ...response.pagination, totalPages: response.pagination.pages } };
   }
 
   async createAppointment(data: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>): Promise<Appointment> {
@@ -265,7 +285,7 @@ class APIService {
       page: page.toString(),
       limit: limit.toString()
     });
-    
+
     if (receiverId) params.append('receiverId', receiverId);
 
     return this.request<PaginatedResponse<Message>>(`/messages?${params}`);
@@ -303,10 +323,11 @@ class APIService {
       page: page.toString(),
       limit: limit.toString()
     });
-    
+
     if (patientId) params.append('patientId', patientId);
 
-    return this.request<PaginatedResponse<Prescription>>(`/prescriptions?${params}`);
+    const response = await this.request<{ prescriptions: Prescription[]; pagination: { page: number; limit: number; total: number; pages: number } }>(`/prescriptions?${params}`);
+    return { data: response.prescriptions, pagination: { ...response.pagination, totalPages: response.pagination.pages } };
   }
 
   async createPrescription(data: {
@@ -373,6 +394,7 @@ class APIService {
 
   // File Upload (for future use)
   async uploadFile(file: File, type: 'avatar' | 'document' | 'image'): Promise<{ url: string }> {
+    if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);

@@ -1,0 +1,45 @@
+name: Security foundation checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=low
+  portal:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-portal
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://security-test.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: synthetic-anon
+      NEXT_PUBLIC_API_URL: https://api.example.invalid/api
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web-portal/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm audit --omit=dev --audit-level=low

@@ -1,9 +1,10 @@
 import express from 'express';
+import { privatePhotos } from '../services/photoAccess';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // Validation schemas
 const updateProfileSchema = z.object({
@@ -24,7 +25,7 @@ const updateSkinScoreSchema = z.object({
 router.get('/profile', async (req, res, next) => {
   try {
     let user;
-    
+
     if (req.user!.userType === 'patient') {
       user = await prisma.user.findUnique({
         where: { id: req.user!.id },
@@ -74,7 +75,7 @@ router.get('/profile', async (req, res, next) => {
       });
     }
 
-    res.json({ user });
+    res.json({ user: { ...user, email: req.user!.email, userType: req.user!.userType } });
 
   } catch (error) {
     next(error);
@@ -107,7 +108,7 @@ router.patch('/profile', async (req, res, next) => {
 
       res.json({
         message: 'Profile updated successfully',
-        user: updatedUser
+        user: { ...updatedUser, email: req.user!.email, userType: req.user!.userType }
       });
     } else {
       // Dermatologist profile update
@@ -120,7 +121,7 @@ router.patch('/profile', async (req, res, next) => {
       });
 
       const dermatologistData = dermatologistUpdateSchema.parse(req.body);
-      
+
       const updatedDermatologist = await prisma.dermatologist.update({
         where: { id: req.user!.id },
         data: dermatologistData,
@@ -137,7 +138,7 @@ router.patch('/profile', async (req, res, next) => {
 
       res.json({
         message: 'Profile updated successfully',
-        user: updatedDermatologist
+        user: { ...updatedDermatologist, email: req.user!.email, userType: req.user!.userType }
       });
     }
 
@@ -178,7 +179,7 @@ router.post('/skin-score', async (req, res, next) => {
     // If photo ID provided, update the photo's skin score
     if (photoId) {
       await prisma.skinPhoto.update({
-        where: { 
+        where: {
           id: photoId,
           userId: req.user!.id  // Ensure user owns the photo
         },
@@ -190,7 +191,7 @@ router.post('/skin-score', async (req, res, next) => {
 
     res.json({
       message: 'Skin score updated successfully',
-      user: updatedUser
+      user: { ...updatedUser, email: req.user!.email, userType: req.user!.userType }
     });
 
   } catch (error) {
@@ -232,7 +233,7 @@ router.get('/stats', async (req, res, next) => {
 
       // Calculate score trend
       const scoreHistory = recentPhotos.map(photo => photo.skinScore);
-      const averageScore = scoreHistory.length > 0 
+      const averageScore = scoreHistory.length > 0
         ? Math.round(scoreHistory.reduce((a, b) => a + b, 0) / scoreHistory.length)
         : 0;
 
@@ -243,7 +244,7 @@ router.get('/stats', async (req, res, next) => {
           streakCount: user?.streakCount || 0,
           totalPhotos,
           totalAppointments,
-          daysSinceJoined: user?.joinDate 
+          daysSinceJoined: user?.joinDate
             ? Math.floor((Date.now() - user.joinDate.getTime()) / (1000 * 60 * 60 * 24))
             : 0,
           recentScores: scoreHistory
@@ -257,12 +258,13 @@ router.get('/stats', async (req, res, next) => {
       });
 
       const totalAppointments = await prisma.appointment.count({
-        where: { dermatologistId: req.user!.id }
+        where: { dermatologistId: req.user!.id, patient: { dermatologistId: req.user!.id } }
       });
 
       const upcomingAppointments = await prisma.appointment.count({
         where: {
           dermatologistId: req.user!.id,
+          patient: { dermatologistId: req.user!.id },
           scheduledDate: {
             gte: new Date()
           },
@@ -272,9 +274,13 @@ router.get('/stats', async (req, res, next) => {
         }
       });
 
+      const assignedPatients = await prisma.user.findMany({ where: { dermatologistId: req.user!.id }, select: { id: true } });
       const unreadMessages = await prisma.message.count({
         where: {
           recipientId: req.user!.id,
+          recipientType: 'dermatologist',
+          senderType: 'patient',
+          senderId: { in: assignedPatients.map(patient => patient.id) },
           isRead: false
         }
       });
@@ -294,55 +300,9 @@ router.get('/stats', async (req, res, next) => {
   }
 });
 
-// Assign dermatologist to patient (admin function)
-router.post('/assign-dermatologist', async (req, res, next) => {
-  try {
-    const assignSchema = z.object({
-      patientId: z.string().uuid(),
-      dermatologistId: z.string().uuid()
-    });
-
-    const { patientId, dermatologistId } = assignSchema.parse(req.body);
-
-    // Verify both users exist
-    const [patient, dermatologist] = await Promise.all([
-      prisma.user.findUnique({ where: { id: patientId } }),
-      prisma.dermatologist.findUnique({ where: { id: dermatologistId } })
-    ]);
-
-    if (!patient || !dermatologist) {
-      return res.status(404).json({
-        error: 'Patient or dermatologist not found',
-        code: 'USER_NOT_FOUND'
-      });
-    }
-
-    // Update patient's assigned dermatologist
-    const updatedPatient = await prisma.user.update({
-      where: { id: patientId },
-      data: { dermatologistId },
-      select: {
-        id: true,
-        name: true,
-        assignedDermatologist: {
-          select: {
-            id: true,
-            name: true,
-            title: true,
-            specialization: true
-          }
-        }
-      }
-    });
-
-    res.json({
-      message: 'Dermatologist assigned successfully',
-      patient: updatedPatient
-    });
-
-  } catch (error) {
-    next(error);
-  }
+// Assignment is a privileged operational action; there is no public admin role.
+router.post('/assign-dermatologist', (_req, res) => {
+  res.status(403).json({ error: 'Assignment requires practice administration', code: 'ASSIGNMENT_FORBIDDEN' });
 });
 
 // Get all patients (dermatologists only) - for patient management
@@ -364,7 +324,7 @@ router.get('/', async (req, res, next) => {
 
     // Build where clause
     const where: any = {};
-    
+
     // Only get patients assigned to this dermatologist
     where.dermatologistId = req.user!.id;
 
@@ -481,7 +441,7 @@ router.get("/patients", async (req, res, next) => {
     });
 
     res.json({
-      patients,
+      patients: await Promise.all(patients.map(async patient => ({ ...patient, skinPhotos: await privatePhotos(patient.skinPhotos, patient.id) }))),
       total: patients.length
     });
 
