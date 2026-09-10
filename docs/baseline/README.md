@@ -42,7 +42,7 @@ References: [Supabase backup/restore](https://supabase.com/docs/guides/platform/
 
 ## Deployment and rollback
 
-Vercel projects are `clearaf-api` and `clearaf-portal`. Production environment settings remain in Vercel. Local dotenv files are excluded from uploads. Deploy from the appropriate service directory using `vercel --prod`; ordinary GitHub merges do not deploy automatically.
+Vercel projects are `clearaf-api` and `clearaf-portal`. Production environment settings remain in Vercel. Local dotenv files are excluded from uploads. The API is deployed explicitly from `backend` using `vercel --prod`. The portal is Git-connected with root directory `web-portal` and deploys automatically when `main` changes. Hosted portal previews are disabled until a separate hosted test backend exists; local testing remains available. For a manual portal deployment, run the CLI from the repository root with the portal project/team IDs in VERCEL_PROJECT_ID and VERCEL_ORG_ID. The root .vercelignore excludes local data, credentials, iOS sources and internal documents.
 
 Before deployment, save the immutable current deployment ID/URL with `vercel inspect`. Verify the rollback target includes the security boundary and is compatible with the existing database. Roll back with `vercel rollback <verified-deployment-url> --yes`, then verify health and authenticated authorization. Restore the new deployment with `vercel promote <new-deployment-url> --yes` and check `/ready`. A code rollback does not restore database state; never roll back the T0 access restrictions. If recovery checks fail, stop further releases and return to the last verified secure version.
 
