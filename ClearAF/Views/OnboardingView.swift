@@ -6,6 +6,8 @@ import Combine
 
 struct OnboardingView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @State private var saving = false
+    @State private var saveError = ""
     @State private var currentPage = 0
     @State private var userName = ""
     @State private var selectedSkinType = "Normal"
@@ -101,12 +103,20 @@ struct OnboardingView: View {
                             )
                             .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
                     }
-                    .disabled(!isNextButtonEnabled)
+                    .accessibilityIdentifier("onboardingNext\(currentPage)")
+                    .disabled(!isNextButtonEnabled || saving)
                 }
                 .padding(.horizontal, .spaceXXL)
                 .padding(.bottom, .spaceHuge)
             }
         }
+        .onAppear {
+            if userName.isEmpty { userName = APIService.shared.currentUser?.name ?? "" }
+            selectedSkinType = APIService.shared.currentUser?.skinType ?? "Normal"
+        }
+        .alert("Profile not saved", isPresented: Binding(get: { !saveError.isEmpty }, set: { if !$0 { saveError = "" } })) {
+            Button("OK") { saveError = "" }
+        } message: { Text(saveError) }
         .sheet(isPresented: $showingImagePicker) {
             CameraView()
         }
@@ -124,7 +134,7 @@ struct OnboardingView: View {
         case 2: 
             let trimmedName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmedName.count >= 2 && !selectedSkinType.isEmpty
-        case 3: return cameraPermissionGranted
+        case 3: return true
         default: return true
         }
     }
@@ -143,38 +153,18 @@ struct OnboardingView: View {
     }
     
     private func completeOnboarding() {
-        // Validate input
-        let trimmedName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedName.count >= 2, !selectedSkinType.isEmpty else {
-            print("Validation failed: Name too short or skin type not selected")
-            return
-        }
-        
-        // Update user profile via API
-        APIService.shared.updateProfile(
-            skinType: selectedSkinType,
-            allergies: nil,
-            currentMedications: nil,
-            skinConcerns: nil
-        )
-        .sink(
-            receiveCompletion: { completion in
-                if case .failure(let error) = completion {
-                    print("Error updating profile: \(error)")
-                    HapticManager.error()
-                }
-            },
-            receiveValue: { updatedUser in
-                print("Profile updated successfully")
-                HapticManager.success()
+        let name = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.count >= 2, !saving else { return }
+        saving = true
+        Task { @MainActor in
+            defer { saving = false }
+            do {
+                try await APIService.shared.finishOnboarding(name: name, skinType: selectedSkinType)
                 onboardingComplete()
-            }
-        )
-        .store(in: &cancellables)
+            } catch { saveError = "Your profile could not be saved. Check your connection and try again." }
+        }
     }
-    
-    @State private var cancellables = Set<AnyCancellable>()
-    
+
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }

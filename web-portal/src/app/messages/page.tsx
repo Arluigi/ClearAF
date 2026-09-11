@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 import { Message, User } from '@/types/api';
 import { useAuth } from '@/lib/auth';
-import { apiService } from '@/lib/api';
+import { useClinicalAPI } from '@/lib/auth';
 
 interface Conversation {
   id: string;
@@ -51,6 +51,7 @@ interface Conversation {
 }
 
 export default function MessagesPage() {
+  const apiService = useClinicalAPI();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);

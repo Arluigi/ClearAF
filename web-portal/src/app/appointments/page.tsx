@@ -41,9 +41,10 @@ import {
   Activity
 } from 'lucide-react';
 import { Appointment } from '@/types/api';
-import { apiService } from '@/lib/api';
+import { useClinicalAPI } from '@/lib/auth';
 
 export default function AppointmentsPage() {
+  const apiService = useClinicalAPI();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

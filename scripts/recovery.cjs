@@ -21,7 +21,7 @@ async function startApi(){const fd=fs.openSync(path.join(local,'recovery-api.log
 async function main(){
  run(process.execPath,['scripts/schema-baseline.cjs'],{cwd:backend,env:{...env,SCHEMA_REFERENCE_ENV:path.join(backend,'.env')}});
  if(!fs.existsSync(state))console.log(run(process.execPath,['scripts/security-live.cjs','prepare'],{cwd:backend}).trim());
- await startApi();run(process.execPath,['scripts/security-live.cjs','verify'],{cwd:backend});await stopApi();
+ await startApi();console.log(run(process.execPath,['scripts/accounts-live.cjs'],{cwd:backend}).trim());run(process.execPath,['scripts/security-live.cjs','verify'],{cwd:backend});await stopApi();
  run(process.execPath,['scripts/migration-drill.cjs'],{cwd:backend});
  env.RECOVERY_QUIESCENT='1';env.PG_DOCKER_CONTAINER='supabase_db_clearaf-local';operation('backup');
  cli(['stop','--project-id','clearaf-local']);sourceStopped=true;

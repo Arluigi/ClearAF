@@ -3,6 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { createAuthStorage } from './auth-storage';
+import { SessionBoundary } from './session-boundary';
 import {
   User,
   Dermatologist,
@@ -11,8 +12,6 @@ import {
   Prescription,
   Photo,
   LoginResponse,
-  RegisterRequest,
-  RegisterResponse,
   DashboardStats,
   PaginatedResponse
 } from '@/types/api';
@@ -27,8 +26,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const authStorageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
 export const authStorage = createAuthStorage(authStorageKey, () => typeof window === 'undefined' ? null : window.localStorage);
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { storageKey: authStorageKey, storage: authStorage },
+  auth: { storageKey: authStorageKey, storage: authStorage, flowType: 'pkce', detectSessionInUrl: false },
 });
+
+export const sessionBoundary = new SessionBoundary();
 
 class APIService {
   private baseURL: string;
@@ -41,12 +42,31 @@ class APIService {
 
   }
 
+  acceptSession(session: { access_token: string; user?: { id: string } } | null) {
+    const permitted = !this.signingOut && !authStorage.isLoggedOut() ? session : null;
+    this.token = permitted?.access_token ?? null;
+    sessionBoundary.accept(permitted?.user?.id ?? null);
+  }
+
   async initializeAuth() {
-    if (this.signingOut || authStorage.isLoggedOut()) { this.token = null; return; }
-    if (typeof window !== 'undefined') {
-      const { data: { session } } = await supabase.auth.getSession();
-      this.token = this.signingOut || authStorage.isLoggedOut() ? null : session?.access_token ?? null;
-    }
+    if (this.signingOut || authStorage.isLoggedOut()) { this.acceptSession(null); return; }
+    const generation = sessionBoundary.snapshot();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    sessionBoundary.assert(generation);
+    if (error) throw error;
+    this.acceptSession(session);
+  }
+
+  scoped() {
+    const generation = sessionBoundary.snapshot();
+    return new Proxy(this, { get(target, property) {
+      const value = Reflect.get(target, property);
+      if (typeof value !== 'function') return value;
+      return (...args: unknown[]) => {
+        sessionBoundary.assert(generation);
+        return value.apply(target, args);
+      };
+    } });
   }
 
   // Helper method to make HTTP requests
@@ -54,17 +74,23 @@ class APIService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    if (authStorage.recoveryAccount()) throw new Error('Finish or cancel password recovery before accessing clinical data.');
+    const generation = sessionBoundary.snapshot();
     const url = `${this.baseURL}${endpoint}`;
 
     if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
     // Get current Supabase session token
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    sessionBoundary.assert(generation);
+    if (sessionError) throw sessionError;
+    this.acceptSession(session);
+    sessionBoundary.assert(generation);
     if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
     const token = session?.access_token;
 
     const config: RequestInit = {
       headers: {
-        'Content-Type': 'application/json',
+        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
       ...options,
@@ -82,6 +108,7 @@ class APIService {
 
     try {
       const response = await fetch(url, config);
+      sessionBoundary.assert(generation);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({
@@ -90,25 +117,12 @@ class APIService {
         throw new Error(errorData.error || `Request failed with status ${response.status}`);
       }
 
-      return await response.json();
+      const body = await response.json();
+      sessionBoundary.assert(generation);
+      return body;
     } catch (error) {
 
       throw error;
-    }
-  }
-
-  // Auth token management
-  private setToken(token: string) {
-    this.token = token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', token);
-    }
-  }
-
-  private clearToken() {
-    this.token = null;
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
     }
   }
 
@@ -116,6 +130,7 @@ class APIService {
   async login(email: string, password: string): Promise<LoginResponse> {
     authStorage.beginLogin();
     this.signingOut = false;
+    if (authStorage.recoveryAccount()) throw new Error('Finish or cancel password recovery before signing in.');
     // Use Supabase Auth for login
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -131,53 +146,50 @@ class APIService {
     }
 
     // Set token for API requests
-    this.token = data.session.access_token;
+    this.acceptSession(data.session);
 
     try {
       const user = await this.getCurrentUser();
       if (user.userType !== 'dermatologist') {
+        await this.logout().catch(() => {});
         throw new Error('A verified dermatologist account is required.');
       }
       return { message: 'Login successful', token: data.session.access_token, userType: user.userType, user };
     } catch (error) {
-      await this.logout();
+      // Keep a valid session on profile/network failure so the retry gate can recover.
       throw error;
     }
   }
 
-  async register(data: Omit<RegisterRequest, 'userType'>): Promise<RegisterResponse> {
-    const response = await this.request<RegisterResponse>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        userType: 'dermatologist'
-      }),
-    });
-
-    this.setToken(response.token);
-    return response;
-  }
-
   async logout(): Promise<void> {
+    const token = this.token;
     this.signingOut = true;
     this.token = null;
-    try {
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
-      if (error) throw error;
-    } finally {
-      authStorage.clearSession();
+    sessionBoundary.accept(null);
+    sessionBoundary.invalidate();
+    // Persist the barrier before any network await. A killed offline tab cannot restore it.
+    authStorage.clearSession();
+    // Revoke the captured session JWT directly: ordinary signOut would now see empty storage.
+    // This is the same public-session endpoint used by Supabase's own signOut implementation.
+    const remote = token ? supabase.auth.admin.signOut(token, 'local') : Promise.resolve({ error: null });
+    const local = supabase.auth.signOut({ scope: 'local' });
+    const results = await Promise.allSettled([remote, local]);
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+      if (result.value.error) throw result.value.error;
     }
   }
 
   // Check if user is authenticated
   isAuthenticated(): boolean {
-    return !this.signingOut && !authStorage.isLoggedOut() && !!this.token;
+    return !this.signingOut && !authStorage.isLoggedOut() && !authStorage.recoveryAccount() && !!this.token;
   }
 
   // Get current dermatologist profile
   async getCurrentUser(): Promise<Dermatologist> {
     const response = await this.request<{user: Dermatologist}>('/users/profile');
     if (response.user.userType !== 'dermatologist') {
+      await this.logout().catch(() => {});
       throw new Error('A verified dermatologist account is required.');
     }
     return response.user;
@@ -394,35 +406,16 @@ class APIService {
 
   // File Upload (for future use)
   async uploadFile(file: File, type: 'avatar' | 'document' | 'image'): Promise<{ url: string }> {
-    if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);
-
-    const config: RequestInit = {
-      method: 'POST',
-      body: formData,
-      headers: {}
-    };
-
-    // Add auth token but don't set Content-Type (let browser set it for FormData)
-    if (this.token) {
-      config.headers = {
-        Authorization: `Bearer ${this.token}`,
-      };
-    }
-
-    const url = `${this.baseURL}/upload`;
-    const response = await fetch(url, config);
-
-    if (!response.ok) {
-      throw new Error(`Upload failed with status ${response.status}`);
-    }
-
-    return await response.json();
+    return this.request('/upload', { method: 'POST', body: formData, headers: {} });
   }
 }
 
 // Create singleton instance
 export const apiService = new APIService();
 export default apiService;
+
+// Synchronous identity invalidation precedes any React profile restoration.
+supabase.auth.onAuthStateChange((_event, session) => { apiService.acceptSession(session); });

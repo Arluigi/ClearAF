@@ -211,6 +211,7 @@ struct DailyPhotoCardEnhanced: View {
     }
     
     private func saveDailyPhoto(imageData: Data) {
+        guard viewContext.userInfo["accountID"] as? UUID == APIService.shared.access.snapshot()?.accountID else { return }
         // Upload photo to backend (Supabase Storage)
         APIService.shared.uploadPhoto(imageData, skinScore: 50, notes: "Daily photo", appointmentId: nil)
             .receive(on: DispatchQueue.main)
@@ -223,7 +224,7 @@ struct DailyPhotoCardEnhanced: View {
                     }
                 },
                 receiveValue: { response in
-                    print("Photo uploaded successfully: \(response.photo.photoUrl)")
+                    print("Photo upload completed")
                     showingPhotoTakenMessage = true
                     HapticManager.success()
 

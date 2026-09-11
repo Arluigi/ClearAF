@@ -8,12 +8,16 @@ const router = express.Router();
 
 // Validation schemas
 const updateProfileSchema = z.object({
-  name: z.string().min(2).optional(),
-  skinType: z.string().optional(),
+  name: z.string().trim().min(2).max(100).optional(),
+  skinType: z.enum(["Normal", "Dry", "Oily", "Combination", "Sensitive"]).optional(),
   skinConcerns: z.string().optional(),
   allergies: z.string().optional(),
   currentMedications: z.string().optional(),
   onboardingCompleted: z.boolean().optional()
+}).strict().superRefine((value, context) => {
+  if (value.onboardingCompleted === true && (!value.name || !value.skinType)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Name and skin type are required to finish onboarding' });
+  }
 });
 
 const updateSkinScoreSchema = z.object({
@@ -85,9 +89,8 @@ router.get('/profile', async (req, res, next) => {
 // Update user profile
 router.patch('/profile', async (req, res, next) => {
   try {
-    const validatedData = updateProfileSchema.parse(req.body);
-
     if (req.user!.userType === 'patient') {
+      const validatedData = updateProfileSchema.parse(req.body);
       const updatedUser = await prisma.user.update({
         where: { id: req.user!.id },
         data: validatedData,

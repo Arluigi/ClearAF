@@ -20,3 +20,16 @@ test('local logout removes stored credentials and blocks stale refresh writes ac
   reloaded.setItem('auth', 'new-session');
   assert.equal(reloaded.getItem('auth'), 'new-session');
 });
+test('requesting recovery can retain PKCE verifier without lifting offline logout tombstone', () => {
+  const storage = memoryStorage(); const adapter = createAuthStorage('auth', () => storage);
+  adapter.clearSession(); adapter.setItem('auth-code-verifier', 'recovery-verifier'); adapter.setItem('auth', 'stale-refresh');
+  assert.equal(adapter.isLoggedOut(), true); assert.equal(adapter.getItem('auth'), null);
+  assert.equal(adapter.getItem('auth-code-verifier'), 'recovery-verifier');
+});
+test('recovery barrier survives reload and records the validated account until explicit logout', () => {
+  const storage = memoryStorage(); const adapter = createAuthStorage('auth', () => storage);
+  adapter.beginRecovery(); assert.equal(adapter.recoveryAccount(), 'pending');
+  adapter.confirmRecovery('account-a');
+  assert.equal(createAuthStorage('auth', () => storage).recoveryAccount(), 'account-a');
+  adapter.clearSession(); assert.equal(adapter.recoveryAccount(), null);
+});

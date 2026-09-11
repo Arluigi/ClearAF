@@ -12,12 +12,15 @@ export function createAuthStorage(storageKey: string, getStorage: () => AuthStor
   const isLoggedOut = () => loggedOut || getStorage()?.getItem(logoutKey) === 'true';
   return {
     isLoggedOut,
+    recoveryAccount() { return getStorage()?.getItem(`${storageKey}-recovery`) ?? null; },
+    beginRecovery() { getStorage()?.setItem(`${storageKey}-recovery`, 'pending'); },
+    confirmRecovery(account: string) { getStorage()?.setItem(`${storageKey}-recovery`, account); },
     getItem(key: string) {
-      return isLoggedOut() ? null : getStorage()?.getItem(key) ?? null;
+      return key !== `${storageKey}-code-verifier` && isLoggedOut() ? null : getStorage()?.getItem(key) ?? null;
     },
     setItem(key: string, value: string) {
       // A refresh already in flight must not restore a session after logout.
-      if (!isLoggedOut()) getStorage()?.setItem(key, value);
+      if (key === `${storageKey}-code-verifier` || !isLoggedOut()) getStorage()?.setItem(key, value);
     },
     removeItem(key: string) {
       getStorage()?.removeItem(key);
@@ -30,7 +33,7 @@ export function createAuthStorage(storageKey: string, getStorage: () => AuthStor
       loggedOut = true;
       let failed = false;
       try { getStorage()?.setItem(logoutKey, 'true'); } catch { failed = true; }
-      for (const key of [storageKey, `${storageKey}-user`, `${storageKey}-code-verifier`, 'auth_token']) {
+      for (const key of [storageKey, `${storageKey}-user`, `${storageKey}-code-verifier`, 'auth_token', `${storageKey}-recovery`]) {
         try { getStorage()?.removeItem(key); } catch { failed = true; }
       }
       if (failed) throw new LocalSessionCleanupError();

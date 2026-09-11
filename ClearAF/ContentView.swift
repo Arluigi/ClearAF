@@ -1,25 +1,29 @@
-//
-//  ContentView.swift
-//  ClearAF
-//
-//  Created by Aryan Sachdev on 7/15/25.
-//
-
 import SwiftUI
 import CoreData
 
 struct ContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var apiService = APIService.shared
     @State private var selectedTab = 0
-    @State private var showingAuthentication = false
-    @State private var showingOnboarding = false
-    @State private var hasCheckedAuth = false
-    
     var body: some View {
-        ZStack {
-            if apiService.isLoggedIn {
-                // Main App Interface
+        Group {
+            switch apiService.phase {
+            case .loading:
+                VStack { SwiftUI.ProgressView(); Text("Opening your account…") }
+            case .signedOut:
+                AuthenticationView {}
+            case .profileError:
+                VStack(spacing: 20) {
+                    Text("Unable to open your account").font(.title2)
+                    Text(apiService.accountError).multilineTextAlignment(.center)
+                    Button("Try again") { apiService.retryProfile() }
+                    Button("Sign out") { apiService.logout() }
+                }.padding()
+            case .recovery:
+                PasswordRecoveryView()
+            case .onboarding:
+                OnboardingView {}
+                    .overlay(alignment: .topTrailing) { Button("Sign out") { apiService.logout() }.padding() }
+            case .ready:
                 TabView(selection: $selectedTab) {
                     DashboardViewEnhanced(selectedTab: $selectedTab)
                         .tabItem {
@@ -56,46 +60,17 @@ struct ContentView: View {
                         }
                         .tag(4)
                 }
-                .accentColor(.primaryPurple)
+                .tint(.primaryPurple)
             }
         }
-        .onAppear {
-            checkAuthenticationStatus()
-        }
-        .fullScreenCover(isPresented: $showingAuthentication) {
-            AuthenticationView {
-                showingAuthentication = false
-                checkOnboardingStatus()
+        .environment(\.managedObjectContext, apiService.persistence.container.viewContext)
+        .id(apiService.access.snapshot()?.generation)
+        .task { apiService.start() }
+        .onOpenURL { url in
+            Task { @MainActor in
+                do { try await SupabaseService.shared.handleCallback(url) }
+                catch { apiService.accountError = "This link is invalid or expired. Request a new one." }
             }
         }
-        .fullScreenCover(isPresented: $showingOnboarding) {
-            OnboardingView {
-                showingOnboarding = false
-            }
-            .environment(\.managedObjectContext, viewContext)
-        }
     }
-    
-    private func checkAuthenticationStatus() {
-        guard !hasCheckedAuth else { return }
-        hasCheckedAuth = true
-        
-        if !apiService.isLoggedIn {
-            showingAuthentication = true
-        } else {
-            checkOnboardingStatus()
-        }
-    }
-    
-    private func checkOnboardingStatus() {
-        // Check if current API user has completed onboarding
-        if let user = apiService.currentUser, !user.onboardingCompleted {
-            showingOnboarding = true
-        }
-    }
-}
-
-#Preview {
-    ContentView()
-        .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
 }

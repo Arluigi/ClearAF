@@ -46,9 +46,10 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { User, Photo } from '@/types/api';
-import { apiService } from '@/lib/api';
+import { useClinicalAPI } from '@/lib/auth';
 
 export default function PatientsPage() {
+  const apiService = useClinicalAPI();
   const [patients, setPatients] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -390,6 +391,7 @@ export default function PatientsPage() {
 
 // Patient Detail Dialog Component
 function PatientDetailDialog({ patient }: { patient: User }) {
+  const apiService = useClinicalAPI();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
