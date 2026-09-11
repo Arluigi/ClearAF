@@ -198,6 +198,7 @@ struct DailyPhotoCaptureView: View {
         
         isUploading = true
         
+        guard viewContext.userInfo["accountID"] as? UUID == APIService.shared.access.snapshot()?.accountID else { return }
         // Upload photo to API
         APIService.shared.uploadPhoto(imageData, skinScore: 50, notes: "Daily progress photo")
             .sink(

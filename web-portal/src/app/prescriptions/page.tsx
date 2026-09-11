@@ -48,7 +48,7 @@ import {
 } from 'lucide-react';
 import { Prescription, User } from '@/types/api';
 import { useAuth } from '@/lib/auth';
-import { apiService } from '@/lib/api';
+import { useClinicalAPI } from '@/lib/auth';
 
 // Common dermatology medications for quick selection
 const commonMedications = [
@@ -65,6 +65,7 @@ const commonMedications = [
 ];
 
 export default function PrescriptionsPage() {
+  const apiService = useClinicalAPI();
   const { user } = useAuth();
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [patients, setPatients] = useState<User[]>([]);
@@ -414,6 +415,7 @@ function NewPrescriptionDialog({
   patients: User[];
   onPrescriptionCreated: () => void;
 }) {
+  const apiService = useClinicalAPI();
   const [formData, setFormData] = useState({
     patientId: '',
     medicationName: '',

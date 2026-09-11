@@ -1,0 +1,68 @@
+{
+  "verifiedAt": "2026-09-11T20:34:13.952558+00:00",
+  "branch": "codex/account-reliability",
+  "baseCommit": "ead5ef34335b399d3581290ebadb6d2ba36d8678",
+  "revisionNote": "This report is versioned with the tested source. The protected final-transfer manifest records the published commit and PR.",
+  "productionDeployed": false,
+  "checks": {
+    "iosUnit": {
+      "passed": 19,
+      "failed": 0
+    },
+    "iosUI": {
+      "passed": 2,
+      "failed": 0,
+      "seconds": 158.015,
+      "includes": [
+        "confirmation and onboarding",
+        "cold restoration",
+        "offline logout and relaunch",
+        "invalid callback after offline logout",
+        "A to B to A",
+        "pending recovery cold restart and actual email callback",
+        "new password and fresh sign-in"
+      ]
+    },
+    "iosReleaseSimulatorBuild": "passed",
+    "backendTests": {
+      "passed": 62,
+      "failed": 0
+    },
+    "backendBuild": "passed",
+    "portalTests": {
+      "passed": 23,
+      "failed": 0
+    },
+    "portalTypecheck": "passed",
+    "portalBuild": "passed",
+    "portalLint": {
+      "errors": 0,
+      "warnings": 45
+    },
+    "dependencyAudits": {
+      "backend": 0,
+      "portal": 0
+    },
+    "localAccountFlowGroups": 6,
+    "localRecovery": {
+      "passed": true,
+      "seconds": 36,
+      "freshDestination": true,
+      "postRestoreAuthorizationChecks": 27
+    },
+    "browser": [
+      "clinician login, reload and logout",
+      "patient denied clinician access",
+      "local PKCE recovery callback and cancellation"
+    ],
+    "independentReview": "No unresolved acceptance blockers after callback and recovery-race fixes",
+    "stagedSecretScan": "passed",
+    "sourceHygiene": "passed"
+  },
+  "remainingReleaseGates": [
+    "Clinical retention and account-removal policy and implementation",
+    "Hosted email confirmation and redirect configuration verification",
+    "Reviewed production deployment and hosted smoke test",
+    "Physical-device and distribution signing verification"
+  ]
+}

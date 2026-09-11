@@ -2,119 +2,134 @@ import Foundation
 import Supabase
 import Auth
 
-class SupabaseService: ObservableObject {
-    static let shared = SupabaseService()
-
-    let client: SupabaseClient
-
-    @Published var currentUser: Auth.User?
-    @Published var isAuthenticated = false
-
-    private init() {
-        self.client = SupabaseClient(
-            supabaseURL: URL(string: SupabaseConfig.url)!,
-            supabaseKey: SupabaseConfig.anonKey
-        )
-
-        // Listen for auth state changes
-        Task {
-            for await state in await client.auth.authStateChanges {
-                await MainActor.run {
-                    self.currentUser = state.session?.user
-                    self.isAuthenticated = state.session != nil
-
-                    // Save session token for API calls
-                    if let session = state.session {
-                        UserDefaults.standard.set(session.accessToken, forKey: "supabase_token")
-                    } else {
-                        UserDefaults.standard.removeObject(forKey: "supabase_token")
-                    }
-                }
-            }
+/// Persistent logout barrier: an offline logout cannot restore a cached session on relaunch.
+final class AccountAuthStorage: AuthLocalStorage, @unchecked Sendable {
+    private let lock = NSLock()
+    private let storage: any AuthLocalStorage
+    private let defaults: UserDefaults
+    private let marker: String
+    private var permanentlyBlocked = false
+    init(storage: any AuthLocalStorage = DeviceAuthStorage(),
+         defaults: UserDefaults = .standard, marker: String = "account.signedOut") {
+        self.storage = storage; self.defaults = defaults; self.marker = marker
+    }
+    func block() { lock.lock(); defer { lock.unlock() }; permanentlyBlocked = true; defaults.set(true, forKey: marker) }
+    func prepareNewLogin() throws {
+        lock.lock(); defer { lock.unlock() }
+        defaults.set(true, forKey: marker)
+        guard !permanentlyBlocked else { throw AccountFailure.accountChanged }
+        try storage.remove(key: "clearaf-session")
+        try storage.remove(key: "clearaf-session-code-verifier")
+        defaults.set(false, forKey: marker)
+    }
+    /// A link may consume an already initiated PKCE flow, never initiate a login
+    /// or clear the persistent logout marker itself.
+    func callbackCode(_ url: URL) throws -> String {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let codes = components?.queryItems?.filter { $0.name == "code" } ?? []
+        guard url.scheme == "clearaf", url.host == "auth", url.path.isEmpty,
+              url.user == nil, url.password == nil, url.port == nil, url.fragment == nil,
+              codes.count == 1, let code = codes.first?.value, !code.isEmpty,
+              try retrieve(key: "clearaf-session-code-verifier") != nil else {
+            throw AccountFailure.accountChanged
         }
-
-        // Check for existing session
-        Task {
-            await checkSession()
-        }
+        return code
     }
-
-    // MARK: - Authentication
-
-    func signUp(email: String, password: String, name: String, skinType: String) async throws -> Auth.User {
-        let response = try await client.auth.signUp(
-            email: email,
-            password: password,
-            data: [
-                "name": .string(name),
-                "skinType": .string(skinType)
-            ]
-        )
-
-        return response.user
+    func store(key: String, value: Data) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard !permanentlyBlocked && !defaults.bool(forKey: marker) else { return }
+        try storage.store(key: key, value: value)
     }
-
-    func signIn(email: String, password: String) async throws -> Session {
-        let session = try await client.auth.signIn(
-            email: email,
-            password: password
-        )
-
-        return session
+    func retrieve(key: String) throws -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        return (permanentlyBlocked || defaults.bool(forKey: marker)) ? nil : try storage.retrieve(key: key)
     }
-
-    func signOut() async throws {
-        try await client.auth.signOut()
-        await MainActor.run {
-            self.currentUser = nil
-            self.isAuthenticated = false
-        }
-    }
-
-    func checkSession() async {
-        do {
-            let session = try await client.auth.session
-            await MainActor.run {
-                self.currentUser = session.user
-                self.isAuthenticated = true
-            }
-        } catch {
-            await MainActor.run {
-                self.currentUser = nil
-                self.isAuthenticated = false
-            }
-        }
-    }
-
-    // MARK: - User Profile
-
-    func getCurrentUserId() -> String? {
-        return currentUser?.id.uuidString
-    }
-
-    func getAccessToken() -> String? {
-        return UserDefaults.standard.string(forKey: "supabase_token")
+    func remove(key: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard !permanentlyBlocked else { return }
+        try storage.remove(key: key)
     }
 }
 
-// MARK: - Errors
-
-enum AuthError: LocalizedError {
-    case signUpFailed
-    case signInFailed
-    case invalidCredentials
-    case networkError
-
-    var errorDescription: String? {
-        switch self {
-        case .signUpFailed:
-            return "Failed to create account. Please try again."
-        case .signInFailed:
-            return "Failed to sign in. Please check your credentials."
-        case .invalidCredentials:
-            return "Invalid email or password."
-        case .networkError:
-            return "Network error. Please check your connection."
+final class SupabaseService: ObservableObject {
+    static let shared = SupabaseService()
+    private(set) var client: SupabaseClient
+    private(set) var storage: AccountAuthStorage
+    private var listener: Task<Void, Never>?
+    private var clientGeneration = UUID()
+    private var logoutTask: Task<Void, Never>?
+    private init() {
+        UserDefaults.standard.removeObject(forKey: "supabase_token")
+        let storage = AccountAuthStorage()
+        self.storage = storage
+        self.client = Self.makeClient(storage)
+    }
+    private static func makeClient(_ storage: AccountAuthStorage) -> SupabaseClient {
+        SupabaseClient(supabaseURL: URL(string: SupabaseConfig.url)!, supabaseKey: SupabaseConfig.anonKey,
+            options: .init(auth: .init(storage: storage, redirectToURL: Self.callbackURL, storageKey: "clearaf-session"), global: .init(session: AccountNetwork.session())))
+    }
+    @MainActor func startListening() {
+        listener?.cancel()
+        let generation = clientGeneration
+        let auth = client.auth
+        listener = Task { @MainActor in
+            for await (event, session) in await auth.authStateChanges {
+                guard generation == clientGeneration, !Task.isCancelled else { return }
+                APIService.shared.authChanged(event, session: session)
+            }
         }
     }
+    var recoveryPending: Bool {
+        get { UserDefaults.standard.bool(forKey: "account.recoveryPending") }
+        set { UserDefaults.standard.set(newValue, forKey: "account.recoveryPending") }
+    }
+    static var callbackURL: URL { URL(string: "clearaf://auth")! }
+    @MainActor func prepareSignIn() async throws {
+        await logoutTask?.value
+        logoutTask = nil
+        // A new SDK client prevents an old refresh from writing into a new login.
+        storage.block()
+        clientGeneration = UUID()
+        listener?.cancel()
+        let replacement = AccountAuthStorage()
+        try replacement.prepareNewLogin()
+        storage = replacement
+        client = Self.makeClient(replacement)
+        startListening()
+    }
+    @MainActor func signUp(email: String, password: String, name: String, skinType: String) async throws -> Bool {
+        try await prepareSignIn()
+        recoveryPending = false
+        let response = try await client.auth.signUp(email: email, password: password,
+            data: ["name": .string(name), "skinType": .string(skinType)], redirectTo: Self.callbackURL)
+        return response.session != nil
+    }
+    @MainActor func signIn(email: String, password: String) async throws {
+        recoveryPending = false
+        try await prepareSignIn()
+        _ = try await client.auth.signIn(email: email, password: password)
+    }
+    @MainActor func signOut() {
+        recoveryPending = false
+        storage.block()
+        clientGeneration = UUID()
+        listener?.cancel()
+        let auth = client.auth
+        logoutTask = Task { try? await auth.signOut(scope: .local) }
+    }
+    @MainActor func requestRecovery(email: String) async throws {
+        try await prepareSignIn()
+        recoveryPending = true
+        do { try await client.auth.resetPasswordForEmail(email, redirectTo: Self.callbackURL) }
+        catch { recoveryPending = false; throw error }
+    }
+    @MainActor func handleCallback(_ url: URL) async throws {
+        let code = try storage.callbackCode(url)
+        _ = try await client.auth.exchangeCodeForSession(authCode: code)
+    }
+    @MainActor func verifyCode(email: String, code: String, recovery: Bool) async throws {
+        try await prepareSignIn()
+        _ = try await client.auth.verifyOTP(email: email, token: code, type: recovery ? .recovery : .signup)
+    }
+    func getCurrentUserId() -> String? { client.auth.currentSession?.user.id.uuidString }
 }

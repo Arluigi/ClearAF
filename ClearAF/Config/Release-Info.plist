@@ -13,12 +13,5 @@
 			</array>
 		</dict>
 	</array>
-	<key>ClearAFLocalSupabaseAnonKey</key>
-	<string>$(CLEARAF_LOCAL_SUPABASE_ANON_KEY)</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 </dict>
 </plist>

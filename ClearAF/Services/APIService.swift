@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import CoreData
+import Auth
 
 // MARK: - API Models
 struct APIUser: Codable {
@@ -14,9 +16,12 @@ struct APIUser: Codable {
     let currentMedications: String?
     let skinConcerns: String?
     let createdAt: String?      // Optional for some responses
+    let userType: String?
 }
 
 struct UpdateProfileRequest: Codable {
+    var name: String? = nil
+    var onboardingCompleted: Bool? = nil
     let skinType: String?
     let allergies: String?
     let currentMedications: String?
@@ -160,68 +165,111 @@ struct AppointmentListResponse: Codable {
 class APIService: ObservableObject {
     static let shared = APIService()
 
-    // Production API URL
     private let baseURL = AppEnvironment.apiURL
-    // For local testing: "http://192.168.68.70:3001/api"
-    private let session = URLSession.shared
-
+    private let session = AccountNetwork.session()
+    let access = AccountAccess()
+    enum Phase: Equatable { case loading, signedOut, profileError, onboarding, ready, recovery }
     @Published var currentUser: APIUser?
-    @Published var isLoggedIn: Bool = false
+    @Published var phase: Phase = .loading
+    @Published var persistence = PersistenceController(inMemory: true)
+    @Published var accountError = ""
+    var isLoggedIn: Bool { phase == .ready || phase == .onboarding }
+    private var started = false
+    private var profileTask: Task<Void, Never>?
+    private var loadingTicket: AccountAccess.Ticket?
+    private init() {}
 
-    private init() {
-        // Check if we have a Supabase session
-        checkAuthState()
+    @MainActor func start() {
+        guard !started else { return }
+        started = true
+        SupabaseService.shared.startListening()
+    }
+    @MainActor func authChanged(_ event: AuthChangeEvent, session: Session?) {
+        if event == .signedOut { clearAccount(); return }
+        if event == .passwordRecovery {
+            SupabaseService.shared.recoveryPending = true
+            clearAccount(); phase = .recovery; return
+        }
+        if session != nil && SupabaseService.shared.recoveryPending { clearAccount(); phase = .recovery; return }
+        guard phase != .recovery else { return }
+        if let session { loadProfile(for: session.user.id) }
+        else if event == .initialSession { clearAccount() }
     }
 
-    private func checkAuthState() {
-        if SupabaseService.shared.getAccessToken() != nil {
-            isLoggedIn = true
+    @MainActor func retryProfile() {
+        guard let id = SupabaseService.shared.client.auth.currentSession?.user.id else { clearAccount(); return }
+        loadProfile(for: id, force: true)
+    }
+
+    @MainActor private func loadProfile(for id: UUID, force: Bool = false) {
+        if access.snapshot()?.accountID == id && !force { return }
+        clearAccount()
+        phase = .loading
+        let ticket = access.activate(id)
+        loadingTicket = ticket
+        profileTask = Task { @MainActor in
+            do {
+                let profile: UserProfileResponse = try await request(endpoint: "/users/profile", method: "GET", body: Optional<String>.none, ticket: ticket)
+                try access.require(ticket)
+                guard UUID(uuidString: profile.user.id) == id, profile.user.userType == "patient" else {
+                    throw AccountFailure.patientRequired
+                }
+                let store = try PersistenceController(accountID: id)
+                try hydrate(profile.user, in: store.container.viewContext)
+                persistence = store
+                currentUser = profile.user
+                phase = profile.user.onboardingCompleted ? .ready : .onboarding
+            } catch {
+                guard access.snapshot() == ticket else { return }
+                if case AccountFailure.requestFailed(401) = error { logout(); return }
+                accountError = (error as? AccountFailure)?.localizedDescription ?? AccountFailure.profileUnavailable.localizedDescription
+                phase = .profileError
+            }
         }
     }
 
-    // MARK: - Authentication
-    func register(name: String, email: String, password: String, skinType: String?) -> AnyPublisher<AuthResponse, Error> {
-        let request = RegisterRequest(
-            name: name,
-            email: email,
-            password: password,
-            skinType: skinType
-        )
-
-        return performRequest(
-            endpoint: "/auth/register",
-            method: "POST",
-            body: request,
-            responseType: AuthResponse.self
-        )
-        .handleEvents(receiveOutput: { [weak self] response in
-            self?.handleAuthSuccess(response)
-        })
-        .eraseToAnyPublisher()
+    @MainActor private func hydrate(_ profile: APIUser, in context: NSManagedObjectContext) throws {
+        let users = try context.fetch(User.fetchRequest())
+        let user = users.first ?? User(context: context)
+        user.id = UUID(uuidString: profile.id)
+        user.name = profile.name
+        user.skinType = profile.skinType
+        user.onboardingCompleted = profile.onboardingCompleted
+        user.currentSkinScore = Int16(profile.currentSkinScore ?? 0)
+        user.streakCount = Int16(profile.streakCount ?? 0)
+        if user.joinDate == nil { user.joinDate = Date() }
+        try context.save()
     }
 
-    func login(email: String, password: String) -> AnyPublisher<AuthResponse, Error> {
-        let request = LoginRequest(email: email, password: password)
-
-        return performRequest(
-            endpoint: "/auth/login",
-            method: "POST",
-            body: request,
-            responseType: AuthResponse.self
-        )
-        .handleEvents(receiveOutput: { [weak self] response in
-            self?.handleAuthSuccess(response)
-        })
-        .eraseToAnyPublisher()
-    }
-
-    func logout() {
+    @MainActor func clearAccount() {
+        access.invalidate()
+        profileTask?.cancel()
+        profileTask = nil
         currentUser = nil
-        isLoggedIn = false
-        // Supabase handles session cleanup
-        Task {
-            try? await SupabaseService.shared.signOut()
-        }
+        persistence = PersistenceController(inMemory: true)
+        phase = .signedOut
+    }
+    @MainActor func logout() {
+        clearAccount()
+        SupabaseService.shared.signOut()
+    }
+
+    @MainActor func finishOnboarding(name: String, skinType: String) async throws {
+        let ticket = access.snapshot()
+        let body = UpdateProfileRequest(name: name, onboardingCompleted: true, skinType: skinType,
+            allergies: nil, currentMedications: nil, skinConcerns: nil)
+        let response: UpdateProfileResponse = try await request(endpoint: "/users/profile", method: "PATCH", body: body, ticket: ticket)
+        try access.require(ticket)
+        guard UUID(uuidString: response.user.id) == ticket?.accountID else { throw AccountFailure.accountChanged }
+        try hydrate(response.user, in: persistence.container.viewContext)
+        currentUser = response.user
+        phase = .ready
+    }
+
+    @MainActor func updateRecoveredPassword(_ password: String) async throws {
+        guard phase == .recovery else { throw AccountFailure.accountChanged }
+        _ = try await SupabaseService.shared.client.auth.update(user: UserAttributes(password: password))
+        logout()
     }
 
     // MARK: - User Profile
@@ -271,81 +319,40 @@ class APIService: ObservableObject {
         .eraseToAnyPublisher()
     }
 
-    // MARK: - Generic Request Methods
-    private func performRequest<T: Codable, U: Codable>(
-        endpoint: String,
-        method: String,
-        body: T? = nil,
-        responseType: U.Type
-    ) -> AnyPublisher<U, Error> {
-
-        guard let url = URL(string: baseURL + endpoint) else {
-            return Fail(error: URLError(.badURL))
-                .eraseToAnyPublisher()
-        }
-
+    // Each request captures its login before work starts and checks it after every suspension.
+    @MainActor private func request<T: Encodable, U: Decodable>(endpoint: String, method: String,
+        body: T?, ticket: AccountAccess.Ticket?) async throws -> U {
+        try access.require(ticket)
+        let auth = try await SupabaseService.shared.client.auth.session
+        try access.require(ticket)
+        guard auth.user.id == ticket?.accountID else { throw AccountFailure.accountChanged }
+        guard let url = URL(string: baseURL + endpoint) else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        if let body = body {
-            do {
-                request.httpBody = try JSONEncoder().encode(body)
-            } catch {
-                return Fail(error: error)
-                    .eraseToAnyPublisher()
-            }
-        }
-
-        return session.dataTaskPublisher(for: request)
-            .map(\.data)
-            .decode(type: responseType, decoder: JSONDecoder())
-            .receive(on: DispatchQueue.main)
-            .eraseToAnyPublisher()
+        request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+        if let body { request.httpBody = try JSONEncoder().encode(body) }
+        let (data, response) = try await session.data(for: request)
+        try access.require(ticket)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard (200..<300).contains(http.statusCode) else { throw AccountFailure.requestFailed(http.statusCode) }
+        return try JSONDecoder().decode(U.self, from: data)
     }
 
-    private func performAuthenticatedRequest<T: Codable, U: Codable>(
-        endpoint: String,
-        method: String,
-        body: T? = nil,
-        responseType: U.Type
-    ) -> AnyPublisher<U, Error> {
-
-        guard let url = URL(string: baseURL + endpoint) else {
-            return Fail(error: URLError(.badURL))
-                .eraseToAnyPublisher()
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Use Supabase token for authentication
-        if let token = SupabaseService.shared.getAccessToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        if let body = body {
-            do {
-                request.httpBody = try JSONEncoder().encode(body)
-            } catch {
-                return Fail(error: error)
-                    .eraseToAnyPublisher()
+    private func performAuthenticatedRequest<T: Codable, U: Codable>(endpoint: String, method: String,
+        body: T? = nil, responseType: U.Type, ticket expected: AccountAccess.Ticket? = nil) -> AnyPublisher<U, Error> {
+        let ticket = expected ?? access.snapshot()
+        return Deferred {
+            Future<U, Error> { promise in
+                Task { @MainActor in
+                    do { promise(.success(try await self.request(endpoint: endpoint, method: method, body: body, ticket: ticket))) }
+                    catch { promise(.failure(error)) }
+                }
             }
-        }
-
-        return session.dataTaskPublisher(for: request)
-            .map(\.data)
-            .decode(type: responseType, decoder: JSONDecoder())
-            .receive(on: DispatchQueue.main)
-            .eraseToAnyPublisher()
-    }
-
-    // MARK: - Deprecated Auth Methods (kept for backward compatibility)
-    // These are no longer used - Supabase handles authentication now
-    private func handleAuthSuccess(_ response: AuthResponse) {
-        self.currentUser = response.user
-        self.isLoggedIn = true
+        }.receive(on: DispatchQueue.main)
+        .tryMap { value in try self.access.require(ticket); return value }
+        .eraseToAnyPublisher()
     }
 }
 
@@ -356,7 +363,8 @@ extension APIService {
         guard imageData.count <= 10 * 1024 * 1024 else {
             return Fail(error: PhotoUploadError.tooLarge).eraseToAnyPublisher()
         }
-        guard SupabaseService.shared.getAccessToken() != nil else {
+        let ticket = access.snapshot()
+        guard ticket != nil else {
             return Fail(error: URLError(.userAuthenticationRequired)).eraseToAnyPublisher()
         }
         return performAuthenticatedRequest(
@@ -366,12 +374,14 @@ extension APIService {
         .flatMap { upload -> AnyPublisher<PhotoUploadResponse, Error> in
             let request: URLRequest
             do {
+                try self.access.require(ticket)
                 request = try Self.privatePhotoUploadRequest(signedURL: upload.signedUrl, imageData: imageData)
             } catch {
                 return Fail(error: error).eraseToAnyPublisher()
             }
             return Self.photoStorageSession.dataTaskPublisher(for: request)
                 .tryMap { _, response in
+                    try self.access.require(ticket)
                     guard let http = response as? HTTPURLResponse,
                           http.statusCode == 200 || http.statusCode == 201 else {
                         throw PhotoUploadError.uploadFailed
@@ -384,7 +394,7 @@ extension APIService {
                         endpoint: "/photos/complete-upload", method: "POST",
                         body: CompletePhotoUploadRequest(storagePath: upload.storagePath, skinScore: skinScore,
                                                          notes: notes, appointmentId: appointmentId),
-                        responseType: PhotoUploadResponse.self
+                        responseType: PhotoUploadResponse.self, ticket: ticket
                     )
                 }
                 .eraseToAnyPublisher()
@@ -425,97 +435,14 @@ extension APIService {
     // MARK: - Appointment API Methods
 
     func createAppointment(scheduledDate: Date, type: String, concern: String, notes: String? = nil) -> AnyPublisher<AppointmentResponse, Error> {
-        guard let token = SupabaseService.shared.getAccessToken() else {
-            return Fail(error: NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "No auth token"]))
-                .eraseToAnyPublisher()
-        }
-
-        // Convert date to ISO8601 string
-        let formatter = ISO8601DateFormatter()
-        let dateString = formatter.string(from: scheduledDate)
-
-        let requestBody = CreateAppointmentRequest(
-            scheduledDate: dateString,
-            type: type,
-            concern: concern,
-            duration: 30,
-            dermatologistId: nil  // Let backend use assigned dermatologist
-        )
-
-        guard let url = URL(string: "\(baseURL)/appointments") else {
-            return Fail(error: NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]))
-                .eraseToAnyPublisher()
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        do {
-            request.httpBody = try JSONEncoder().encode(requestBody)
-        } catch {
-            return Fail(error: error).eraseToAnyPublisher()
-        }
-
-        return session.dataTaskPublisher(for: request)
-            .tryMap { data, response -> Data in
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    throw NSError(domain: "APIService", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-                }
-
-                if httpResponse.statusCode == 401 {
-                    throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "Unauthorized"])
-                }
-
-                if httpResponse.statusCode >= 400 {
-                    let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                    throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-                }
-
-                return data
-            }
-            .decode(type: CreateAppointmentResponse.self, decoder: JSONDecoder())
-            .map { $0.appointment }
-            .receive(on: DispatchQueue.main)
-            .eraseToAnyPublisher()
+        let body = CreateAppointmentRequest(scheduledDate: ISO8601DateFormatter().string(from: scheduledDate),
+            type: type, concern: concern, duration: 30, dermatologistId: nil)
+        return performAuthenticatedRequest(endpoint: "/appointments", method: "POST", body: body,
+            responseType: CreateAppointmentResponse.self).map(\.appointment).eraseToAnyPublisher()
     }
-
     func fetchAppointments() -> AnyPublisher<[AppointmentResponse], Error> {
-        guard let token = SupabaseService.shared.getAccessToken() else {
-            return Fail(error: NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "No auth token"]))
-                .eraseToAnyPublisher()
-        }
-
-        guard let url = URL(string: "\(baseURL)/appointments") else {
-            return Fail(error: NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]))
-                .eraseToAnyPublisher()
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        return session.dataTaskPublisher(for: request)
-            .tryMap { data, response -> Data in
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    throw NSError(domain: "APIService", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-                }
-
-                if httpResponse.statusCode == 401 {
-                    throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "Unauthorized"])
-                }
-
-                if httpResponse.statusCode >= 400 {
-                    throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server error"])
-                }
-
-                return data
-            }
-            .decode(type: AppointmentListResponse.self, decoder: JSONDecoder())
-            .map { $0.appointments }
-            .receive(on: DispatchQueue.main)
-            .eraseToAnyPublisher()
+        performAuthenticatedRequest(endpoint: "/appointments", method: "GET", body: Optional<String>.none,
+            responseType: AppointmentListResponse.self).map(\.appointments).eraseToAnyPublisher()
     }
 
     func fetchMessages() -> AnyPublisher<[String], Error> {

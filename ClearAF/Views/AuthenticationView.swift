@@ -3,6 +3,7 @@ import Combine
 
 struct AuthenticationView: View {
     @StateObject private var supabaseService = SupabaseService.shared
+    @State private var information = ""
     @State private var isRegistering = false
     @State private var email = ""
     @State private var password = ""
@@ -51,7 +52,7 @@ struct AuthenticationView: View {
                         CustomTextField(
                             title: "Email",
                             text: $email,
-                            placeholder: "Enter your email"
+                            placeholder: "Enter your email", keyboardType: .emailAddress, autocapitalization: .never
                         )
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
@@ -93,7 +94,7 @@ struct AuthenticationView: View {
                     }) {
                         HStack {
                             if isLoading {
-                                ProgressView()
+                                SwiftUI.ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
                             } else {
@@ -109,9 +110,16 @@ struct AuthenticationView: View {
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
+                    .accessibilityIdentifier("authSubmit")
                     .disabled(!isFormValid || isLoading)
                     .padding(.horizontal, 24)
 
+                    if !information.isEmpty { Text(information).padding(.horizontal, 24).accessibilityIdentifier("authInformation") }
+                    if !APIService.shared.accountError.isEmpty { Text(APIService.shared.accountError).padding(.horizontal, 24) }
+                    if !isRegistering {
+                        Button("Forgot password?", action: recoverPassword)
+                            .disabled(email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                    }
                     // Toggle Authentication Mode
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
@@ -128,6 +136,9 @@ struct AuthenticationView: View {
                         }
                     }
 
+                    .accessibilityIdentifier("authMode")
+                    .disabled(isLoading)
+
                     Spacer(minLength: 50)
                 }
             }
@@ -141,7 +152,7 @@ struct AuthenticationView: View {
 
     private var isFormValid: Bool {
         if isRegistering {
-            return !name.isEmpty && !email.isEmpty && !password.isEmpty && password.count >= 6
+            return name.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 && email.contains("@") && password.count >= 8
         } else {
             return !email.isEmpty && !password.isEmpty
         }
@@ -149,89 +160,40 @@ struct AuthenticationView: View {
 
     private func registerUser() {
         isLoading = true
-
-        Task {
+        Task { @MainActor in
+            defer { isLoading = false }
             do {
-                let user = try await supabaseService.signUp(
-                    email: email,
-                    password: password,
-                    name: name,
-                    skinType: selectedSkinType
-                )
-
-                print("Registration successful: \(user.email ?? "Unknown")")
-
-                // Sync profile with backend to assign dermatologist
-                let syncResult = await syncProfileWithBackend()
-                if syncResult {
-                    print("✅ Profile synced and assigned to dermatologist")
-                } else {
-                    print("⚠️ Profile sync failed, but registration succeeded")
+                let hasSession = try await supabaseService.signUp(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: password, name: name.trimmingCharacters(in: .whitespacesAndNewlines), skinType: selectedSkinType)
+                if !hasSession {
+                    information = "Check your email to confirm your account, then sign in."
+                    isRegistering = false
+                    password = ""
                 }
-
-                await MainActor.run {
-                    isLoading = false
-                    // Update APIService to reflect logged in state
-                    APIService.shared.isLoggedIn = true
-                    onAuthenticationSuccess()
-                }
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    handleError(error)
-                }
-            }
+            } catch { handleError(error) }
         }
     }
-
-    private func syncProfileWithBackend() async -> Bool {
-        return await withCheckedContinuation { continuation in
-            var cancellable: AnyCancellable?
-            cancellable = APIService.shared.syncProfile()
-                .sink(
-                    receiveCompletion: { completion in
-                        if case .failure(let error) = completion {
-                            print("Profile sync error: \(error)")
-                            continuation.resume(returning: false)
-                        }
-                        cancellable?.cancel()
-                    },
-                    receiveValue: { _ in
-                        continuation.resume(returning: true)
-                        cancellable?.cancel()
-                    }
-                )
-        }
-    }
-
     private func loginUser() {
         isLoading = true
-
-        Task {
+        Task { @MainActor in
+            defer { isLoading = false }
+            do { try await supabaseService.signIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password) }
+            catch { handleError(error) }
+        }
+    }
+    private func recoverPassword() {
+        isLoading = true
+        Task { @MainActor in
+            defer { isLoading = false }
             do {
-                let session = try await supabaseService.signIn(
-                    email: email,
-                    password: password
-                )
-
-                await MainActor.run {
-                    isLoading = false
-                    print("Login successful: \(session.user.email ?? "Unknown")")
-                    // Update APIService to reflect logged in state
-                    APIService.shared.isLoggedIn = true
-                    onAuthenticationSuccess()
-                }
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    handleError(error)
-                }
-            }
+                try await supabaseService.requestRecovery(email: email.trimmingCharacters(in: .whitespacesAndNewlines))
+                information = "If an account exists, a password reset email is on its way. Open the link on this device."
+            } catch { handleError(error) }
         }
     }
 
     private func handleError(_ error: Error) {
-        errorMessage = error.localizedDescription
+        errorMessage = "Unable to continue. Check your details and connection, then try again."
         showError = true
     }
 

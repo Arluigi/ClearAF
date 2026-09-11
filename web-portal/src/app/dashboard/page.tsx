@@ -25,10 +25,11 @@ import {
   Plus
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { apiService } from '@/lib/api';
+import { useClinicalAPI } from '@/lib/auth';
 import { User, Appointment, DashboardStats } from '@/types/api';
 
 export default function DashboardPage() {
+  const apiService = useClinicalAPI();
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentPatients, setRecentPatients] = useState<User[]>([]);

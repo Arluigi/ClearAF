@@ -88,3 +88,15 @@ test('direct upload completion refuses another account path',async()=>{const r=a
 test('direct upload completion rejects oversized stored file',async()=>{uploadSize=11*1024*1024;const r=await request('/photos/complete-upload',A,'POST',{storagePath:A+'/'+P+'.png'});assert.equal(r.status,400);assert.equal(writes.length,0)});
 test('former clinician stats exclude historical appointments',async()=>{const r=await request('/users/stats',D);assert.equal(r.status,200);const body:any=await r.json();assert.equal(body.stats.totalAppointments,0)});
 test('repeat direct completion returns the same record',async()=>{photos=[];const body={storagePath:A+'/'+P+'.png'};const first=await request('/photos/complete-upload',A,'POST',body);const second=await request('/photos/complete-upload',A,'POST',body);assert.equal(first.status,201);assert.equal(second.status,200);assert.equal(writes.length,1)});
+test('onboarding persists trimmed name and completion for only the signed-in patient', async () => {
+ const r = await request('/users/profile', A, 'PATCH', { name:'  Synthetic Name  ', skinType:'Sensitive', onboardingCompleted:true });
+ assert.equal(r.status,200); assert.equal(users[0].name,'Synthetic Name'); assert.equal(users[0].onboardingCompleted,true); assert.equal(users[1].onboardingCompleted,undefined);
+});
+test('incomplete onboarding cannot write a completion flag', async () => {
+ const r = await request('/users/profile', A, 'PATCH', { onboardingCompleted:true });
+ assert.notEqual(r.status,200); assert.equal(writes.length,0);
+});
+test('patient profile cannot accept role or assignment fields', async () => {
+ const r = await request('/users/profile', A, 'PATCH', { name:'Synthetic Name', userType:'dermatologist', dermatologistId:E });
+ assert.notEqual(r.status,200); assert.equal(writes.length,0);
+});

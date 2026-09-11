@@ -4,6 +4,7 @@ import './env';
 import { apiService, supabase, authStorage } from '../src/lib/api';
 beforeEach(async () => {
   authStorage.beginLogin();
+  supabase.auth.admin.signOut = async () => ({ data: null, error: null });
   const signIn = supabase.auth.signInWithPassword;
   supabase.auth.signInWithPassword = async () => { throw new Error('fixture reset'); };
   try { await assert.rejects(apiService.login('fixture@example.test', 'fixture'), /fixture reset/); }
@@ -81,4 +82,64 @@ test('requests cannot use a session while remote signout is pending', async () =
     finish();
     await pending;
   } finally { supabase.auth.signOut = signOut; }
+});
+test('late clinical response and old multi-step facade are rejected after identity changes', async () => {
+  const getSession = supabase.auth.getSession, originalFetch = globalThis.fetch;
+  const session = { access_token: 'token-a', user: { id: 'A' } };
+  apiService.acceptSession(session);
+  const scoped = apiService.scoped();
+  supabase.auth.getSession = async () => ({ data: { session }, error: null }) as Awaited<ReturnType<typeof getSession>>;
+  let finish!: (response: Response) => void;
+  let started!: () => void;
+  const fetching = new Promise<void>(resolve => { started = resolve; });
+  globalThis.fetch = async () => { started(); return new Promise<Response>(resolve => { finish = resolve; }); };
+  try {
+    const pending = scoped.getPatients();
+    await fetching;
+    apiService.acceptSession({ access_token: 'token-b', user: { id: 'B' } });
+    finish(new Response(JSON.stringify({ patients: [{ id: 'private-a' }], total: 1 })));
+    await assert.rejects(pending, /changed/);
+    assert.throws(() => scoped.sendMessage({ receiverId: 'patient-a', content: 'old continuation' }), /changed/);
+  } finally { supabase.auth.getSession = getSession; globalThis.fetch = originalFetch; }
+});
+test('an account switch discovered during token lookup never sends old work with the new token', async () => {
+  const getSession = supabase.auth.getSession, originalFetch = globalThis.fetch;
+  apiService.acceptSession({ access_token: 'token-a', user: { id: 'A' } });
+  supabase.auth.getSession = async () => ({ data: { session: { access_token: 'token-b', user: { id: 'B' } } }, error: null }) as Awaited<ReturnType<typeof getSession>>;
+  let fetched = false;
+  globalThis.fetch = async () => { fetched = true; return new Response('{}'); };
+  try { await assert.rejects(apiService.getPatients(), /changed/); assert.equal(fetched, false); }
+  finally { supabase.auth.getSession = getSession; globalThis.fetch = originalFetch; }
+});
+test('profile network failure preserves a valid login for retry without granting clinical access', async () => {
+  const signIn = supabase.auth.signInWithPassword, signOut = supabase.auth.signOut, profile = apiService.getCurrentUser;
+  let signedOut = false;
+  supabase.auth.signInWithPassword = async () => ({ data: { session: { access_token: 'test', user: { id: 'A' } }, user: { id: 'A' } }, error: null }) as Awaited<ReturnType<typeof signIn>>;
+  supabase.auth.signOut = async () => { signedOut = true; return { error: null }; };
+  apiService.getCurrentUser = async () => { throw new Error('Network unavailable'); };
+  try { await assert.rejects(apiService.login('clinician@example.test', 'test'), /Network/); assert.equal(signedOut, false); assert.equal(apiService.isAuthenticated(), true); }
+  finally { supabase.auth.signInWithPassword = signIn; supabase.auth.signOut = signOut; apiService.getCurrentUser = profile; }
+});
+test('logout persists its barrier before pending remote revocation and recovery never authenticates clinical access', async () => {
+  const values = new Map<string, string>();
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { localStorage: { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } } } });
+  const signOut = supabase.auth.signOut, revoke = supabase.auth.admin.signOut;
+  let finish!: () => void;
+  supabase.auth.signOut = async () => ({ error: null });
+  supabase.auth.admin.signOut = () => new Promise(resolve => { finish = () => resolve({ data: null, error: null }); });
+  try {
+    apiService.acceptSession({ access_token: 'recovery-token', user: { id: 'A' } });
+    authStorage.beginRecovery(); authStorage.confirmRecovery('A');
+    assert.equal(apiService.isAuthenticated(), false);
+    await assert.rejects(apiService.getPatients(), /recovery/);
+    const pending = apiService.logout();
+    assert.equal(authStorage.isLoggedOut(), true);
+    assert.equal(authStorage.recoveryAccount(), null);
+    assert.ok([...values.entries()].some(([key, value]) => key.endsWith('-logged-out') && value === 'true'));
+    finish(); await pending;
+  } finally {
+    supabase.auth.signOut = signOut; supabase.auth.admin.signOut = revoke;
+    if (descriptor) Object.defineProperty(globalThis, 'window', descriptor); else Reflect.deleteProperty(globalThis, 'window');
+  }
 });

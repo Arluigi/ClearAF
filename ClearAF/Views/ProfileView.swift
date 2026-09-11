@@ -4,6 +4,7 @@ import CoreData
 
 struct ProfileView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @State private var showingRemovalInfo = false
     @State private var showingEditProfile = false
     @State private var showingSkinType = false
     @State private var showingNotifications = false
@@ -120,6 +121,12 @@ struct ProfileView: View {
                                     }
                                 )
                             
+                                SettingsRow(title: "Sign out", icon: "rectangle.portrait.and.arrow.right") {
+                                    APIService.shared.logout()
+                                }
+                                SettingsRow(title: "Account removal", icon: "person.crop.circle.badge.minus") {
+                                    showingRemovalInfo = true
+                                }
                                 SettingsRow(
                                     title: "Privacy Policy",
                                     icon: "hand.raised.fill",
@@ -187,39 +194,7 @@ struct ProfileView: View {
                             .padding(.bottom, .spaceXXL)
                             
                             // TEMPORARY: Reset button for testing new user flow
-                            #if DEBUG
-                            Button(action: {
-                                resetAppData()
-                            }) {
-                                VStack(spacing: .spaceXS) {
-                                    HStack(spacing: .spaceMD) {
-                                        Image(systemName: "arrow.clockwise.circle.fill")
-                                            .font(.title2)
-                                            .foregroundColor(.red)
-                                        
-                                        Text("Reset App Data (Testing Only)")
-                                            .font(.bodyMedium)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(.red)
-                                    }
-                                    
-                                    Text("This will clear all data and restart onboarding")
-                                        .font(.caption)
-                                        .foregroundColor(.textSecondary)
-                                        .multilineTextAlignment(.center)
-                                }
-                                .padding(.spaceLG)
-                                .frame(maxWidth: .infinity)
-                                .background(Color.red.opacity(0.1))
-                                .cornerRadius(.radiusMedium)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: .radiusMedium)
-                                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                                )
-                            }
-                            .padding(.horizontal, .spaceXL)
-                            .padding(.bottom, .spaceXL)
-                            #endif
+
                             
                             Spacer()
                         }
@@ -229,6 +204,11 @@ struct ProfileView: View {
                 .padding(.top, .spaceXL)
             }
             .navigationBarHidden(true)
+            .alert("Account removal is not available yet", isPresented: $showingRemovalInfo) {
+                Button("OK") {}
+            } message: {
+                Text("The practice must finalize its record-retention and deletion process before account removal is enabled. Signing out ends access on this device; it does not delete your account or clinical records.")
+            }
             .sheet(isPresented: $showingEditProfile) {
                 EditProfileView()
             }
@@ -257,52 +237,7 @@ struct ProfileView: View {
         return formatter.string(from: joinDate)
     }
     
-    // TEMPORARY: Reset function for testing new user flow
-    #if DEBUG
-    private func resetAppData() {
-        HapticManager.medium()
-        
-        // Clear Core Data
-        let context = viewContext
-        
-        // Delete all users
-        let userRequest: NSFetchRequest<NSFetchRequestResult> = User.fetchRequest()
-        let userDeleteRequest = NSBatchDeleteRequest(fetchRequest: userRequest)
-        
-        // Delete all photos
-        let photoRequest: NSFetchRequest<NSFetchRequestResult> = SkinPhoto.fetchRequest()
-        let photoDeleteRequest = NSBatchDeleteRequest(fetchRequest: photoRequest)
-        
-        // Delete all routines
-        let routineRequest: NSFetchRequest<NSFetchRequestResult> = Routine.fetchRequest()
-        let routineDeleteRequest = NSBatchDeleteRequest(fetchRequest: routineRequest)
-        
-        // Delete all routine steps
-        let stepRequest: NSFetchRequest<NSFetchRequestResult> = RoutineStep.fetchRequest()
-        let stepDeleteRequest = NSBatchDeleteRequest(fetchRequest: stepRequest)
-        
-        do {
-            try context.execute(userDeleteRequest)
-            try context.execute(photoDeleteRequest)
-            try context.execute(routineDeleteRequest)
-            try context.execute(stepDeleteRequest)
-            try context.save()
-            
-            // Clear UserDefaults
-            let domain = Bundle.main.bundleIdentifier!
-            UserDefaults.standard.removePersistentDomain(forName: domain)
-            UserDefaults.standard.synchronize()
-            
-            HapticManager.success()
-            
-            // Force app to restart onboarding on next launch
-            exit(0)
-        } catch {
-            print("Error resetting app data: \(error)")
-            HapticManager.error()
-        }
-    }
-    #endif
+
     
 }
 
@@ -817,20 +752,24 @@ struct NotificationSettingsView: View {
     }
     
     private func loadNotificationSettings() {
+        guard let id = APIService.shared.access.snapshot()?.accountID else { return }
+        let preferences = AccountPreferences(accountID: id)
         // Load current notification settings from UserDefaults
-        morningReminder = UserDefaults.standard.bool(forKey: "morningReminder")
-        eveningReminder = UserDefaults.standard.bool(forKey: "eveningReminder")
-        photoReminder = UserDefaults.standard.bool(forKey: "photoReminder")
-        weeklyProgress = UserDefaults.standard.bool(forKey: "weeklyProgress")
-        milestoneAlerts = UserDefaults.standard.bool(forKey: "milestoneAlerts")
+        morningReminder = preferences.bool(forKey: "morningReminder")
+        eveningReminder = preferences.bool(forKey: "eveningReminder")
+        photoReminder = preferences.bool(forKey: "photoReminder")
+        weeklyProgress = preferences.bool(forKey: "weeklyProgress")
+        milestoneAlerts = preferences.bool(forKey: "milestoneAlerts")
     }
     
     private func saveNotificationSettings() {
-        UserDefaults.standard.set(morningReminder, forKey: "morningReminder")
-        UserDefaults.standard.set(eveningReminder, forKey: "eveningReminder")
-        UserDefaults.standard.set(photoReminder, forKey: "photoReminder")
-        UserDefaults.standard.set(weeklyProgress, forKey: "weeklyProgress")
-        UserDefaults.standard.set(milestoneAlerts, forKey: "milestoneAlerts")
+        guard let id = APIService.shared.access.snapshot()?.accountID else { return }
+        let preferences = AccountPreferences(accountID: id)
+        preferences.set(morningReminder, forKey: "morningReminder")
+        preferences.set(eveningReminder, forKey: "eveningReminder")
+        preferences.set(photoReminder, forKey: "photoReminder")
+        preferences.set(weeklyProgress, forKey: "weeklyProgress")
+        preferences.set(milestoneAlerts, forKey: "milestoneAlerts")
         
         HapticManager.success()
         dismiss()

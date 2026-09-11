@@ -21,6 +21,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('password') === 'updated') setError('Password updated. Sign in with your new password.');
     if (new URLSearchParams(window.location.search).get('logout') === 'revocation-failed') {
       setError('You are signed out on this browser. The server could not confirm session revocation; sign in again when your connection is available.');
     }
@@ -158,7 +159,7 @@ export default function LoginPage() {
                     className="p-0 h-auto font-semibold text-primary hover:underline"
                     onClick={() => router.push('/register')}
                   >
-                    Sign up here
+                    Request practice access
                   </Button>
                 </div>
               </div>
