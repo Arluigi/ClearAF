@@ -1,0 +1,4 @@
+// Local endpoints are compile-time constants in SupabaseConfig.swift.
+// Only the public local anon JWT is supplied by the local stack setup.
+#include? "Local.generated.xcconfig"
+INFOPLIST_FILE = ClearAF/Config/Debug-Info.plist

@@ -1,4 +1,4 @@
-name: Security foundation checks
+name: ClearAF verification
 on:
   push:
   pull_request:
@@ -11,8 +11,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: 24
           cache: npm
@@ -20,7 +20,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npm audit --omit=dev --audit-level=low
+      - run: npm audit --audit-level=low
   portal:
     runs-on: ubuntu-latest
     defaults:
@@ -31,8 +31,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: synthetic-anon
       NEXT_PUBLIC_API_URL: https://api.example.invalid/api
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: 24
           cache: npm
@@ -42,4 +42,37 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run typecheck
-      - run: npm audit --omit=dev --audit-level=low
+      - run: npm audit --audit-level=low
+  database-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: node scripts/local.cjs start
+      - run: npm run build
+        working-directory: backend
+      - run: node scripts/recovery.cjs
+      - if: always()
+        run: npx --yes supabase@2.117.0 stop --project-id clearaf-local --no-backup
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - name: Install verified secret scanner
+        run: |
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum --check
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+      - name: Scan changes after audited security baseline
+        run: /tmp/gitleaks git --redact --log-opts=ab7861d3807a56f2f3db6f5fb3d2bcf6bf2f7c64..HEAD
+      - name: Reject tracked credentials and dependencies
+        run: node scripts/source-hygiene.cjs

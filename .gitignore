@@ -116,3 +116,7 @@ CLAUDE.md
 !**/.env.example
 .vercel/
 *.log
+
+# Generated local development configuration and recovery artifacts
+ClearAF/Config/Local.generated.xcconfig
+.local/

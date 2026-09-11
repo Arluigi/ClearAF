@@ -4,7 +4,11 @@ const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:a
 const {Client}=require('pg');const{createClient}=require('@supabase/supabase-js');
 require('dotenv').config({quiet:true});
 const statePath=process.env.SECURITY_FIXTURE_STATE||'/tmp/clearaf-security-fixtures.json';
-const base=process.env.SECURITY_API_URL||'https://clearaf-api.vercel.app/api';
+const base=process.env.SECURITY_API_URL||'http://127.0.0.1:3001/api';
+for (const value of [base,process.env.SUPABASE_URL,process.env.DATABASE_URL]) {
+ if (!value) throw Error('Configure explicit local test environment first');
+ if (!['127.0.0.1','localhost','[::1]'].includes(new URL(value).hostname) && process.env.SECURITY_ALLOW_PRODUCTION !== 'true') throw Error('Nonlocal security tests require explicit SECURITY_ALLOW_PRODUCTION=true');
+}
 const admin=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const publicClient=()=>createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const db=new Client({connectionString:process.env.DATABASE_URL});
@@ -76,7 +80,7 @@ async function run(){
   const deletion=await call('/photos/'+photo.id,a,'DELETE');assert.equal(deletion.status,200);const{error:missing}=await admin.storage.from('patient-photos').info(photo.storagePath);assert(missing);ok('owner deletion removes stored object');
   const logout=await admin.auth.admin.signOut(b.token,'global');assert(!logout.error);assert.equal((await call('/users/profile',b)).status,401);ok('revoked session JWT cannot access API');
   const extra=await admin.auth.admin.createUser({email:`clearaf-security-${s.run}-postmigration@example.invalid`,password:crypto.randomBytes(32).toString('hex'),email_confirm:true});assert(!extra.error);const profileCreated=await db.query('select exists(select 1 from public.user_profiles where id=$1) as present',[extra.data.user.id]);assert(profileCreated.rows[0].present);await admin.auth.admin.deleteUser(extra.data.user.id);await db.query('delete from public.user_profiles where id=$1',[extra.data.user.id]);ok('signup profile trigger works after permission hardening');
-  fs.writeFileSync('../docs/security/live-verification.json' ,JSON.stringify({date:new Date().toISOString(),api:base,passed:results},null,2));
+  fs.mkdirSync('../.local',{recursive:true});fs.writeFileSync('../.local/live-verification.json' ,JSON.stringify({date:new Date().toISOString(),api:base,passed:results},null,2));
  }else if(mode==='cleanup'){
   if(!fs.existsSync(statePath)){console.log('No fixture state to clean');return}
   const s=JSON.parse(fs.readFileSync(statePath));assert(s.run&&s.accounts.every(a=>a.email.startsWith(`clearaf-security-${s.run}-`)),'Invalid fixture identity');

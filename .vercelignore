@@ -1,0 +1,17 @@
+# Root uploads are used only for the Git-connected portal project.
+/backend
+/ClearAF
+/ClearAF.xcodeproj
+/ClearAFTests
+/ClearAFUITests
+/docs
+/scripts
+/supabase
+/.github
+/.local
+**/node_modules
+**/.next
+**/.env*
+**/.vercel
+**/*.log
+**/Local.generated.xcconfig

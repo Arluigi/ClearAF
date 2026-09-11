@@ -161,7 +161,7 @@ class APIService: ObservableObject {
     static let shared = APIService()
 
     // Production API URL
-    private let baseURL = "https://clearaf-api.vercel.app/api"
+    private let baseURL = AppEnvironment.apiURL
     // For local testing: "http://192.168.68.70:3001/api"
     private let session = URLSession.shared
 
@@ -395,11 +395,15 @@ extension APIService {
 
     static func privatePhotoUploadRequest(signedURL: String, imageData: Data) throws -> URLRequest {
         guard imageData.count <= 10 * 1024 * 1024 else { throw PhotoUploadError.tooLarge }
-        let prefix = "/storage/v1/object/upload/sign/patient-photos/"
+        guard let origin = URLComponents(string: SupabaseConfig.url) else {
+            throw PhotoUploadError.invalidDestination
+        }
+        let prefix = origin.path + "/storage/v1/object/upload/sign/patient-photos/"
         guard let components = URLComponents(string: signedURL),
-              components.scheme == "https",
-              components.host == "glrfxjydebnilsptlksg.supabase.co",
-              components.port == nil || components.port == 443,
+              components.scheme == origin.scheme,
+              components.host == origin.host,
+              (components.port ?? (components.scheme == "https" ? 443 : 80)) ==
+                (origin.port ?? (origin.scheme == "https" ? 443 : 80)),
               components.user == nil, components.password == nil, components.fragment == nil,
               components.path.hasPrefix(prefix),
               components.path.count > prefix.count,
