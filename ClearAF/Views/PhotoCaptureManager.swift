@@ -44,7 +44,7 @@ struct PhotoCaptureView: View {
                     
                     VStack(spacing: 16) {
                         Button(action: {
-                            showingImagePicker = true
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) { showingImagePicker = true } else { showingPhotoLibrary = true }
                         }) {
                             HStack {
                                 Image(systemName: "camera")
@@ -102,164 +102,31 @@ struct PhotoCaptureView: View {
     }
 }
 
-// MARK: - Daily Photo Capture (for Dashboard)
+// Every retained entry point uses the same durable account-bound capture.
+struct DurablePhotoCaptureView: View {
+    var onSaved: (SkinPhoto) throws -> Void = { _ in }
+    @Environment(\.dismiss) private var dismiss
+    @State private var errorMessage: String?
+    @State private var captureTicket = APIService.shared.access.snapshot()
+    var body: some View {
+        PhotoCaptureView(title: "Track Your Progress", subtitle: "Your photo is saved on this device, then shared with your care team.") { bytes in
+            do {
+                let photo = try APIService.shared.photos.capture(bytes, ticket: captureTicket)
+                try onSaved(photo)
+                HapticManager.success()
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+        .alert("Unable to save photo", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK") { errorMessage = nil }
+        } message: { Text(errorMessage ?? "") }
+    }
+}
 
 struct DailyPhotoCaptureView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.managedObjectContext) private var viewContext
-    @State private var showingImagePicker = false
-    @State private var selectedImage: UIImage?
-    @State private var showingPhotoTakenMessage = false
-    @State private var isUploading = false
-    @State private var cancellables = Set<AnyCancellable>()
-    
-    var body: some View {
-        NavigationView {
-            VStack {
-                Spacer()
-                
-                VStack(spacing: 20) {
-                    Text("Track Your Progress")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .multilineTextAlignment(.center)
-                    
-                    Text("Take a photo to track your skin's journey")
-                        .font(.body)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                    
-                    Button(action: {
-                        showingImagePicker = true
-                    }) {
-                        HStack {
-                            Image(systemName: "camera")
-                            Text("Take Photo")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color.primaryGradient)
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal, 40)
-                }
-                
-                Spacer()
-            }
-            .navigationTitle("Camera")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(
-                leading: Button("Cancel") { dismiss() }
-            )
-        }
-        .sheet(isPresented: $showingImagePicker) {
-            CameraImagePicker(selectedImage: $selectedImage)
-        }
-        .onChange(of: selectedImage) { image in
-            if let image = image {
-                saveDailyPhoto(image: image)
-            }
-        }
-        .overlay(
-            // Photo taken confirmation message
-            Group {
-                if showingPhotoTakenMessage {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.green)
-                            Text("Photo captured!")
-                                .font(.headlineSmall)
-                                .foregroundColor(.textPrimary)
-                        }
-                        .padding(.spaceLG)
-                        .background(Color.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                        .softShadow()
-                        .padding(.bottom, 100)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.bouncy, value: showingPhotoTakenMessage)
-                }
-            }
-        )
-    }
-    
-    private func saveDailyPhoto(image: UIImage) {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            HapticManager.error()
-            print("Failed to convert image to data")
-            return
-        }
-        
-        isUploading = true
-        
-        guard viewContext.userInfo["accountID"] as? UUID == APIService.shared.access.snapshot()?.accountID else { return }
-        // Upload photo to API
-        APIService.shared.uploadPhoto(imageData, skinScore: 50, notes: "Daily progress photo")
-            .sink(
-                receiveCompletion: { [self] completion in
-                    isUploading = false
-                    switch completion {
-                    case .failure(let error):
-                        HapticManager.error()
-                        print("Error uploading photo: \(error)")
-                        
-                        // Fallback to Core Data if API fails
-                        saveDailyPhotoLocally(image: image)
-                        
-                    case .finished:
-                        break
-                    }
-                },
-                receiveValue: { [self] response in
-                    HapticManager.success()
-                    showingPhotoTakenMessage = true
-                    print("Photo uploaded successfully: \(response.photo.id)")
-                    
-                    // Hide message after 2 seconds, then close
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        showingPhotoTakenMessage = false
-                        // Close after message disappears
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            dismiss()
-                        }
-                    }
-                }
-            )
-            .store(in: &cancellables)
-    }
-    
-    // Fallback method for offline storage
-    private func saveDailyPhotoLocally(image: UIImage) {
-        let photo = SkinPhoto(context: viewContext)
-        photo.id = UUID()
-        photo.captureDate = Date()
-        photo.photoData = image.jpegData(compressionQuality: 0.8)
-        photo.skinScore = 50 // Default score, user can edit later
-        
-        do {
-            try viewContext.save()
-            HapticManager.success()
-            showingPhotoTakenMessage = true
-            
-            // Hide message after 2 seconds, then close
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                showingPhotoTakenMessage = false
-                // Close after message disappears
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    dismiss()
-                }
-            }
-        } catch {
-            HapticManager.error()
-            print("Error saving photo locally: \(error)")
-        }
-    }
+    var body: some View { DurablePhotoCaptureView() }
 }
 
 // MARK: - Reusable Camera Image Picker

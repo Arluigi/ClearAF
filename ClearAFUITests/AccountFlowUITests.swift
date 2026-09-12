@@ -12,6 +12,7 @@ final class AccountFlowUITests: XCTestCase {
         let suffix = UUID().uuidString.lowercased()
         let email = "clearaf-ui-\(suffix)@example.invalid"
         let password = "Synthetic-\(suffix)-A!"
+        print("Synthetic account created for local UI verification: \(email)")
         app.buttons["authMode"].tap()
         XCTAssertTrue(app.textFields["Enter your full name"].waitForExistence(timeout: 5))
         app.textFields["Enter your full name"].tap()
@@ -129,6 +130,38 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Welcome, Synthetic Alpha"].waitForExistence(timeout: 15))
         signOut(app)
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
+    }
+
+    /// Preload the test-owned synthetic JPEG as the newest Simulator library image with simctl addmedia.
+    @MainActor func testSyntheticPhotoCaptureSharesAndSurvivesColdLaunch() async throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
+        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        _ = try await register(app, name: "Synthetic Photo Patient")
+        try await finishOnboarding(app)
+        app.tabBars.buttons["Progress"].tap()
+        let capture = app.buttons["Capture progress photo"]
+        XCTAssertTrue(capture.waitForExistence(timeout: 5))
+        capture.tap()
+        app.buttons["Choose from Library"].tap()
+        let image = app.images.matching(NSPredicate(format: "label CONTAINS 'Photo' OR label CONTAINS 'Image'")).firstMatch
+        if !image.waitForExistence(timeout: 5) { print(app.debugDescription) }
+        XCTAssertTrue(image.exists)
+        // The system Photos remote view exposes a visible image with no hittable flag.
+        image.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["Shared"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["1 photos"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Progress"].tap()
+        XCTAssertTrue(app.staticTexts["Shared"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 photos"].exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.lifetime = .keepAlways; add(attachment)
+        app.tabBars.buttons["Home"].tap()
+        signOut(app)
     }
 
     @MainActor private func register(_ app: XCUIApplication, name: String) async throws -> (email: String, password: String) {

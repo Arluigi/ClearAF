@@ -177,6 +177,7 @@ class APIService: ObservableObject {
     private var started = false
     private var profileTask: Task<Void, Never>?
     private var loadingTicket: AccountAccess.Ticket?
+    @MainActor lazy var photos = PhotoRepository(access: access, transport: self)
     private init() {}
 
     @MainActor func start() {
@@ -242,6 +243,7 @@ class APIService: ObservableObject {
     }
 
     @MainActor func clearAccount() {
+        photos.cancel()
         access.invalidate()
         profileTask?.cancel()
         profileTask = nil
@@ -359,50 +361,6 @@ class APIService: ObservableObject {
 // MARK: - API Service Extensions for Future Features
 extension APIService {
     // MARK: - Photo Upload
-    func uploadPhoto(_ imageData: Data, skinScore: Int = 0, notes: String = "", appointmentId: String? = nil) -> AnyPublisher<PhotoUploadResponse, Error> {
-        guard imageData.count <= 10 * 1024 * 1024 else {
-            return Fail(error: PhotoUploadError.tooLarge).eraseToAnyPublisher()
-        }
-        let ticket = access.snapshot()
-        guard ticket != nil else {
-            return Fail(error: URLError(.userAuthenticationRequired)).eraseToAnyPublisher()
-        }
-        return performAuthenticatedRequest(
-            endpoint: "/photos/upload-url", method: "POST",
-            body: PhotoUploadURLRequest(mimeType: "image/jpeg"), responseType: PhotoUploadURLResponse.self
-        )
-        .flatMap { upload -> AnyPublisher<PhotoUploadResponse, Error> in
-            let request: URLRequest
-            do {
-                try self.access.require(ticket)
-                request = try Self.privatePhotoUploadRequest(signedURL: upload.signedUrl, imageData: imageData)
-            } catch {
-                return Fail(error: error).eraseToAnyPublisher()
-            }
-            return Self.photoStorageSession.dataTaskPublisher(for: request)
-                .tryMap { _, response in
-                    try self.access.require(ticket)
-                    guard let http = response as? HTTPURLResponse,
-                          http.statusCode == 200 || http.statusCode == 201 else {
-                        throw PhotoUploadError.uploadFailed
-                    }
-                }
-                // Do not expose errors that may contain the signed upload URL.
-                .mapError { _ -> Error in PhotoUploadError.uploadFailed }
-                .flatMap {
-                    self.performAuthenticatedRequest(
-                        endpoint: "/photos/complete-upload", method: "POST",
-                        body: CompletePhotoUploadRequest(storagePath: upload.storagePath, skinScore: skinScore,
-                                                         notes: notes, appointmentId: appointmentId),
-                        responseType: PhotoUploadResponse.self, ticket: ticket
-                    )
-                }
-                .eraseToAnyPublisher()
-        }
-        .receive(on: DispatchQueue.main)
-        .eraseToAnyPublisher()
-    }
-
     static func privatePhotoUploadRequest(signedURL: String, imageData: Data) throws -> URLRequest {
         guard imageData.count <= 10 * 1024 * 1024 else { throw PhotoUploadError.tooLarge }
         guard let origin = URLComponents(string: SupabaseConfig.url) else {
@@ -459,15 +417,6 @@ extension APIService {
             .eraseToAnyPublisher()
     }
 }
-private struct PhotoUploadURLRequest: Codable { let mimeType: String }
-private struct PhotoUploadURLResponse: Codable { let storagePath: String; let signedUrl: String }
-private struct CompletePhotoUploadRequest: Codable {
-    let storagePath: String
-    let skinScore: Int
-    let notes: String
-    let appointmentId: String?
-}
-
 private enum PhotoUploadError: LocalizedError {
     case tooLarge, invalidDestination, uploadFailed
     var errorDescription: String? {
@@ -484,5 +433,59 @@ private final class PhotoUploadRedirectDelegate: NSObject, URLSessionTaskDelegat
                     willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
                     completionHandler: @escaping (URLRequest?) -> Void) {
         completionHandler(nil)
+    }
+}
+
+
+extension APIService: PhotoTransport {
+    @MainActor func intent(captureID: UUID, ticket: AccountAccess.Ticket) async throws -> CaptureIntent {
+        let response: CaptureUploadResponse = try await request(
+            endpoint: "/photos/captures/\(captureID.uuidString.lowercased())/upload-url", method: "POST", body: EmptyBody(), ticket: ticket)
+        try access.require(ticket)
+        if let photo = response.photo { return .shared(try photo.verifiedID(ticket)) }
+        if response.uploaded == true { return .uploaded }
+        guard let url = response.signedUrl else { throw URLError(.badServerResponse) }
+        return .upload(url)
+    }
+
+    @MainActor func upload(_ bytes: Data, signedURL: String, ticket: AccountAccess.Ticket) async throws {
+        try access.require(ticket)
+        let request = try Self.privatePhotoUploadRequest(signedURL: signedURL, imageData: bytes)
+        do {
+            let (_, response) = try await Self.photoStorageSession.data(for: request)
+            try access.require(ticket)
+            guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            // Retry intent after a Storage conflict: a previous response may have been lost.
+            guard (200..<300).contains(http.statusCode) else { throw URLError(.cannotLoadFromNetwork) }
+        } catch {
+            try access.require(ticket)
+            // URLSession errors can contain signed URLs. Surface only a sanitized error.
+            throw URLError(.networkConnectionLost)
+        }
+    }
+
+    @MainActor func complete(captureID: UUID, date: Date, notes: String, ticket: AccountAccess.Ticket) async throws -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let response: CaptureUploadResponse = try await request(
+            endpoint: "/photos/captures/\(captureID.uuidString.lowercased())/complete", method: "POST",
+            body: CaptureCompletion(captureDate: formatter.string(from: date), notes: notes), ticket: ticket)
+        try access.require(ticket)
+        guard let photo = response.photo else { throw URLError(.badServerResponse) }
+        return try photo.verifiedID(ticket)
+    }
+}
+private struct CaptureCompletion: Encodable { let captureDate: String; let notes: String }
+private struct CaptureUploadResponse: Decodable {
+    let photo: CaptureRecord?
+    let signedUrl: String?
+    let uploaded: Bool?
+}
+private struct CaptureRecord: Decodable {
+    let id: String
+    let userId: String
+    func verifiedID(_ ticket: AccountAccess.Ticket) throws -> String {
+        guard UUID(uuidString: userId) == ticket.accountID, UUID(uuidString: id) != nil else { throw AccountFailure.accountChanged }
+        return id
     }
 }

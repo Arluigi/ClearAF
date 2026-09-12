@@ -4,6 +4,7 @@ import CoreData
 struct ContentView: View {
     @StateObject private var apiService = APIService.shared
     @State private var selectedTab = 0
+    @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         Group {
             switch apiService.phase {
@@ -65,12 +66,31 @@ struct ContentView: View {
         }
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)
         .id(apiService.access.snapshot()?.generation)
-        .task { apiService.start() }
+        .task { apiService.start(); resumePhotos() }
+        .onChange(of: apiService.phase) { _ in resumePhotos() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { resumePhotos() }
+            else { apiService.photos.cancel() }
+        }
+        .overlay(alignment: .bottom) { PhotoPersistenceErrorView(repository: apiService.photos) }
         .onOpenURL { url in
             Task { @MainActor in
                 do { try await SupabaseService.shared.handleCallback(url) }
                 catch { apiService.accountError = "This link is invalid or expired. Request a new one." }
             }
+        }
+    }
+    private func resumePhotos() {
+        guard scenePhase == .active, (apiService.phase == .ready || apiService.phase == .onboarding), let ticket = apiService.access.snapshot() else { return }
+        apiService.photos.resume(context: apiService.persistence.container.viewContext, ticket: ticket)
+    }
+}
+
+private struct PhotoPersistenceErrorView: View {
+    @ObservedObject var repository: PhotoRepository
+    var body: some View {
+        if let error = repository.lastError {
+            Text(error).font(.callout).padding().background(.regularMaterial).cornerRadius(12).padding()
         }
     }
 }
