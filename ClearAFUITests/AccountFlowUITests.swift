@@ -13,6 +13,7 @@ final class AccountFlowUITests: XCTestCase {
         let email = "clearaf-ui-\(suffix)@example.invalid"
         let password = "Synthetic-\(suffix)-A!"
         app.buttons["authMode"].tap()
+        XCTAssertTrue(app.textFields["Enter your full name"].waitForExistence(timeout: 5))
         app.textFields["Enter your full name"].tap()
         app.textFields["Enter your full name"].typeText("Synthetic UI Patient")
         app.textFields["Enter your email"].tap()
@@ -136,6 +137,7 @@ final class AccountFlowUITests: XCTestCase {
         let password = "Synthetic-\(suffix)-A!"
         print("Synthetic account created for local UI verification: \(email)")
         app.buttons["authMode"].tap()
+        XCTAssertTrue(app.textFields["Enter your full name"].waitForExistence(timeout: 5))
         app.textFields["Enter your full name"].tap()
         app.textFields["Enter your full name"].typeText(name)
         app.textFields["Enter your email"].tap()
@@ -176,8 +178,11 @@ final class AccountFlowUITests: XCTestCase {
     }
 
     @MainActor private func dismissPasswordPrompt(_ app: XCUIApplication) {
-        let decline = app.sheets["Save Password?"].buttons["Not Now"]
-        if decline.waitForExistence(timeout: 3) { decline.tap() }
+        // iOS may present Passwords' remote view without an XCUIElementTypeSheet.
+        // Match its visible title before dismissing the specific password prompt.
+        guard app.staticTexts["Save Password?"].waitForExistence(timeout: 3) else { return }
+        let decline = app.buttons["Not Now"]
+        if decline.waitForExistence(timeout: 3), decline.isHittable { decline.tap() }
     }
 
     @MainActor private func signOut(_ app: XCUIApplication) {

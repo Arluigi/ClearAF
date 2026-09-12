@@ -5,6 +5,7 @@
 /ClearAFTests
 /ClearAFUITests
 /docs
+/handoff-*/
 /scripts
 /supabase
 /.github
@@ -15,3 +16,6 @@
 **/.vercel
 **/*.log
 **/Local.generated.xcconfig
+
+/.worktrees
+/.superpowers
