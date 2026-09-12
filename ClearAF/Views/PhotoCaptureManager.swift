@@ -107,21 +107,36 @@ struct DurablePhotoCaptureView: View {
     var onSaved: (SkinPhoto) throws -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var errorMessage: String?
+    @State private var attachmentFailed = false
+    @State private var session = PhotoCaptureSession()
     @State private var captureTicket = APIService.shared.access.snapshot()
     var body: some View {
         PhotoCaptureView(title: "Track Your Progress", subtitle: "Your photo is saved on this device, then shared with your care team.") { bytes in
             do {
-                let photo = try APIService.shared.photos.capture(bytes, ticket: captureTicket)
-                try onSaved(photo)
-                HapticManager.success()
-                dismiss()
+                let completion = try session.capture(bytes, repository: APIService.shared.photos,
+                    ticket: captureTicket, onSaved: onSaved)
+                if completion == .saved {
+                    HapticManager.success()
+                    dismiss()
+                } else {
+                    attachmentFailed = true
+                    errorMessage = "Your photo is saved in Progress, but could not be attached here."
+                }
             } catch {
+                attachmentFailed = false
                 errorMessage = error.localizedDescription
             }
         }
-        .alert("Unable to save photo", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button("OK") { errorMessage = nil }
+        .alert(attachmentFailed ? "Photo saved" : "Unable to save photo",
+               isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { finishAlert() } })) {
+            Button(attachmentFailed ? "Done" : "OK") { finishAlert() }
         } message: { Text(errorMessage ?? "") }
+    }
+
+    private func finishAlert() {
+        errorMessage = nil
+        // Attachment failure does not invite another capture: the durable photo already exists.
+        if attachmentFailed { dismiss() }
     }
 }
 
@@ -205,5 +220,26 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.dismiss()
         }
+    }
+}
+
+/// One picker presentation owns one durable capture, even if attaching it fails.
+@MainActor final class PhotoCaptureSession {
+    enum Completion: Equatable { case saved, savedWithoutAttachment }
+    private(set) var photo: SkinPhoto?
+    private var completion = Completion.savedWithoutAttachment
+
+    func capture(_ bytes: Data, repository: PhotoRepository, ticket: AccountAccess.Ticket?,
+                 onSaved: (SkinPhoto) throws -> Void) throws -> Completion {
+        guard photo == nil else { return completion }
+        let photo = try repository.capture(bytes, ticket: ticket)
+        self.photo = photo
+        do {
+            try onSaved(photo)
+            completion = .saved
+        } catch {
+            completion = .savedWithoutAttachment
+        }
+        return completion
     }
 }

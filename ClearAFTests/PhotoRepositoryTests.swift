@@ -247,6 +247,44 @@ import UIKit
         repository.cancel()
     }
 
+    @Test func throwingAttachmentCannotTurnSavedPhotoIntoAnotherCapture() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let access = AccountAccess(), transport = CaptureTransport()
+        let ticket = access.activate(UUID())
+        let store = try PersistenceController(accountID: ticket.accountID, directory: root)
+        defer { close(store) }
+        let repository = PhotoRepository(access: access, transport: transport)
+        repository.resume(context: store.container.viewContext, ticket: ticket)
+        defer { repository.cancel() }
+        let session = PhotoCaptureSession(), bytes = jpeg()
+        var attempts = 0
+        let failedAttachment: (SkinPhoto) throws -> Void = { _ in
+            attempts += 1
+            throw CocoaError(.persistentStoreSave)
+        }
+        #expect(throws: PhotoCaptureFailure.self) {
+            try session.capture(Data(), repository: repository, ticket: ticket, onSaved: failedAttachment)
+        }
+        #expect(session.photo == nil)
+        #expect(attempts == 0)
+        let first = Result { try session.capture(bytes, repository: repository, ticket: ticket, onSaved: failedAttachment) }
+        #expect((try? first.get()) == .savedWithoutAttachment)
+        let originalID = try #require(session.photo?.id)
+        let repeated = Result { try session.capture(bytes, repository: repository, ticket: ticket, onSaved: failedAttachment) }
+        #expect((try? repeated.get()) == .savedWithoutAttachment)
+        #expect(session.photo?.id == originalID)
+        #expect(attempts == 1)
+        #expect(try store.container.viewContext.count(for: SkinPhoto.fetchRequest()) == 1)
+        let reopened = try PersistenceController(accountID: ticket.accountID, directory: root)
+        defer { close(reopened) }
+        let persisted = try reopened.container.viewContext.fetch(SkinPhoto.fetchRequest())
+        #expect(persisted.count == 1)
+        #expect(persisted.first?.id == originalID)
+        #expect(persisted.first?.photoData == bytes)
+        #expect(persisted.first?.uploadState == "pending")
+    }
+
     @Test func invalidBytesAndSaveFailureNeverClaimCaptureSuccess() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
