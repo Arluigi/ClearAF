@@ -51,7 +51,7 @@ function RoutineEditor({
           {editor.routine?.isActive === false && <Badge variant="secondary">Archived</Badge>}
         </div>
       </div>
-      <CardDescription>Saving creates an immutable revision for this patient.</CardDescription>
+      <CardDescription>Saving creates a new version for this patient.</CardDescription>
     </CardHeader>
     <CardContent className="space-y-5">
       <div className="space-y-2">
@@ -153,7 +153,7 @@ function RoutineEditor({
 
       {editor.error && <div role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm">
         <p>{editor.error}</p>
-        {editor.status === 'conflict' ? <Button type="button" variant="outline" size="sm" onClick={reload}>
+        {editor.status === 'conflict' ? <Button type="button" variant="outline" size="sm" disabled={!controller.canReloadConflict(slot)} onClick={reload}>
           <RefreshCw className="mr-2 h-4 w-4" /> Reload assignments
         </Button> : editor.hasPendingSave ? <Button type="button" variant="outline" size="sm" onClick={() => void controller.retry(slot)}>
           Retry the same save
@@ -188,7 +188,9 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
   }, [controller]);
 
   const reloadAssignments = () => { void controller.load(); };
+  const reloadConflict = (slot: RoutineTimeOfDay) => { void controller.reloadConflict(slot); };
   const saving = state.slots.morning.status === 'saving' || state.slots.evening.status === 'saving';
+  const reloadBlocked = saving || state.slots.morning.hasPendingSave || state.slots.evening.hasPendingSave;
 
   return <section aria-label="Patient routine care" className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -196,7 +198,7 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
         <h4 className="flex items-center gap-2 font-medium"><ClipboardCheck className="h-4 w-4" /> Assigned routines</h4>
         <p className="mt-1 text-sm text-muted-foreground">Edit clinician-assigned morning and evening routines.</p>
       </div>
-      <Button type="button" variant="outline" size="sm" disabled={saving || state.loadStatus === 'loading'} onClick={reloadAssignments}>
+      <Button type="button" variant="outline" size="sm" disabled={reloadBlocked || state.loadStatus === 'loading'} onClick={reloadAssignments}>
         <RefreshCw className="mr-2 h-4 w-4" /> Refresh assignments
       </Button>
     </div>
@@ -207,8 +209,8 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
       <Button type="button" variant="outline" onClick={reloadAssignments}>Retry assignments</Button>
     </div>}
     {state.loadStatus === 'ready' && <div className="grid gap-4 lg:grid-cols-2">
-      <RoutineEditor slot="morning" editor={state.slots.morning} controller={controller} reload={reloadAssignments} />
-      <RoutineEditor slot="evening" editor={state.slots.evening} controller={controller} reload={reloadAssignments} />
+      <RoutineEditor slot="morning" editor={state.slots.morning} controller={controller} reload={() => reloadConflict('morning')} />
+      <RoutineEditor slot="evening" editor={state.slots.evening} controller={controller} reload={() => reloadConflict('evening')} />
     </div>}
 
     <div className="space-y-4 border-t pt-6">

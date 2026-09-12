@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import './env';
 import { RoutineCareController } from '../src/lib/routine-care';
 import { apiService, authStorage, supabase } from '../src/lib/api';
-import { APIError } from '../src/types/api';
+import { APIError, type RoutineSnapshot } from '../src/types/api';
 
 const morning = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -79,7 +79,7 @@ test('a 409 locks the conflicted draft until reload replaces it with the latest 
   assert.equal(controller.snapshot().slots.morning.draft.name, 'Clinician draft');
 
   loaded = { routines: [latest], completions: [] };
-  await controller.load();
+  await controller.reloadConflict('morning');
   assert.equal(controller.snapshot().slots.morning.draft.name, 'Externally edited morning');
   assert.equal(controller.snapshot().slots.morning.expectedRevisionId, latest.id);
   assert.equal(controller.snapshot().slots.morning.status, 'ready');
@@ -389,4 +389,111 @@ test('duplicate save actions serialize one in-flight request per routine slot', 
   response.resolve({ ...morning, id: '22222222-2222-4222-8222-222222222222', version: 2, name: 'Serialized edit' });
   await Promise.all([first, second]);
   assert.equal(requests, 1);
+});
+
+test('assignment reload cannot clear or retarget another slot unresolved save', async () => {
+  const evening = {
+    ...morning,
+    id: '77777777-7777-4777-8777-777777777777',
+    timeOfDay: 'evening' as const,
+    name: 'Original evening',
+  };
+  const latestMorning = {
+    ...morning,
+    id: '88888888-8888-4888-8888-888888888888',
+    version: 2,
+    name: 'Latest morning',
+  };
+  const firstEvening = deferred<typeof evening>();
+  const conflictSnapshot = deferred<RoutineSnapshot>();
+  const eveningRequests: Array<{ revisionId: string; body: unknown }> = [];
+  const revisionIds = [
+    '99999999-9999-4999-8999-999999999999',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab',
+  ];
+  let snapshotRequests = 0;
+  const controller = new RoutineCareController({
+    fetchSnapshot: async () => {
+      snapshotRequests += 1;
+      return snapshotRequests === 1
+        ? { routines: [morning, evening], completions: [] }
+        : conflictSnapshot.promise;
+    },
+    saveRevision: async (slot, revisionId, body) => {
+      if (slot === 'morning') throw Object.assign(new Error('stale'), { status: 409 });
+      eveningRequests.push({ revisionId, body: structuredClone(body) });
+      if (eveningRequests.length === 1) return firstEvening.promise;
+      return { ...evening, id: revisionId, version: 2, name: body.name, steps: body.steps };
+    },
+    fetchHistory: async () => emptyHistory,
+    createRevisionId: () => revisionIds.shift()!,
+  });
+  await controller.load();
+  controller.setName('morning', 'Conflicted morning');
+  await controller.save('morning');
+  assert.equal(controller.snapshot().slots.morning.status, 'conflict');
+
+  controller.setName('evening', 'Frozen evening attempt');
+  const saving = controller.save('evening');
+  await controller.load();
+  assert.equal(snapshotRequests, 1);
+  assert.equal(controller.snapshot().slots.evening.status, 'saving');
+  await controller.reloadConflict('morning');
+  assert.equal(snapshotRequests, 1);
+
+  firstEvening.reject(new Error('lost response'));
+  await saving;
+  await controller.load();
+  await controller.reloadConflict('morning');
+  assert.equal(snapshotRequests, 1);
+  assert.equal(controller.snapshot().slots.evening.status, 'error');
+  assert.equal(controller.snapshot().slots.evening.draft.name, 'Frozen evening attempt');
+  controller.setName('evening', 'Must remain frozen');
+  assert.equal(controller.snapshot().slots.evening.draft.name, 'Frozen evening attempt');
+
+  await controller.retry('evening');
+  assert.equal(eveningRequests.length, 2);
+  assert.equal(eveningRequests[1].revisionId, eveningRequests[0].revisionId);
+  assert.deepEqual(eveningRequests[1].body, eveningRequests[0].body);
+  const savedEveningId = eveningRequests[1].revisionId;
+
+  const reloading = controller.reloadConflict('morning');
+  controller.setName('evening', 'Must remain frozen during reload');
+  await controller.save('evening');
+  assert.equal(eveningRequests.length, 2);
+  assert.equal(controller.snapshot().slots.evening.draft.name, 'Frozen evening attempt');
+  conflictSnapshot.resolve({ routines: [latestMorning, evening], completions: [] });
+  await reloading;
+  assert.equal(snapshotRequests, 2);
+  assert.equal(controller.snapshot().slots.morning.routine?.id, latestMorning.id);
+  assert.equal(controller.snapshot().slots.evening.routine?.id, savedEveningId);
+  assert.equal(controller.snapshot().slots.evening.draft.name, 'Frozen evening attempt');
+});
+
+test('resolved conflicts in both slots can reload one at a time without deadlock', async () => {
+  const evening = {
+    ...morning,
+    id: '77777777-7777-4777-8777-777777777777',
+    timeOfDay: 'evening' as const,
+    name: 'Original evening',
+  };
+  const latestMorning = { ...morning, id: '88888888-8888-4888-8888-888888888888', version: 2 };
+  let loads = 0;
+  const controller = new RoutineCareController({
+    fetchSnapshot: async () => ++loads === 1
+      ? { routines: [morning, evening], completions: [] }
+      : { routines: [latestMorning, evening], completions: [] },
+    saveRevision: async () => { throw Object.assign(new Error('stale'), { status: 409 }); },
+    fetchHistory: async () => emptyHistory,
+    createRevisionId: () => crypto.randomUUID(),
+  });
+  await controller.load();
+  controller.setName('morning', 'Morning conflict');
+  controller.setName('evening', 'Evening conflict');
+  await Promise.all([controller.save('morning'), controller.save('evening')]);
+
+  assert.equal(controller.canReloadConflict('morning'), true);
+  await controller.reloadConflict('morning');
+  assert.equal(controller.snapshot().slots.morning.routine?.id, latestMorning.id);
+  assert.equal(controller.snapshot().slots.evening.status, 'conflict');
 });

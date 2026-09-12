@@ -85,6 +85,7 @@ export class RoutineCareController {
   private lifecycle = 0;
   private historyRequest = 0;
   private snapshotRequest = 0;
+  private assignmentLoads = 0;
 
   constructor(private dependencies: RoutineCareDependencies) {}
 
@@ -109,9 +110,20 @@ export class RoutineCareController {
     this.publish({ ...this.state, slots: { ...this.state.slots, [slot]: update(this.state.slots[slot]) } });
   }
 
+  private hasSaveBarrier(allowResolvedConflicts = false) {
+    return (['morning', 'evening'] as const).some(slot => {
+      const resolvedConflict = allowResolvedConflicts && this.state.slots[slot].status === 'conflict';
+      if (this.saves[slot] && !resolvedConflict) return true;
+      if (!this.pending[slot]) return false;
+      return !resolvedConflict;
+    });
+  }
+
   async load() {
+    if (this.hasSaveBarrier()) return;
     const lifecycle = this.lifecycle;
     const request = ++this.snapshotRequest;
+    this.assignmentLoads += 1;
     this.publish({ ...this.state, loadStatus: 'loading', loadError: '' });
     try {
       const snapshot = await this.dependencies.fetchSnapshot();
@@ -142,6 +154,8 @@ export class RoutineCareController {
         loadStatus: 'error',
         loadError: 'Routine assignments could not be loaded. Check your connection and try again.',
       });
+    } finally {
+      this.assignmentLoads -= 1;
     }
   }
 
@@ -154,7 +168,7 @@ export class RoutineCareController {
   }
 
   private editDraft(slot: RoutineTimeOfDay, edit: (draft: RoutineDraft) => RoutineDraft) {
-    if (this.pending[slot]) return;
+    if (this.assignmentLoads > 0 || this.pending[slot]) return;
     this.updateSlot(slot, current => ({ ...current, draft: edit(current.draft), dirty: true, error: '' }));
   }
 
@@ -197,6 +211,7 @@ export class RoutineCareController {
   }
 
   save(slot: RoutineTimeOfDay): Promise<void> {
+    if (this.assignmentLoads > 0) return Promise.resolve();
     if (this.saves[slot]) return this.saves[slot]!;
     if (!this.pending[slot]) {
       const current = this.state.slots[slot];
@@ -223,6 +238,59 @@ export class RoutineCareController {
 
   retry(slot: RoutineTimeOfDay): Promise<void> {
     return this.save(slot);
+  }
+
+  canReloadConflict(slot: RoutineTimeOfDay) {
+    return this.assignmentLoads === 0
+      && this.state.slots[slot].status === 'conflict'
+      && !!this.pending[slot]
+      && !this.hasSaveBarrier(true);
+  }
+
+  async reloadConflict(slot: RoutineTimeOfDay) {
+    if (!this.canReloadConflict(slot)) return;
+    const lifecycle = this.lifecycle;
+    const request = ++this.snapshotRequest;
+    this.assignmentLoads += 1;
+    this.publish({ ...this.state, loadStatus: 'loading', loadError: '' });
+    try {
+      const snapshot = await this.dependencies.fetchSnapshot();
+      if (lifecycle !== this.lifecycle || request !== this.snapshotRequest) return;
+      const routine = snapshot.routines.find(item => item.timeOfDay === slot) ?? null;
+      delete this.pending[slot];
+      this.publish({
+        ...this.state,
+        loadStatus: 'ready',
+        loadError: '',
+        slots: {
+          ...this.state.slots,
+          [slot]: routine ? {
+            routine,
+            draft: draftFrom(routine),
+            expectedRevisionId: routine.id,
+            status: 'ready',
+            error: '',
+            dirty: false,
+            hasPendingSave: false,
+          } : emptyEditor(),
+        },
+      });
+    } catch {
+      if (lifecycle !== this.lifecycle || request !== this.snapshotRequest) return;
+      this.publish({
+        ...this.state,
+        loadStatus: 'ready',
+        slots: {
+          ...this.state.slots,
+          [slot]: {
+            ...this.state.slots[slot],
+            error: 'The latest routine could not be loaded. Check your connection and try Reload again.',
+          },
+        },
+      });
+    } finally {
+      this.assignmentLoads -= 1;
+    }
   }
 
   async loadHistory(page: number) {
