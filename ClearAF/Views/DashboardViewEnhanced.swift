@@ -95,159 +95,23 @@ struct DashboardViewEnhanced: View {
 
 struct DailyPhotoCardEnhanced: View {
     @Binding var selectedTab: Int
-    @Environment(\.managedObjectContext) private var viewContext
-    @FetchRequest(
-        entity: User.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \User.joinDate, ascending: false)],
-        animation: .default)
-    private var users: FetchedResults<User>
-    
-    @FetchRequest(
-        entity: SkinPhoto.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \SkinPhoto.captureDate, ascending: false)],
-        animation: .default)
+    @FetchRequest(entity: SkinPhoto.entity(),
+        sortDescriptors: [NSSortDescriptor(keyPath: \SkinPhoto.captureDate, ascending: false)], animation: .default)
     private var photos: FetchedResults<SkinPhoto>
-    
     @State private var showingCamera = false
-    @State private var showingPhotoTakenMessage = false
-    @State private var animatedScore: Double = 0
-    @State private var cancellables = Set<AnyCancellable>()
-    
+
     var body: some View {
-        VStack(spacing: .spaceXL) {
-            // Enhanced Skin Score with Animation
-            VStack(spacing: .spaceMD) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: .spaceXS) {
-                        Text("Skin Score")
-                            .font(.headlineSmall)
-                            .foregroundColor(.textSecondary)
-                            .accessibilityLabel("Current skin score section")
-                        
-                        // Animated streak with better design
-                        StreakIndicator(count: Int(users.first?.streakCount ?? 0))
-                    }
-                    Spacer()
-                    
-                    // Animated score display
-                    VStack(alignment: .trailing, spacing: .spaceXXS) {
-                        AnimatedScoreDisplay(score: Int(users.first?.currentSkinScore ?? 0))
-                        Text(scoreDescription(for: Int(users.first?.currentSkinScore ?? 0)))
-                            .font(.captionLarge)
-                            .foregroundColor(scoreColor(for: Int(users.first?.currentSkinScore ?? 0)))
-                            .animation(.gentle, value: users.first?.currentSkinScore)
-                    }
-                }
-                
-                // Enhanced Progress Bar with Animation
-                EnhancedProgressBar(
-                    progress: Double(users.first?.currentSkinScore ?? 0) / 100.0,
-                    score: Int(users.first?.currentSkinScore ?? 0)
-                )
-                
-                // Progress insight
-                ProgressInsight(currentScore: Int(users.first?.currentSkinScore ?? 0))
+        VStack(alignment: .leading, spacing: .spaceLG) {
+            HStack {
+                Text("Your photos").font(.headlineSmall)
+                Spacer()
+                Button("View all") { selectedTab = 1 }
             }
-            
-            // Enhanced Photo Section
-            PhotoDisplaySection(
-                todayPhoto: getTodayPhoto(),
-                showingCamera: $showingCamera
-            )
+            PhotoDisplaySection(todayPhoto: photos.first, showingCamera: $showingCamera)
         }
         .wellnessCard(style: .elevated)
         .padding(.horizontal, .spaceXL)
-        .sheet(isPresented: $showingCamera) {
-            PhotoCaptureView(
-                title: "Track Your Progress",
-                subtitle: "Take a photo to track your skin's journey"
-            ) { imageData in
-                saveDailyPhoto(imageData: imageData)
-                showingCamera = false
-                showingPhotoTakenMessage = true
-                HapticManager.success()
-                
-                // Hide message after 2 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showingPhotoTakenMessage = false
-                }
-            }
-        }
-        .overlay(
-            // Photo taken confirmation message
-            Group {
-                if showingPhotoTakenMessage {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.green)
-                            Text("Photo captured!")
-                                .font(.headlineSmall)
-                                .foregroundColor(.textPrimary)
-                        }
-                        .padding(.spaceLG)
-                        .background(Color.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                        .softShadow()
-                        .padding(.bottom, 100)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.bouncy, value: showingPhotoTakenMessage)
-                }
-            }
-        )
-    }
-    
-    private func getTodayPhoto() -> SkinPhoto? {
-        let today = Calendar.current.startOfDay(for: Date())
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
-        
-        return photos.first { photo in
-            guard let captureDate = photo.captureDate else { return false }
-            return captureDate >= today && captureDate < tomorrow
-        }
-    }
-    
-    private func saveDailyPhoto(imageData: Data) {
-        guard viewContext.userInfo["accountID"] as? UUID == APIService.shared.access.snapshot()?.accountID else { return }
-        // Upload photo to backend (Supabase Storage)
-        APIService.shared.uploadPhoto(imageData, skinScore: 50, notes: "Daily photo", appointmentId: nil)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { completion in
-                    if case .failure(let error) = completion {
-                        print("Error uploading photo: \(error)")
-                        // Still save locally to Core Data as fallback
-                        self.savePhotoToCoreData(imageData: imageData)
-                    }
-                },
-                receiveValue: { response in
-                    print("Photo upload completed")
-                    showingPhotoTakenMessage = true
-                    HapticManager.success()
-
-                    // Optionally save to Core Data with URL reference
-                    self.savePhotoToCoreData(imageData: imageData, photoUrl: response.photo.photoUrl)
-                }
-            )
-            .store(in: &cancellables)
-    }
-
-    private func savePhotoToCoreData(imageData: Data, photoUrl: String? = nil) {
-        let photo = SkinPhoto(context: viewContext)
-        photo.id = UUID()
-        photo.captureDate = Date()
-        photo.photoData = imageData
-        photo.skinScore = 50
-        // Note: photoUrl is stored in Supabase, shown in derm portal
-
-        do {
-            try viewContext.save()
-        } catch {
-            print("Error saving photo to Core Data: \(error)")
-        }
+        .sheet(isPresented: $showingCamera) { DurablePhotoCaptureView() }
     }
 }
 
@@ -544,115 +408,39 @@ struct ProgressInsight: View {
 struct PhotoDisplaySection: View {
     let todayPhoto: SkinPhoto?
     @Binding var showingCamera: Bool
-    
     var body: some View {
         VStack(spacing: .spaceMD) {
-            if let todayPhoto = todayPhoto {
-                // Display today's photo with enhanced styling
-                if let photoData = todayPhoto.photoData,
-                   let uiImage = UIImage(data: photoData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                        .overlay(
-                            VStack {
-                                Spacer()
-                                HStack {
-                                    // "Take Another" button on bottom-left
-                                    Button(action: {
-                                        HapticManager.light()
-                                        showingCamera = true
-                                    }) {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "camera.fill")
-                                                .font(.system(size: 11))
-                                            Text("Take Another")
-                                                .fontWeight(.semibold)
-                                                .font(.system(size: 12))
-                                        }
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.primaryPurple)
-                                        .clipShape(Capsule())
-                                    }
-                                    .padding(.spaceMD)
-                                    .accessibleButton(label: "Take another photo", hint: "Upload an additional progress photo")
-
-                                    Spacer()
-
-                                    // Score badge on bottom-right
-                                    Text("\(todayPhoto.skinScore)")
-                                        .font(.captionLarge)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, .spaceMD)
-                                        .padding(.vertical, .spaceXS)
-                                        .background(Color.black.opacity(0.7))
-                                        .clipShape(Capsule())
-                                        .padding(.spaceMD)
-                                }
-                            }
-                        )
-                        .accessibleImage(label: "Today's progress photo with score \(todayPhoto.skinScore)")
-                }
+            if let photo = todayPhoto {
+                DashboardPhotoPreview(photo: photo)
             } else {
-                // Enhanced photo placeholder
-                Button(action: {
-                    HapticManager.light()
-                    showingCamera = true
-                }) {
-                    VStack(spacing: .spaceLG) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.primaryPurple)
-                        
-                        VStack(spacing: .spaceXS) {
-                            Text("Take your daily picture!")
-                                .font(.headlineSmall)
-                                .foregroundColor(.textPrimary)
-                            Text("Track your progress with a quick selfie")
-                                .font(.captionLarge)
-                                .foregroundColor(.textSecondary)
-                        }
-                        .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 240)
-                    .background(Color.backgroundTertiary)
-                    .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                }
-                .accessibleButton(
-                    label: "Take daily progress photo",
-                    hint: "Double tap to open camera and capture your daily skin photo"
-                )
+                Image(systemName: "camera.fill").font(.largeTitle).foregroundColor(.primaryPurple)
+                Text("Start your photo history").foregroundColor(.textSecondary)
             }
-            
-            // Enhanced date display
-            HStack {
-                Image(systemName: "calendar")
-                    .foregroundColor(.textTertiary)
-                    .font(.caption)
-                Text(formatDate(Date()))
-                    .font(.captionLarge)
-                    .foregroundColor(.textSecondary)
-                    .fontWeight(.medium)
+            Button { showingCamera = true } label: {
+                Label(todayPhoto == nil ? "Take a photo" : "Take another photo", systemImage: "camera")
             }
-            .accessibilityLabel("Today's date: \(formatDate(Date()))")
+            .accessibilityLabel("Take daily progress photo")
+            .buttonStyle(.borderedProminent)
         }
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMM d"
-        return formatter.string(from: date)
+        .frame(maxWidth: .infinity)
     }
 }
 
-// Your Dermatologist Card Component
+private struct DashboardPhotoPreview: View {
+    @ObservedObject var photo: SkinPhoto
+    var body: some View {
+        VStack(spacing: .spaceSM) {
+            if let bytes = photo.photoData, let image = UIImage(data: bytes) {
+                Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: .radiusMedium))
+                    .accessibilityLabel("Latest progress photo")
+            }
+            if let date = photo.captureDate { Text(date, style: .date).font(.caption) }
+            PhotoSharingStatusView(photo: photo)
+        }
+    }
+}
+
 struct YourDermatologistCard: View {
     @Binding var selectedTab: Int
     

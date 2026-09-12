@@ -109,19 +109,8 @@ struct AppointmentBookingView: View {
             .disabled(isBooking)
         }
         .sheet(isPresented: $showingCamera) {
-            PhotoCaptureView(
-                title: "Take Photo",
-                subtitle: "Capture a photo for your appointment"
-            ) { imageData in
-                selectedPhotos.append(imageData)
-                showingCamera = false
-                showingPhotoTakenMessage = true
-                HapticManager.success()
-
-                // Hide message after 2 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showingPhotoTakenMessage = false
-                }
+            DurablePhotoCaptureView { photo in
+                if let bytes = photo.photoData { selectedPhotos.append(bytes) }
             }
         }
         .overlay(

@@ -256,18 +256,9 @@ struct AppointmentDetailView: View {
             VideoCallView(appointment: appointment)
         }
         .sheet(isPresented: $showingCamera) {
-            PhotoCaptureView(
-                title: "Take Photo",
-                subtitle: "Document your skin concern"
-            ) { imageData in
-                addPhotoToAppointment(imageData)
-                showingCamera = false
-                showingPhotoTakenMessage = true
-                HapticManager.success()
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showingPhotoTakenMessage = false
-                }
+            DurablePhotoCaptureView { photo in
+                photo.relatedAppointment = appointment
+                try viewContext.save()
             }
         }
         .overlay(
@@ -301,20 +292,7 @@ struct AppointmentDetailView: View {
         return scheduledDate > Date()
     }
     
-    private func addPhotoToAppointment(_ imageData: Data) {
-        let photo = SkinPhoto(context: viewContext)
-        photo.id = UUID()
-        photo.photoData = imageData
-        photo.captureDate = Date()
-        photo.relatedAppointment = appointment
-        photo.notes = "Added during appointment preparation"
-        
-        do {
-            try viewContext.save()
-        } catch {
-            print("Error saving photo: \(error)")
-        }
-    }
+
 }
 
 // MARK: - Supporting Views

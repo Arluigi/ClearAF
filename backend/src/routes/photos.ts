@@ -6,6 +6,7 @@ import multer from 'multer';
 import { privatePhoto, privatePhotos, deletePhotoObject, ownedPhotoPath } from '../services/photoAccess';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin, PHOTO_BUCKET, generatePhotoPath } from '../config/supabase';
+import { captureIdentity, isMissingStorageObject, isValidCaptureObject } from '../services/photoCapture';
 
 const router = express.Router();
 
@@ -44,6 +45,109 @@ const uploadPhotoSchema = z.object({
 const updatePhotoSchema = z.object({
   skinScore: z.number().min(0).max(100).optional(),
   notes: z.string().optional()
+});
+
+const captureIdSchema = z.string().uuid();
+const captureIntentSchema = z.object({}).strict();
+const captureDateSchema = z.string().datetime({ offset: true }).refine(value => {
+  if (!Number.isFinite(Date.parse(value))) return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  return calendarDate.getUTCFullYear() === year
+    && calendarDate.getUTCMonth() === month - 1
+    && calendarDate.getUTCDate() === day;
+}, 'Invalid capture date');
+const completeCaptureSchema = z.object({
+  captureDate: captureDateSchema,
+  notes: z.string().max(10000)
+}).strict();
+
+function captureConflict(photo: { userId: string; photoUrl: string }, ownerId: string, storagePath: string): boolean {
+  return photo.userId !== ownerId || photo.photoUrl !== storagePath;
+}
+
+async function captureObjectInfo(storagePath: string) {
+  const { data, error } = await supabaseAdmin.storage.from(PHOTO_BUCKET).info(storagePath);
+  if (error) {
+    if (isMissingStorageObject(error)) return { state: 'missing' as const };
+    throw new Error('Unable to verify photo upload');
+  }
+  if (!data || !isValidCaptureObject(data)) return { state: 'invalid' as const };
+  return { state: 'uploaded' as const };
+}
+
+router.post('/captures/:captureId/upload-url', requirePatient, async (req, res, next) => {
+  try {
+    const captureId = captureIdSchema.parse(req.params.captureId);
+    captureIntentSchema.parse(req.body);
+    const { id, storagePath } = captureIdentity(req.user!.id, captureId);
+    const existing = await prisma.skinPhoto.findUnique({ where: { id } });
+    if (existing) {
+      if (captureConflict(existing, req.user!.id, storagePath)) {
+        return res.status(409).json({ error: 'Photo capture conflict', code: 'CAPTURE_CONFLICT' });
+      }
+      return res.json({ photo: await privatePhoto(existing, req.user!.id) });
+    }
+
+    const object = await captureObjectInfo(storagePath);
+    if (object.state === 'uploaded') return res.json({ storagePath, uploaded: true });
+    if (object.state === 'invalid') {
+      return res.status(400).json({ error: 'Upload is not a JPEG between 1 byte and 10 MB', code: 'INVALID_UPLOAD' });
+    }
+
+    const { data, error } = await supabaseAdmin.storage
+      .from(PHOTO_BUCKET)
+      .createSignedUploadUrl(storagePath, { upsert: false });
+    if (error || !data?.signedUrl) throw new Error('Unable to authorize photo upload');
+    return res.json({ storagePath, signedUrl: data.signedUrl });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/captures/:captureId/complete', requirePatient, async (req, res, next) => {
+  try {
+    const captureId = captureIdSchema.parse(req.params.captureId);
+    const input = completeCaptureSchema.parse(req.body);
+    const { id, storagePath } = captureIdentity(req.user!.id, captureId);
+    const existing = await prisma.skinPhoto.findUnique({ where: { id } });
+    if (existing) {
+      if (captureConflict(existing, req.user!.id, storagePath)) {
+        return res.status(409).json({ error: 'Photo capture conflict', code: 'CAPTURE_CONFLICT' });
+      }
+      return res.json({ photo: await privatePhoto(existing, req.user!.id) });
+    }
+
+    const object = await captureObjectInfo(storagePath);
+    if (object.state !== 'uploaded') {
+      return res.status(400).json({ error: 'Upload is missing or is not a JPEG between 1 byte and 10 MB', code: 'INVALID_UPLOAD' });
+    }
+
+    try {
+      const photo = await prisma.$transaction(tx => tx.skinPhoto.create({
+        data: {
+          id,
+          photoUrl: storagePath,
+          skinScore: 0,
+          notes: input.notes,
+          captureDate: new Date(input.captureDate),
+          userId: req.user!.id
+        }
+      }));
+      return res.status(201).json({ photo: await privatePhoto(photo, req.user!.id) });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2002') throw error;
+      const winner = await prisma.skinPhoto.findUnique({ where: { id } });
+      if (!winner || captureConflict(winner, req.user!.id, storagePath)) throw error;
+      return res.json({ photo: await privatePhoto(winner, req.user!.id) });
+    }
+  } catch (error) {
+    return next(error);
+  }
 });
 
 // Large images travel directly to private Storage instead of through Vercel's

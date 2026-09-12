@@ -98,18 +98,8 @@ struct MessagingView: View {
             )
         }
         .sheet(isPresented: $showingCamera) {
-            PhotoCaptureView(
-                title: "Take Photo",
-                subtitle: "Share a photo with your dermatologist"
-            ) { imageData in
-                sendPhotoMessage(imageData)
-                showingCamera = false
-                showingPhotoTakenMessage = true
-                HapticManager.success()
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showingPhotoTakenMessage = false
-                }
+            DurablePhotoCaptureView { photo in
+                if let bytes = photo.photoData { sendPhotoMessage(bytes) }
             }
         }
         .overlay(

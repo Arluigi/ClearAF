@@ -45,7 +45,8 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { User, Photo } from '@/types/api';
+import { User } from '@/types/api';
+import PatientPhotoHistory from '@/components/patients/PatientPhotoHistory';
 import { useClinicalAPI } from '@/lib/auth';
 
 export default function PatientsPage() {
@@ -391,42 +392,14 @@ export default function PatientsPage() {
 
 // Patient Detail Dialog Component
 function PatientDetailDialog({ patient }: { patient: User }) {
-  const apiService = useClinicalAPI();
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [photosLoading, setPhotosLoading] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
-  const [photoTimeline, setPhotoTimeline] = useState<Awaited<ReturnType<typeof apiService.getPhotoTimeline>>['timeline'] | null>(null);
 
   const status = patient.currentSkinScore ?
     (patient.currentSkinScore >= 85 ? 'excellent' :
      patient.currentSkinScore >= 70 ? 'good' :
      patient.currentSkinScore >= 50 ? 'fair' : 'needs_attention') : 'new';
 
-  const fetchPatientPhotos = async () => {
-    if (photos.length > 0) return; // Already loaded
-
-    try {
-      setPhotosLoading(true);
-      const [photosResponse, timelineResponse] = await Promise.all([
-        apiService.getPatientPhotos(patient.id, 1, 10),
-        apiService.getPhotoTimeline(patient.id, 30)
-      ]);
-
-      setPhotos(photosResponse.data);
-      setPhotoTimeline(timelineResponse.timeline);
-    } catch (error) {
-
-    } finally {
-      setPhotosLoading(false);
-    }
-  };
-
-  const handleTogglePhotos = () => {
-    setShowPhotos(!showPhotos);
-    if (!showPhotos && photos.length === 0) {
-      fetchPatientPhotos();
-    }
-  };
+  const handleTogglePhotos = () => setShowPhotos(!showPhotos);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -438,6 +411,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
       default: return 'bg-muted text-muted-foreground';
     }
   };
+
 
   return (
     <>
@@ -553,86 +527,7 @@ function PatientDetailDialog({ patient }: { patient: User }) {
           </Button>
         </div>
 
-        {showPhotos && (
-          <div className="space-y-4">
-            {photosLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                <span>Loading photos...</span>
-              </div>
-            ) : photos.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Camera className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No photos uploaded yet</p>
-                <p className="text-sm">Patient hasn&apos;t taken any progress photos</p>
-              </div>
-            ) : (
-              <>
-                {/* Photo Timeline Stats */}
-                {photoTimeline && (
-                  <div className="grid grid-cols-3 gap-4 mb-4">
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold text-clearaf-blue">{photoTimeline.stats.totalPhotos}</div>
-                      <div className="text-xs text-muted-foreground">Total Photos</div>
-                    </div>
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <div className="text-2xl font-bold text-clearaf-green">{photoTimeline.stats.averageScore}</div>
-                      <div className="text-xs text-muted-foreground">Avg Score</div>
-                    </div>
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <div className={`text-2xl font-bold ${
-                        photoTimeline.stats.trend === 'improving' ? 'text-clearaf-green' :
-                        photoTimeline.stats.trend === 'declining' ? 'text-clearaf-red' :
-                        'text-clearaf-orange'
-                      }`}>
-                        {photoTimeline.stats.trend === 'improving' ? '↗' :
-                         photoTimeline.stats.trend === 'declining' ? '↘' : '→'}
-                      </div>
-                      <div className="text-xs text-muted-foreground capitalize">{photoTimeline.stats.trend}</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Photo Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  {photos.slice(0, 6).map((photo) => (
-                    <div key={photo.id} className="relative group">
-                      <div className="aspect-square bg-muted rounded-lg overflow-hidden">
-                        <img
-                          referrerPolicy="no-referrer"
-                          src={photo.photoUrl}
-                          alt={`Progress photo from ${new Date(photo.captureDate).toLocaleDateString()}`}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            // Fallback for broken images
-                            e.currentTarget.hidden = true;
-                          }}
-                        />
-                      </div>
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                        <div className="text-white text-center">
-                          <div className="text-lg font-bold">Score: {photo.skinScore}</div>
-                          <div className="text-sm">{new Date(photo.captureDate).toLocaleDateString()}</div>
-                          {photo.notes && (
-                            <div className="text-xs mt-1 opacity-80">{photo.notes}</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {photos.length > 6 && (
-                  <div className="text-center">
-                    <Button variant="outline" size="sm">
-                      View All {photos.length} Photos
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+        {showPhotos && <PatientPhotoHistory patientId={patient.id} />}
       </div>
 
       <div className="flex gap-2 mt-6">
