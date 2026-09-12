@@ -156,6 +156,7 @@ export class RoutineCareController {
       });
     } finally {
       this.assignmentLoads -= 1;
+      if (lifecycle === this.lifecycle) this.publish({ ...this.state });
     }
   }
 
@@ -231,7 +232,12 @@ export class RoutineCareController {
         },
       };
     }
-    const work = this.performSave(slot).finally(() => { delete this.saves[slot]; });
+    const lifecycle = this.lifecycle;
+    const work = this.performSave(slot).finally(() => {
+      delete this.saves[slot];
+      // Barrier changes affect Reload eligibility even when editor data is unchanged.
+      if (lifecycle === this.lifecycle) this.publish({ ...this.state });
+    });
     this.saves[slot] = work;
     return work;
   }
@@ -290,6 +296,7 @@ export class RoutineCareController {
       });
     } finally {
       this.assignmentLoads -= 1;
+      if (lifecycle === this.lifecycle) this.publish({ ...this.state });
     }
   }
 

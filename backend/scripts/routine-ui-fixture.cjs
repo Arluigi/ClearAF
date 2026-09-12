@@ -109,11 +109,18 @@ async function create() {
 
 async function inspectOrCleanup() {
   const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  const liveAccounts = [];
   for (const account of state.accounts) {
+    assert(['patient', 'clinician'].includes(account.role)
+      && account.email === `clearaf-routine-ui-${state.run}-${account.role}@example.invalid`,
+    'Synthetic fixture identity required');
     const result = await admin.auth.admin.getUserById(account.id);
-    assert(!result.error && result.data.user.email === account.email, 'Exact fixture identity required');
-    assert(account.email === `clearaf-routine-ui-${state.run}-${account.role}@example.invalid`,
-      'Synthetic fixture identity required');
+    // Auth is durable cleanup progress: only an exact not-found response permits a skip.
+    if (result.error?.status === 404 && result.error.code === 'user_not_found'
+      && result.data.user === null) continue;
+    assert(!result.error && result.data.user?.id === account.id
+      && result.data.user.email === account.email, 'Exact fixture identity required');
+    liveAccounts.push(account);
   }
   const ids = state.accounts.map(account => account.id);
   if (mode === 'inspect') {
@@ -128,7 +135,7 @@ async function inspectOrCleanup() {
   await db.query('delete from care_routine_revisions where "userId"=any($1::uuid[])', [ids]);
   await db.query('delete from user_profiles where id=any($1::uuid[])', [ids]);
   await db.query('delete from dermatologists where id=any($1::uuid[])', [ids]);
-  for (const account of state.accounts) {
+  for (const account of liveAccounts) {
     assert(!(await admin.auth.admin.deleteUser(account.id)).error, 'Fixture deletion failed');
   }
   const remaining = await db.query('select count(*)::int as count from auth.users where id=any($1::uuid[])', [ids]);

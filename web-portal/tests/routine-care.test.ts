@@ -95,9 +95,14 @@ test('patient replacement rejects a late routine snapshot from the prior control
 
   const load = controller.load();
   controller.cancel();
+  const cancelledSnapshot = controller.snapshot();
+  let notifications = 0;
+  controller.subscribe(() => { notifications += 1; });
   pending.resolve(snapshot);
   await load;
 
+  assert.equal(notifications, 0);
+  assert.equal(controller.snapshot(), cancelledSnapshot);
   assert.equal(controller.snapshot().slots.morning.routine, null);
   assert.equal(controller.snapshot().slots.morning.expectedRevisionId, null);
 });
@@ -115,9 +120,14 @@ test('patient replacement rejects a late save response from the prior controller
 
   const save = controller.save('morning');
   controller.cancel();
+  const cancelledSnapshot = controller.snapshot();
+  let notifications = 0;
+  controller.subscribe(() => { notifications += 1; });
   pending.resolve({ ...morning, id: '22222222-2222-4222-8222-222222222222', version: 2 });
   await save;
 
+  assert.equal(notifications, 0);
+  assert.equal(controller.snapshot(), cancelledSnapshot);
   assert.equal(controller.snapshot().slots.morning.expectedRevisionId, morning.id);
   assert.equal(controller.snapshot().slots.morning.draft.name, 'Prior patient draft');
 });
@@ -497,3 +507,76 @@ test('resolved conflicts in both slots can reload one at a time without deadlock
   assert.equal(controller.snapshot().slots.morning.routine?.id, latestMorning.id);
   assert.equal(controller.snapshot().slots.evening.status, 'conflict');
 });
+
+// Model an external-store consumer: unchanged snapshot identities do not render.
+function observeReload(controller: RoutineCareController, slot: 'morning' | 'evening', queued: boolean) {
+  let renderedSnapshot = controller.snapshot();
+  let canReload = controller.canReloadConflict(slot);
+  const values: boolean[] = [];
+  const render = () => {
+    const next = controller.snapshot();
+    if (Object.is(next, renderedSnapshot)) return;
+    renderedSnapshot = next;
+    canReload = controller.canReloadConflict(slot);
+    values.push(canReload);
+  };
+  const unsubscribe = controller.subscribe(() => queued ? queueMicrotask(render) : render());
+  return { values, canReload: () => canReload, unsubscribe };
+}
+
+for (const queued of [false, true]) {
+  const timing = queued ? 'microtask' : 'synchronous';
+  test(`${timing} subscriber sees conflict Reload enabled after another slot save succeeds`, async () => {
+    const evening = { ...morning, timeOfDay: 'evening' as const, name: 'Evening' };
+    const response = deferred<typeof evening>();
+    const controller = new RoutineCareController({
+      fetchSnapshot: async () => ({ routines: [morning, evening], completions: [] }),
+      saveRevision: async slot => {
+        if (slot === 'morning') throw Object.assign(new Error('stale'), { status: 409 });
+        return response.promise;
+      },
+      fetchHistory: async () => emptyHistory,
+    });
+    await controller.load();
+    controller.setName('morning', 'Conflicted edit');
+    await controller.save('morning');
+    controller.setName('evening', 'Successful edit');
+    const saving = controller.save('evening');
+    const rendered = observeReload(controller, 'morning', queued);
+    assert.equal(rendered.canReload(), false);
+
+    response.resolve({ ...evening, version: 2, name: 'Successful edit' });
+    await saving;
+
+    assert.equal(rendered.canReload(), true, `rendered eligibility: ${rendered.values}`);
+    rendered.unsubscribe();
+  });
+
+  test(`${timing} subscriber sees second conflict Reload enabled after the first reload finishes`, async () => {
+    const evening = { ...morning, timeOfDay: 'evening' as const, name: 'Evening' };
+    const response = deferred<RoutineSnapshot>();
+    let loads = 0;
+    const controller = new RoutineCareController({
+      fetchSnapshot: async () => ++loads === 1
+        ? { routines: [morning, evening], completions: [] }
+        : response.promise,
+      saveRevision: async () => { throw Object.assign(new Error('stale'), { status: 409 }); },
+      fetchHistory: async () => emptyHistory,
+    });
+    await controller.load();
+    controller.setName('morning', 'Morning conflict');
+    controller.setName('evening', 'Evening conflict');
+    await Promise.all([controller.save('morning'), controller.save('evening')]);
+    const rendered = observeReload(controller, 'evening', queued);
+    assert.equal(rendered.canReload(), true);
+    const reloading = controller.reloadConflict('morning');
+    await Promise.resolve();
+    assert.equal(rendered.canReload(), false);
+
+    response.resolve({ routines: [{ ...morning, version: 2 }, evening], completions: [] });
+    await reloading;
+
+    assert.equal(rendered.canReload(), true, `rendered eligibility: ${rendered.values}`);
+    rendered.unsubscribe();
+  });
+}
