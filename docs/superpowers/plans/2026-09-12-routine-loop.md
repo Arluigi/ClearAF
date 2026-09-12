@@ -90,7 +90,7 @@
 
 ### Task 4: Integration, final review and handoff
 
-**Files:** docs/routines/README.md and verification.json; docs/handoff only when updating known setup/merge state; necessary review fixes in owning task files.
+**Files:** docs/routines/README.md and verification.json; backend/scripts/routine-ui-fixture.cjs for reproducible local synthetic UI fixtures; docs/handoff only when updating known setup/merge state; necessary review fixes in owning task files.
 
 - [ ] Package each committed task diff with Superpowers scripts and request independent spec/quality review; fix important findings through implementer and scoped re-review. Finish with whole-branch review covering cross-client/schema contracts and all ledger findings.
 - [ ] Exercise real local clinician assign→patient completion→clinician dated history, edit→newrevision while oldcompletion stays unchanged, patient/wrongclinician denials, offline/restart/lost-response/accountswitch behavior, localday rollover, migration/recovery and direct Data API protection. Example end-to-end acceptance:
