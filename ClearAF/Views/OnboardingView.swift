@@ -235,7 +235,7 @@ struct AppExplanationScreen: View {
                     FeatureCard(
                         icon: "list.bullet.clipboard.fill",
                         title: "Skincare Routines",
-                        description: "Create and follow personalized morning and evening routines"
+                        description: "View clinician-assigned morning and evening routines and record completion"
                     )
                     
                     FeatureCard(

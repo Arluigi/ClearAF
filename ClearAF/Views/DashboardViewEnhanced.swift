@@ -58,6 +58,8 @@ struct DashboardViewEnhanced: View {
                     // Daily Photo & Skin Score Card
                     DailyPhotoCardEnhanced(selectedTab: $selectedTab)
                     
+                    DailyTasksCardEnhanced(selectedTab: $selectedTab)
+
                     // Prescription Refill Reminders
                     PrescriptionRemindersCard()
                     
@@ -117,160 +119,40 @@ struct DailyPhotoCardEnhanced: View {
 
 struct DailyTasksCardEnhanced: View {
     @Binding var selectedTab: Int
-    @State private var morningCompleted = false
-    @State private var photoCompleted = false
-    @State private var eveningCompleted = false
-    
+    @ObservedObject private var repository = APIService.shared.routines
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceLG) {
-            HStack {
-                Text("Today's Tasks")
-                    .font(.headlineLarge)
-                    .foregroundColor(.textPrimary)
-                Spacer()
-                TaskProgressIndicator(
-                    completed: completedTasksCount,
-                    total: 3
-                )
+            Text("Assigned routines").font(.headlineLarge)
+            Text(repository.localDate).font(.caption).foregroundStyle(.secondary)
+            ForEach(RoutineTimeOfDay.allCases, id: \.self) { slot in
+                Button { selectedTab = 2 } label: {
+                    HStack(spacing: .spaceMD) {
+                        Image(systemName: slot == .morning ? "sun.max" : "moon")
+                        VStack(alignment: .leading, spacing: .spaceXS) {
+                            Text(slot.title).font(.headline)
+                            if let routine = repository.routine(for: slot), routine.isActive {
+                                Text(routine.name).font(.subheadline)
+                                Text(repository.status(for: routine).label).font(.caption)
+                            } else {
+                                Text(repository.snapshot == nil ? "Open routines to load assignments" : "No active assignment")
+                                    .font(.caption)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .foregroundStyle(Color.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityHint("Open your clinician-assigned routines")
             }
-            
-            VStack(spacing: .spaceSM) {
-                EnhancedTaskRow(
-                    title: "Morning Routine",
-                    isCompleted: $morningCompleted,
-                    time: "8 min",
-                    icon: "sun.max",
-                    selectedTab: $selectedTab,
-                    targetTab: 2,
-                    routineType: "morning"
-                )
-                
-                EnhancedTaskRow(
-                    title: "Take Progress Photo",
-                    isCompleted: $photoCompleted,
-                    time: "2 min",
-                    icon: "camera",
-                    selectedTab: $selectedTab,
-                    targetTab: -1,
-                    isCameraTask: true
-                )
-                
-                EnhancedTaskRow(
-                    title: "Evening Routine",
-                    isCompleted: $eveningCompleted,
-                    time: "12 min",
-                    icon: "moon",
-                    selectedTab: $selectedTab,
-                    targetTab: 2,
-                    routineType: "evening"
-                )
+            if repository.lastError != nil {
+                Text("Routines need attention. Open Routines to refresh or retry.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .wellnessCard(style: .elevated)
         .padding(.horizontal, .spaceXL)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Daily tasks section")
-    }
-    
-    private var completedTasksCount: Int {
-        [morningCompleted, photoCompleted, eveningCompleted].filter { $0 }.count
-    }
-}
-
-// Enhanced Task Row Component
-struct EnhancedTaskRow: View {
-    let title: String
-    @Binding var isCompleted: Bool
-    let time: String
-    let icon: String
-    @Binding var selectedTab: Int
-    let targetTab: Int
-    let routineType: String?
-    let isCameraTask: Bool
-    @State private var showingCamera = false
-    
-    init(title: String, isCompleted: Binding<Bool>, time: String, icon: String, selectedTab: Binding<Int>, targetTab: Int, routineType: String? = nil, isCameraTask: Bool = false) {
-        self.title = title
-        self._isCompleted = isCompleted
-        self.time = time
-        self.icon = icon
-        self._selectedTab = selectedTab
-        self.targetTab = targetTab
-        self.routineType = routineType
-        self.isCameraTask = isCameraTask
-    }
-    
-    var body: some View {
-        HStack(spacing: .spaceMD) {
-            // Enhanced checkbox with haptic feedback
-            Button(action: {
-                withAnimation(.bouncy) {
-                    isCompleted.toggle()
-                }
-                HapticManager.success()
-            }) {
-                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isCompleted ? .scoreExcellent : .textTertiary)
-                    .font(.system(size: 24))
-                    .frame(width: .touchTarget, height: .touchTarget)
-                    .contentShape(Circle())
-            }
-            .accessibleButton(
-                label: isCompleted ? "Completed: \(title)" : "Not completed: \(title)",
-                hint: "Double tap to toggle completion"
-            )
-            
-            // Task icon
-            Image(systemName: icon)
-                .foregroundColor(.primaryPurple)
-                .font(.system(size: 18))
-                .frame(width: 24)
-            
-            // Task content
-            Button(action: {
-                HapticManager.light()
-                if isCameraTask {
-                    showingCamera = true
-                } else {
-                    if let routineType = routineType {
-                        NotificationCenter.default.post(name: NSNotification.Name("SetRoutineTab"), object: routineType)
-                    }
-                    selectedTab = targetTab
-                }
-            }) {
-                VStack(alignment: .leading, spacing: .spaceXXS) {
-                    Text(title)
-                        .font(.bodyLarge)
-                        .foregroundColor(.textPrimary)
-                        .strikethrough(isCompleted)
-                        .animation(.gentle, value: isCompleted)
-                    
-                    HStack {
-                        Image(systemName: "clock")
-                            .font(.caption)
-                        Text(time)
-                            .font(.captionLarge)
-                    }
-                    .foregroundColor(.textTertiary)
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-            .accessibleButton(
-                label: title,
-                hint: isCameraTask ? "Double tap to open camera" : "Double tap to start \(title.lowercased())"
-            )
-            
-            Spacer()
-            
-            // Progress arrow
-            Image(systemName: "chevron.right")
-                .foregroundColor(.textTertiary)
-                .font(.caption)
-        }
-        .padding(.vertical, .spaceSM)
-        .padding(.horizontal, .spaceMD)
-        .background(Color.backgroundSecondary.opacity(0.2))
-        .cornerRadius(.radiusMedium)
     }
 }
 

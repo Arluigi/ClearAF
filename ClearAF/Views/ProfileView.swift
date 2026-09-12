@@ -856,8 +856,8 @@ struct ExportDataView: View {
                             )
                             
                             ExportOption(
-                                title: "Routine Data",
-                                subtitle: "Export your skincare routines and steps",
+                                title: "Legacy Local Routines",
+                                subtitle: "Export older routines stored on this device; clinician assignments are not included",
                                 icon: "list.bullet",
                                 action: { exportRoutineData() }
                             )
@@ -879,7 +879,7 @@ struct ExportDataView: View {
                         
                         VStack(spacing: .spaceMD) {
                             DataSummaryRow(icon: "photo", title: "Progress Photos", count: "\(photos.count)")
-                            DataSummaryRow(icon: "list.bullet", title: "Routines", count: "\(routines.count)")
+                            DataSummaryRow(icon: "list.bullet", title: "Legacy Local Routines", count: "\(routines.count)")
                             DataSummaryRow(icon: "calendar", title: "Days Tracked", count: calculateDaysTracked())
                         }
                         .wellnessCard(style: .flat)
@@ -915,7 +915,7 @@ struct ExportDataView: View {
     }
     
     private func exportRoutineData() {
-        var jsonContent = "{\n  \"routines\": [\n"
+        var jsonContent = "{\n  \"legacyLocalRoutines\": [\n"
         
         for (index, routine) in routines.enumerated() {
             jsonContent += "    {\n"
@@ -1065,8 +1065,8 @@ struct HelpSupportView: View {
                             
                             HelpItem(
                                 icon: "list.bullet",
-                                title: "Creating Routines",
-                                content: "Build your morning and evening skincare routines by adding products with their application instructions and durations. Use the timer feature during routine sessions."
+                                title: "Assigned Routines",
+                                content: "Your clinician assigns and updates morning and evening routines. Review the ordered steps in Routines, then record completion. Pending completions stay on this device until they sync. Contact your clinician about changes."
                             )
                             
                             HelpItem(
@@ -1099,7 +1099,7 @@ struct HelpSupportView: View {
                             HelpItem(
                                 icon: "square.and.arrow.up",
                                 title: "Backing Up Data",
-                                content: "Use the Export Data feature in your profile to backup your progress photos, routines, and skin scores as CSV or JSON files."
+                                content: "Use the Export Data feature in your profile to export progress records and legacy local routines as CSV or JSON files. Current clinician assignments and their completion history are not part of the legacy routine export."
                             )
                         }
                     }

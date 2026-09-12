@@ -178,6 +178,7 @@ class APIService: ObservableObject {
     private var profileTask: Task<Void, Never>?
     private var loadingTicket: AccountAccess.Ticket?
     @MainActor lazy var photos = PhotoRepository(access: access, transport: self)
+    @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
     private init() {}
 
     @MainActor func start() {
@@ -244,6 +245,7 @@ class APIService: ObservableObject {
 
     @MainActor func clearAccount() {
         photos.cancel()
+        routines.cancel()
         access.invalidate()
         profileTask?.cancel()
         profileTask = nil
@@ -489,3 +491,34 @@ private struct CaptureRecord: Decodable {
         return id
     }
 }
+
+
+extension APIService: RoutineTransport {
+    @MainActor func fetchRoutines(localDate: String, ticket: AccountAccess.Ticket) async throws -> RoutineSnapshot {
+        try access.require(ticket)
+        let response: RoutineSnapshot = try await request(endpoint: "/routines?localDate=\(localDate)",
+            method: "GET", body: Optional<String>.none, ticket: ticket)
+        try access.require(ticket)
+        guard response.routines.allSatisfy({ $0.userId == ticket.accountID }),
+              response.completions.allSatisfy({ $0.userId == ticket.accountID }) else { throw AccountFailure.accountChanged }
+        return response
+    }
+    @MainActor func sendCompletion(_ pending: PendingRoutineCompletion, ticket: AccountAccess.Ticket) async throws -> CareRoutineCompletion {
+        try access.require(ticket)
+        guard pending.userId == ticket.accountID else { throw AccountFailure.accountChanged }
+        let body = RoutineCompletionBody(revisionId: pending.revisionId.uuidString.lowercased(),
+            completedAt: pending.completedAt, localDate: pending.localDate, timeZone: pending.timeZone)
+        let response: RoutineCompletionResponse = try await request(
+            endpoint: "/routines/completions/\(pending.id.uuidString.lowercased())", method: "PUT", body: body, ticket: ticket)
+        try access.require(ticket)
+        guard response.completion.userId == ticket.accountID else { throw AccountFailure.accountChanged }
+        return response.completion
+    }
+}
+private struct RoutineCompletionBody: Encodable {
+    let revisionId: String
+    let completedAt: String
+    let localDate: String
+    let timeZone: String
+}
+private struct RoutineCompletionResponse: Decodable { let completion: CareRoutineCompletion }

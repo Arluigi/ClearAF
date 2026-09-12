@@ -164,6 +164,48 @@ final class AccountFlowUITests: XCTestCase {
         signOut(app)
     }
 
+    /// Preconfirmed, clinician-assigned local fixture; credentials stay in the test runner.
+    @MainActor func testAssignedRoutineCompletionSurvivesColdLaunchAndYesterdayDoesNotCount() async throws {
+        continueAfterFailure = false
+        let environment = ProcessInfo.processInfo.environment
+        let email = try XCTUnwrap(environment["CLEARAF_ROUTINE_UI_EMAIL"], "Provide the synthetic local routine fixture")
+        let password = try XCTUnwrap(environment["CLEARAF_ROUTINE_UI_PASSWORD"], "Provide the synthetic local routine fixture")
+        let app = XCUIApplication()
+        app.launch()
+        if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
+        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        login(app, email: email, password: password)
+        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        dismissPasswordPrompt(app)
+        let routinesTab = app.tabBars.buttons["Routines"]
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: routinesTab)], timeout: 10)
+        routinesTab.tap()
+        XCTAssertTrue(app.staticTexts["Synthetic Morning Routine"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Synthetic step one"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Synthetic step two"].exists)
+        XCTAssertFalse(app.buttons["Edit"].exists)
+        XCTAssertFalse(app.buttons["Add Step"].exists)
+        let record = app.buttons["routine-morning-record"]
+        for _ in 0..<3 where !record.isHittable { app.swipeUp() }
+        XCTAssertTrue(record.isEnabled)
+        record.tap()
+        let status = app.staticTexts["routine-morning-status"]
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Recorded today'"), object: status)], timeout: 20)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Routines"].tap()
+        XCTAssertTrue(app.staticTexts["Synthetic Morning Routine"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.staticTexts["routine-morning-status"].label, "Recorded today")
+        app.buttons["Evening"].tap()
+        XCTAssertTrue(app.staticTexts["Synthetic Evening Routine"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["routine-evening-status"].label, "Not recorded today")
+        XCTAssertTrue(app.buttons["routine-evening-record"].isEnabled)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.lifetime = .keepAlways; add(attachment)
+        app.tabBars.buttons["Home"].tap()
+        signOut(app)
+    }
+
     @MainActor private func register(_ app: XCUIApplication, name: String) async throws -> (email: String, password: String) {
         let suffix = UUID().uuidString.lowercased()
         let email = "clearaf-ui-\(suffix)@example.invalid"
