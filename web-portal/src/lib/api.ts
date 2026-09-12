@@ -13,7 +13,13 @@ import {
   Photo,
   LoginResponse,
   DashboardStats,
-  PaginatedResponse
+  PaginatedResponse,
+  APIError,
+  RoutineCompletionRecord,
+  RoutineRevision,
+  RoutineSnapshot,
+  RoutineTimeOfDay,
+  SaveRoutineRevisionInput,
 } from '@/types/api';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -111,10 +117,14 @@ class APIService {
       sessionBoundary.assert(generation);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          error: `HTTP ${response.status}: ${response.statusText}`
-        }));
-        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+        const errorData: unknown = await response.json().catch(() => null);
+        // Parsing an error body is asynchronous too; never publish it across an account boundary.
+        sessionBoundary.assert(generation);
+        const payload = typeof errorData === 'object' && errorData !== null ? errorData as { error?: unknown; code?: unknown } : {};
+        const message = typeof payload.error === 'string'
+          ? payload.error
+          : `Request failed with status ${response.status}`;
+        throw new APIError(response.status, message, typeof payload.code === 'string' ? payload.code : undefined);
       }
 
       const body = await response.json();
@@ -246,6 +256,35 @@ class APIService {
       method: 'POST',
       body: JSON.stringify({ patientId, dermatologistId }),
     });
+  }
+
+  async getPatientRoutines(patientId: string, localDate: string): Promise<RoutineSnapshot> {
+    const params = new URLSearchParams({ localDate });
+    return this.request<RoutineSnapshot>(`/routines/patients/${encodeURIComponent(patientId)}?${params}`);
+  }
+
+  async savePatientRoutine(
+    patientId: string,
+    timeOfDay: RoutineTimeOfDay,
+    revisionId: string,
+    data: SaveRoutineRevisionInput,
+  ): Promise<RoutineRevision> {
+    const response = await this.request<{ routine: RoutineRevision }>(
+      `/routines/patients/${encodeURIComponent(patientId)}/${timeOfDay}/revisions/${encodeURIComponent(revisionId)}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+    );
+    return response.routine;
+  }
+
+  async getPatientRoutineCompletions(
+    patientId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedResponse<RoutineCompletionRecord>> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return this.request<PaginatedResponse<RoutineCompletionRecord>>(
+      `/routines/patients/${encodeURIComponent(patientId)}/completions?${params}`,
+    );
   }
 
   // Appointment Management

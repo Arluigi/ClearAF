@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { User } from '@/types/api';
 import PatientPhotoHistory from '@/components/patients/PatientPhotoHistory';
+import PatientRoutineCare from '@/components/patients/PatientRoutineCare';
 import { useClinicalAPI } from '@/lib/auth';
 
 export default function PatientsPage() {
@@ -335,7 +336,7 @@ export default function PatientsPage() {
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-muted-foreground/50">
+                                <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-muted-foreground/50">
                                   <PatientDetailDialog patient={patient} />
                                 </DialogContent>
                               </Dialog>
@@ -498,6 +499,10 @@ function PatientDetailDialog({ patient }: { patient: User }) {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <PatientRoutineCare patientId={patient.id} />
       </div>
 
       {/* Photo Progress Section */}
