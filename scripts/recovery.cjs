@@ -10,6 +10,7 @@ const socket=path.join(require('node:os').homedir(),'.colima/clearaf/docker.sock
 const state=path.join(local,'security-fixtures.json');env.SECURITY_FIXTURE_STATE=state;env.SECURITY_API_URL='http://127.0.0.1:3002/api';env.PORT='3002';
 const excludes='realtime,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor';
 const stamp=Date.now();env.RECOVERY_DIR=path.join(local,`recovery-${stamp}`);
+env.RECOVERY_SCHEMA_PATH=path.join(local,`recovery-schema-${stamp}.json`);
 fs.mkdirSync(local,{recursive:true,mode:0o700});
 function run(command,args,options={}){const r=spawnSync(command,args,{cwd:root,env,encoding:'utf8',maxBuffer:16*1024*1024,...options});if(r.status!==0)throw Error(`${command} ${args[0]} failed`);return r.stdout}
 function cli(args){return run('npx',['--yes','supabase@2.117.0',...args]);}
@@ -19,7 +20,7 @@ const restore=path.join(local,'restore-stack');
 async function stopApi(){if(!api)return;const child=api;api=undefined;if(child.exitCode!==null||child.signalCode!==null)return;let timer;await new Promise(resolve=>{child.once('exit',resolve);child.kill('SIGTERM');timer=setTimeout(()=>{child.kill('SIGKILL');resolve();},3000)});clearTimeout(timer)}
 async function startApi(){const fd=fs.openSync(path.join(local,'recovery-api.log'),'w',0o600);api=spawn(process.execPath,['dist/server.js'],{cwd:backend,env,stdio:['ignore',fd,fd]});fs.closeSync(fd);for(let i=0;i<40;i++){await new Promise(r=>setTimeout(r,250));if(api.exitCode!==null)throw Error('Local API exited');try{if((await fetch('http://127.0.0.1:3002/ready',{signal:AbortSignal.timeout(2500)})).status===200)return}catch{}}throw Error('Local API did not become ready')}
 async function main(){
- run(process.execPath,['scripts/schema-baseline.cjs'],{cwd:backend,env:{...env,SCHEMA_REFERENCE_ENV:path.join(backend,'.env')}});
+ operation('schema-source');
  if(!fs.existsSync(state))console.log(run(process.execPath,['scripts/security-live.cjs','prepare'],{cwd:backend}).trim());
  await startApi();console.log(run(process.execPath,['scripts/accounts-live.cjs'],{cwd:backend}).trim());run(process.execPath,['scripts/security-live.cjs','verify'],{cwd:backend});await stopApi();
  run(process.execPath,['scripts/migration-drill.cjs'],{cwd:backend});
@@ -31,8 +32,8 @@ async function main(){
  restoreStarted=true;cli(['start','--workdir',restore,'-x',excludes]);
  const status=JSON.parse(cli(['status','--workdir',restore,'-o','json']));
  Object.assign(env,{DATABASE_URL:status.DB_URL,DIRECT_URL:status.DB_URL,SUPABASE_URL:status.API_URL,SUPABASE_ANON_KEY:status.ANON_KEY,SUPABASE_SERVICE_ROLE_KEY:status.SERVICE_ROLE_KEY,PG_DOCKER_CONTAINER:'supabase_db_clearaf-restore'});
- operation('restore-verify');await startApi();run(process.execPath,['scripts/security-live.cjs','verify'],{cwd:backend});await stopApi();
- const report={passed:true,verifiedAt:new Date().toISOString(),elapsedSeconds:Math.round((Date.now()-stamp)/1000),freshDestination:true,liveChecksAfterRestore:27,scope:'Synthetic local database, auth identities and storage bytes; no production patient data'};
+ operation('schema-destination');operation('restore-verify');await startApi();run(process.execPath,['scripts/security-live.cjs','verify'],{cwd:backend});await stopApi();
+ const report={passed:true,verifiedAt:new Date().toISOString(),elapsedSeconds:Math.round((Date.now()-stamp)/1000),freshDestination:true,liveChecksAfterRestore:JSON.parse(fs.readFileSync(path.join(local,'live-verification.json'))).passed.length,scope:'Synthetic local database, auth identities and storage bytes; no production patient data'};
  fs.writeFileSync(path.join(local,'recovery-verification.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
  cli(['stop','--workdir',restore,'--no-backup']);restoreStarted=false;
  cli(['start','-x',excludes]);sourceStopped=false;

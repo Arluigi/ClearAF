@@ -33,6 +33,8 @@ model User {
   assignedDermatologist Dermatologist? @relation(fields: [dermatologistId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   routines Routine[]
+  careRoutineRevisions CareRoutineRevision[]
+  careRoutineCompletions CareRoutineCompletion[]
 
   @@index([dermatologistId], map: "idx_user_profiles_dermatologist")
   @@map("user_profiles")
@@ -53,6 +55,7 @@ model Dermatologist {
   appointments    Appointment[]
   prescriptions   Prescription[]
   patients        User[]
+  careRoutineRevisions CareRoutineRevision[]
 
   @@map("dermatologists")
 }
@@ -207,4 +210,42 @@ model RoutineStep {
   routine      Routine  @relation(fields: [routineId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@map("routine_steps")
+}
+
+
+model CareRoutineRevision {
+  id String @id @db.Uuid
+  userId String @db.Uuid
+  timeOfDay String
+  version Int
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+  name String
+  isActive Boolean
+  steps Json
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  author Dermatologist @relation(fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  completions CareRoutineCompletion[]
+
+  @@unique([userId, timeOfDay, version])
+  @@unique([id, userId])
+  @@index([createdBy])
+  @@map("care_routine_revisions")
+}
+
+model CareRoutineCompletion {
+  id String @id @db.Uuid
+  userId String @db.Uuid
+  revisionId String @db.Uuid
+  completedAt DateTime @db.Timestamp(3)
+  localDate String
+  timeZone String
+  receivedAt DateTime @default(now()) @db.Timestamp(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  routine CareRoutineRevision @relation(fields: [revisionId, userId], references: [id, userId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([userId, revisionId, localDate])
+  @@index([userId, receivedAt, id])
+  @@index([revisionId, userId])
+  @@map("care_routine_completions")
 }

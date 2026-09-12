@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const tables = ['appointments','dermatologists','messages','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles'];
+const tables = ['appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles'];
 let phase = 'local target and backup validation';
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 function local(value, protocol) {
@@ -29,12 +29,39 @@ function validate(dir) {
   return m;
 }
 function write(dir,name,value) { fs.writeFileSync(path.join(dir,name),value,{mode:0o600}); fs.chmodSync(path.join(dir,name),0o600); }
+// The immutable baseline approval remains pinned; additive migrations are checked
+// against the full applied chain and independently rebuilt destination below.
+function validateMigrationChain(files, ledger, approved) {
+  assert(files.length > 0 && files.length === ledger.length, 'Applied migration chain differs from repository');
+  const baseline=files[0], first=ledger[0];
+  assert(baseline.version===approved.version && baseline.name===approved.name && hash(Buffer.from(baseline.sql))===approved.fileSha256, 'Approved baseline file changed');
+  assert(first.version===approved.version && first.name===approved.name && hash(Buffer.from(JSON.stringify(first.statements)))===approved.statementsSha256, 'Approved baseline ledger changed');
+  files.forEach((file,index)=>assert(file.version===ledger[index].version && file.name===ledger[index].name && Array.isArray(ledger[index].statements) && ledger[index].statements.length>0, 'Applied migration chain differs from repository'));
+}
+async function schemaChain(mode) {
+  const root=path.resolve(__dirname,'../..');
+  const dir=path.join(root,'supabase/migrations');
+  const files=fs.readdirSync(dir).filter(name=>/^\d{14}_.+\.sql$/.test(name)).sort().map(name=>({version:name.slice(0,14),name:name.slice(15,-4),sql:fs.readFileSync(path.join(dir,name),'utf8')}));
+  const approved=JSON.parse(fs.readFileSync(path.join(root,'supabase/baseline.json')));
+  const target=path.resolve(process.env.RECOVERY_SCHEMA_PATH||path.join(root,'.local/recovery-schema.json'));
+  const {Client}=require('pg');const db=new Client({connectionString:process.env.DATABASE_URL});await db.connect();
+  try {
+    const ledger=(await db.query('select version,name,statements from supabase_migrations.schema_migrations order by version')).rows;
+    validateMigrationChain(files,ledger,approved);
+    const schema=await require('./schema-baseline.cjs').snapshot(db);
+    const current={files:files.map(file=>({version:file.version,name:file.name,sha256:hash(Buffer.from(file.sql))})),ledger,schema};
+    if(mode==='schema-source') { fs.mkdirSync(path.dirname(target),{recursive:true,mode:0o700});write(path.dirname(target),path.basename(target),JSON.stringify(current)); }
+    else { assert.deepEqual(current,JSON.parse(fs.readFileSync(target)), 'Fresh migration schema/security or full ledger differs from source'); }
+    console.log('PASS approved baseline integrity, repository migration chain'+(mode==='schema-destination'?' and fresh source/destination schema/security/full-ledger parity':''));
+  } finally {await db.end();}
+}
 async function run(mode) {
   require('dotenv').config({quiet:true});
-  assert(['backup','restore-verify'].includes(mode),'Expected backup or restore-verify');
+  assert(['backup','restore-verify','schema-source','schema-destination'].includes(mode),'Expected recovery or schema verification mode');
   const u = local(process.env.DATABASE_URL,['postgres:','postgresql:']);
   local(process.env.SUPABASE_URL,['http:','https:']);
   assert.equal(u.username,'postgres','Local recovery requires postgres');
+  if (mode.startsWith('schema-')) return schemaChain(mode);
   if(process.env.PG_DOCKER_CONTAINER) assert(/^supabase_db_clearaf-(local|restore)$/.test(process.env.PG_DOCKER_CONTAINER),'Refusing unexpected database container');
   const dir = path.resolve(process.env.RECOVERY_DIR || '../.local/recovery');
   const statePath = path.resolve(process.env.SECURITY_FIXTURE_STATE || '../.local/security-fixtures.json');
@@ -101,7 +128,11 @@ async function run(mode) {
       assert.deepEqual(users,fixture.accounts.map(({id,email})=>({id,email})).sort((a,b)=>a.id.localeCompare(b.id)), 'Database contains accounts outside synthetic fixtures');
       const doctors = (await db.query('select id,email,name from public.dermatologists')).rows;
       assert(doctors.every(d=>fixture.accounts.some(a=>a.id===d.id&&a.email===d.email)&&d.name.startsWith('Synthetic')), 'Non-synthetic clinicians');
-      for (const table of tables.filter(t=>!['user_profiles','dermatologists','skin_photos'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
+      for (const table of tables.filter(t=>!['user_profiles','dermatologists','skin_photos','care_routine_revisions','care_routine_completions'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
+      const revisions=(await db.query('select id,"userId","createdBy",name from public.care_routine_revisions')).rows;
+      assert(revisions.length > 0 && revisions.every(r=>(fixture.routineRevisionIds||[]).includes(r.id) && fixture.accounts.some(a=>a.id===r.userId&&a.role.startsWith('patient')) && fixture.accounts.some(a=>a.id===r.createdBy&&a.role.startsWith('doctor')) && r.name.startsWith('Synthetic')), 'Non-fixture routine revision');
+      const completions=(await db.query('select id,"userId","revisionId" from public.care_routine_completions')).rows;
+      assert(completions.length > 0 && completions.every(c=>(fixture.routineCompletionIds||[]).includes(c.id) && revisions.some(r=>r.id===c.revisionId&&r.userId===c.userId)), 'Non-fixture routine completion');
       const profiles=(await db.query('select id,name from public.user_profiles')).rows;
       assert(profiles.every(p=>fixture.accounts.some(a=>a.id===p.id)&&p.name?.startsWith('Synthetic')), 'Non-synthetic profiles');
       const photos=(await db.query('select "userId",notes from public.skin_photos')).rows;
@@ -153,7 +184,7 @@ async function run(mode) {
       phase = 'restored password and authorization checks';
       for (const account of fixture.accounts) {
         const client=publicClient(); const login=await client.auth.signInWithPassword({email:account.email,password:account.password}); assert(!login.error,'Restored password login failed');
-        const denied=await client.from('user_profiles').select('id').limit(0); assert(denied.error,'Direct clinical access allowed');
+        for (const table of ['user_profiles','care_routine_revisions','care_routine_completions']) { const denied=await client.from(table).select('id').limit(0); assert(denied.error,'Direct clinical access allowed'); }
       }
       phase = 'signup trigger verification';
       const email=`clearaf-security-${fixture.run}-recovery-signup@example.invalid`;
@@ -165,5 +196,5 @@ async function run(mode) {
     }
   } finally { await db.end(); }
 }
-module.exports={local,validate};
+module.exports={local,validate,validateMigrationChain};
 if(require.main===module) run(process.argv[2]).catch(()=>{console.error(`Recovery drill failed during ${phase}; no credentials or database contents logged.`);process.exitCode=1;});

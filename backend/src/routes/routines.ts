@@ -1,272 +1,30 @@
 import express from 'express';
-import { z } from 'zod';
-import { prisma } from '../config/database';
-import { requirePatient } from '../middleware/auth';
-
+import { z, ZodError } from 'zod';
+import { requirePatient, requireDermatologist } from '../middleware/auth';
+import { careError, completionInput, history, localDate, revisionInput, saveCompletion, saveRevision, slot, snapshot, uuid } from '../services/routineCare';
 const router = express.Router();
-
-
-// Validation schemas
-const createRoutineSchema = z.object({
-  name: z.string().min(1),
-  timeOfDay: z.enum(['morning', 'evening']),
-  steps: z.array(z.object({
-    productName: z.string().min(1),
-    productType: z.string().optional(),
-    instructions: z.string().optional(),
-    duration: z.number().min(0).default(0),
-    orderIndex: z.number().min(0)
-  }))
-});
-
-const updateRoutineSchema = z.object({
-  name: z.string().min(1).optional(),
-  isActive: z.boolean().optional(),
-  completedToday: z.boolean().optional()
-});
-
-// Create routine
-router.post('/', requirePatient, async (req, res, next) => {
-  try {
-    const validatedData = createRoutineSchema.parse(req.body);
-    const { name, timeOfDay, steps } = validatedData;
-
-    const routine = await prisma.routine.create({
-      data: {
-        name,
-        timeOfDay,
-        userId: req.user!.id,
-        steps: {
-          create: steps.map(step => ({
-            productName: step.productName,
-            productType: step.productType,
-            instructions: step.instructions,
-            duration: step.duration,
-            orderIndex: step.orderIndex
-          }))
-        }
-      },
-      include: {
-        steps: {
-          orderBy: { orderIndex: 'asc' }
-        }
-      }
-    });
-
-    res.status(201).json({
-      message: 'Routine created successfully',
-      routine
-    });
-
-  } catch (error) {
-    next(error);
+// Keep provider details and development stacks out of this clinical API.
+const route = (handler: express.RequestHandler): express.RequestHandler => async (req,res,next) => {
+  try { await handler(req,res,next); } catch (error) {
+    next(error instanceof ZodError || (error as {statusCode?:number}).statusCode ? error : careError(500,'Routine operation failed'));
   }
-});
-
-// Get user's routines
-router.get('/', requirePatient, async (req, res, next) => {
-  try {
-    const timeOfDay = req.query.timeOfDay as string;
-    const activeOnly = req.query.activeOnly === 'true';
-
-    let whereClause: any = {
-      userId: req.user!.id
-    };
-
-    if (timeOfDay) {
-      whereClause.timeOfDay = timeOfDay;
-    }
-
-    if (activeOnly) {
-      whereClause.isActive = true;
-    }
-
-    const routines = await prisma.routine.findMany({
-      where: whereClause,
-      include: {
-        steps: {
-          orderBy: { orderIndex: 'asc' }
-        }
-      },
-      orderBy: [
-        { timeOfDay: 'asc' },
-        { createdAt: 'asc' }
-      ]
-    });
-
-    res.json({ routines });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Get specific routine
-router.get('/:id', requirePatient, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    const routine = await prisma.routine.findUnique({
-      where: {
-        id,
-        userId: req.user!.id
-      },
-      include: {
-        steps: {
-          orderBy: { orderIndex: 'asc' }
-        }
-      }
-    });
-
-    if (!routine) {
-      return res.status(404).json({
-        error: 'Routine not found',
-        code: 'ROUTINE_NOT_FOUND'
-      });
-    }
-
-    res.json({ routine });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Update routine
-router.patch('/:id', requirePatient, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const validatedData = updateRoutineSchema.parse(req.body);
-
-    const routine = await prisma.routine.update({
-      where: {
-        id,
-        userId: req.user!.id
-      },
-      data: validatedData,
-      include: {
-        steps: {
-          orderBy: { orderIndex: 'asc' }
-        }
-      }
-    });
-
-    res.json({
-      message: 'Routine updated successfully',
-      routine
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Delete routine
-router.delete('/:id', requirePatient, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    await prisma.routine.delete({
-      where: {
-        id,
-        userId: req.user!.id
-      }
-    });
-
-    res.json({
-      message: 'Routine deleted successfully'
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Mark routine step as completed
-router.post('/:routineId/steps/:stepId/complete', requirePatient, async (req, res, next) => {
-  try {
-    const { routineId, stepId } = req.params;
-
-    // Verify routine belongs to user
-    const routine = await prisma.routine.findUnique({
-      where: {
-        id: routineId,
-        userId: req.user!.id
-      }
-    });
-
-    if (!routine) {
-      return res.status(404).json({
-        error: 'Routine not found',
-        code: 'ROUTINE_NOT_FOUND'
-      });
-    }
-
-    // Update step completion
-    const step = await prisma.routineStep.update({
-      where: {
-        id: stepId,
-        routineId
-      },
-      data: { isCompleted: true }
-    });
-
-    // Check if all steps are completed
-    const allSteps = await prisma.routineStep.findMany({
-      where: { routineId },
-      select: { isCompleted: true }
-    });
-
-    const allCompleted = allSteps.every(step => step.isCompleted);
-
-    // If all steps completed, mark routine as completed today
-    if (allCompleted) {
-      await prisma.routine.update({
-        where: { id: routineId },
-        data: { completedToday: true }
-      });
-    }
-
-    res.json({
-      message: 'Step marked as completed',
-      step,
-      routineCompleted: allCompleted
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Reset daily completion (should be called daily)
-router.post('/reset-daily', requirePatient, async (req, res, next) => {
-  try {
-    // Reset all routine and step completions for the user
-    await prisma.routine.updateMany({
-      where: { userId: req.user!.id },
-      data: { completedToday: false }
-    });
-
-    // Reset all steps for user's routines
-    const userRoutines = await prisma.routine.findMany({
-      where: { userId: req.user!.id },
-      select: { id: true }
-    });
-
-    const routineIds = userRoutines.map(r => r.id);
-
-    await prisma.routineStep.updateMany({
-      where: { routineId: { in: routineIds } },
-      data: { isCompleted: false }
-    });
-
-    res.json({
-      message: 'Daily routine progress reset successfully'
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
+};
+const dateQuery = z.object({localDate:localDate.optional()}).strict();
+const requestedDate = (query: unknown) => dateQuery.parse(query).localDate ?? new Date().toISOString().slice(0,10);
+const pagination = z.object({page:z.coerce.number().int().min(1).max(1000000).default(1),limit:z.coerce.number().int().min(1).max(50).default(20)}).strict();
+router.get('/',requirePatient,route(async(req,res)=>{res.json(await snapshot(req.user!.id,requestedDate(req.query)))}));
+router.get('/patients/:patientId',requireDermatologist,route(async(req,res)=>{res.json(await snapshot(uuid.parse(req.params.patientId),requestedDate(req.query),req.user!.id))}));
+router.get('/patients/:patientId/completions',requireDermatologist,route(async(req,res)=>{const {page,limit}=pagination.parse(req.query);res.json(await history(uuid.parse(req.params.patientId),req.user!.id,page,limit))}));
+router.put('/patients/:patientId/:timeOfDay/revisions/:revisionId',requireDermatologist,route(async(req,res)=>{
+  const result=await saveRevision(uuid.parse(req.params.patientId),req.user!.id,slot.parse(req.params.timeOfDay),uuid.parse(req.params.revisionId),revisionInput.parse(req.body));
+  res.status(result.created?201:200).json({routine:result.routine});
+}));
+router.put('/completions/:completionId',requirePatient,route(async(req,res)=>{
+  const result=await saveCompletion(req.user!.id,uuid.parse(req.params.completionId),completionInput.parse(req.body));
+  res.status(result.created?201:200).json({completion:result.completion});
+}));
+const forbidden:express.RequestHandler=(_req,res)=>{res.status(403).json({error:'Routine definitions require clinician assignment',code:'INSUFFICIENT_PERMISSIONS'})};
+const gone:express.RequestHandler=(_req,res)=>{res.status(410).json({error:'Legacy routine operation retired',code:'ROUTINE_OPERATION_RETIRED'})};
+router.post('/',forbidden);router.patch('/:id',forbidden);router.delete('/:id',forbidden);
+router.get('/:id',gone);router.post('/reset-daily',gone);router.post('/:routineId/steps/:stepId/complete',gone);
 export default router;

@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+const recovery=require('../scripts/recovery-drill.cjs');
+const digest=(value:unknown)=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const baseline='-- approved baseline';
+const files=[{version:'20260910183704',name:'application_baseline',sql:baseline},{version:'20260912212136',name:'clinician_routines',sql:'CREATE TABLE synthetic();'}];
+const ledger=[{version:files[0].version,name:files[0].name,statements:[baseline]},{version:files[1].version,name:files[1].name,statements:[files[1].sql]}];
+const approved={version:files[0].version,name:files[0].name,fileSha256:crypto.createHash('sha256').update(baseline).digest('hex'),statementsSha256:digest(ledger[0].statements)};
+test('recovery accepts approved baseline followed by fully applied additive migration',()=>{assert.doesNotThrow(()=>recovery.validateMigrationChain(files,ledger,approved))});
+test('recovery refuses missing, extra, renamed, or altered baseline migrations',()=>{for(const [changedFiles,changedLedger] of [[files,ledger.slice(0,1)],[files,[...ledger,{version:'99999999999999',name:'unexpected',statements:['bad']}]],[files,[ledger[0],{...ledger[1],name:'renamed'}]],[[{...files[0],sql:'changed'},files[1]],ledger],[files,[{...ledger[0],statements:['changed']},ledger[1]]]])assert.throws(()=>recovery.validateMigrationChain(changedFiles,changedLedger,approved), /migration chain|baseline/)});
