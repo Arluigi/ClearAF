@@ -1,0 +1,88 @@
+{
+  "phase": "T3 photo foundation (first slice)",
+  "status": "complete-local",
+  "date": "2026-09-12",
+  "scope": "Durable account-bound capture and assigned-clinician photo history; not whole T3 or release approval",
+  "commits": {
+    "baseline": "84a83662848942d4f45d1fa12c1fe7a77314fe3b",
+    "backend": "d7c39b2",
+    "portal": "a3dc63e",
+    "ios": "eb471ce"
+  },
+  "checks": {
+    "backendTests": {
+      "passed": 77,
+      "failed": 0
+    },
+    "backendBuild": "passed",
+    "liveCapture": "passed: deterministic intent, no-overwrite JPEG upload, existing-object resume, lost-response completion retry, original metadata, owner and clinician isolation, exact fixture cleanup",
+    "portalTests": {
+      "passed": 28,
+      "failed": 0
+    },
+    "portalTypecheck": "passed",
+    "portalLint": {
+      "errors": 0,
+      "warnings": 43
+    },
+    "portalProductionBuild": "passed",
+    "portalBrowser": "passed: assigned synthetic clinician, 14 photos across 12+2 pages, uncropped full image with capture time/notes, private access refresh preserves selection, actual missing object yields visible error, restore and Retry recovers page",
+    "backendDependencyAudit": {
+      "vulnerabilities": 0
+    },
+    "portalDependencyAudit": {
+      "vulnerabilities": 0
+    },
+    "sourceHygiene": "passed",
+    "ios": {
+      "debugBuild": "passed",
+      "unit": {
+        "passed": 28,
+        "failed": 0
+      },
+      "accountUI": {
+        "passed": 2,
+        "failed": 0
+      },
+      "photoUI": {
+        "passed": 1,
+        "failed": 0,
+        "includes": [
+          "system photo picker with synthetic JPEG",
+          "Shared status",
+          "one photo after cold launch",
+          "Shared status on Home"
+        ]
+      },
+      "integrationConfig": "Photo UI used temporary literal-only Debug API3002 override to reach isolated worktree server; restored normal3001 and reran27unit tests before commit",
+      "serverVerification": "Exactly one row and one private image/jpeg object (17925 bytes) for the final successful fixture",
+      "releaseSimulatorBuild": "passed",
+      "fixtureCleanup": "All six exact Auth/profile/photo/object fixtures and their mapped local Simulator account stores removed",
+      "postCaptureCallbackRegression": "passed: callback failure preserves one durable capture and runs attachment callback once, including repeated delivery and SQLite reopen"
+    },
+    "independentReview": {
+      "backend": "approved",
+      "portal": "approved",
+      "ios": "approved: initial post-capture callback finding resolved in eb471ce and scoped re-review approved"
+    },
+    "browserFixtureCleanup": "passed: exact run IDs and recorded object paths removed",
+    "committedSecretScan": "passed through eb471ce",
+    "databaseRecovery": "Not repeated: no server schema/migration/recovery infrastructure changes; Core Data original-store migration covered by new SQLite tests"
+  },
+  "deployment": "No production deployment or push performed for this slice",
+  "limitations": [
+    "Foreground upload recovery does not promise execution while iOS is suspended",
+    "Already issued private bearer URLs may remain usable until their 300-second expiration",
+    "Physical-device camera and distribution signing require later device/release verification",
+    "Photo/account clinical retention and removal policy remains undecided"
+  ],
+  "nextT3Slice": "Clinicians assign and edit routines; patients record completion. Implement explicit server permissions and reliable patient completion without inventing clinical content.",
+  "baselineCI": {
+    "main": "84a83662848942d4f45d1fa12c1fe7a77314fe3b",
+    "runs": [
+      34645384754,
+      34645382980
+    ],
+    "conclusion": "success"
+  }
+}

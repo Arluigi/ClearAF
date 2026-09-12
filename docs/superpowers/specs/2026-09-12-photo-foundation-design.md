@@ -1,6 +1,6 @@
 # T3 photo foundation design
 
-The user approved the MVP scope: photos, routines and clinician photo review, deferring messaging, prescribing, appointments and commerce. This slice implements reliable photo capture/sharing and clinician review. Later T3 routine ownership and clinical deletion policies remain undecided. No production deployment or private transfer content is included.
+The user approved the MVP scope: photos, routines and clinician photo review, deferring messaging, prescribing, appointments and commerce. This slice implements reliable photo capture/sharing and clinician review. Later T3 routines will be clinician-assigned/edited and patient-completed, as selected during execution; clinical deletion policies remain undecided. No production deployment or private transfer content is included.
 
 ## Selected approach
 
@@ -39,3 +39,7 @@ Preserve the existing model version and add a new current version with optional 
 ## Boundaries
 
 No production patient data, deployments, new provider credentials, clinical policy invention or automatic legacy record ownership assignment. No new dependencies unless existing tools cannot satisfy the design. Scope is the first T3 slice, not completion of all T3 or release readiness.
+
+## Product decision recorded during execution
+
+September 12: the user selected clinician-owned routines: clinicians assign and edit; patients record completion. This defines the next T3 routine slice, not extra functionality in the current photo slice. Clinical deletion/retention rules remain pending.
