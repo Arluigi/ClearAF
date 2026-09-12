@@ -1,20 +1,21 @@
 {
   "schemaVersion": 1,
   "phase": "T3 clinician routines",
-  "status": "verification_passed_final_reviews_pending",
+  "status": "complete_locally",
   "baseCommit": "2a7f3925552c62d0194630d0d439fd46cf307c88",
   "implementationCommits": {
     "backend": "22c462b",
     "patient": "89bbde8",
     "portal": "90024cd",
-    "portalReviewFix": "c1c9d81"
+    "portalReviewFix": "c1c9d81",
+    "finalReviewFix": "a7eea1c"
   },
   "tests": {
-    "backend": 95,
+    "backend": 104,
     "patientDebug": 37,
-    "portal": 44,
+    "portal": 48,
     "patientRoutineTests": 9,
-    "portalRoutineTests": 16,
+    "portalRoutineTests": 20,
     "routineUI": {
       "passed": true,
       "runs": 2,
@@ -30,7 +31,8 @@
     "accountUI": {
       "passed": true,
       "flows": 2
-    }
+    },
+    "fixtureHelperTests": 9
   },
   "builds": {
     "backend": "passed",
@@ -109,9 +111,10 @@
   },
   "fixtureHelper": {
     "path": "backend/scripts/routine-ui-fixture.cjs",
-    "sha256": "7fb52295599a2896824e45d65413603585760ed29847a74f24c6290806db273b",
+    "sha256": "4181887f8e560a126ab944cfa3445b331f0c23266cb6f07f294ffbc61003aba8",
     "guardsPassed": true,
-    "createInspectCleanupPassed": true
+    "createInspectCleanupPassed": true,
+    "partialCleanupResumePassed": true
   },
   "cleanup": {
     "authUsers": 0,
@@ -124,7 +127,13 @@
     "backend": "approved",
     "patient": "approved",
     "portal": "approved after c1c9d81 scoped re-review",
-    "wholeBranch": "pending"
+    "wholeBranch": "approved after a7eea1c scoped re-review; no open Critical/Important findings",
+    "reviewedCodeCommit": "a7eea1cabe504f1ec0c108b2f78b3d182ab15c8b",
+    "deferredMinor": [
+      "Dense backend route/test formatting",
+      "Expected rejection logging in backend tests",
+      "Deprecated existing ContentView onChange closure form"
+    ]
   },
   "limitations": [
     "Physical-device Data Protection and locked-device behavior cannot be verified on Simulator.",
@@ -139,6 +148,30 @@
     "/private/tmp/clearaf-t3-routine-ui-green2.log",
     "/private/tmp/clearaf-t3-routine-account-ui.log",
     "/private/tmp/clearaf-t3-routine-release.log",
-    "/private/tmp/clearaf-routine-integration-ui.log"
-  ]
+    "/private/tmp/clearaf-routine-integration-ui.log",
+    "/private/tmp/clearaf-routine-final-fix-portal-tests.log",
+    "/private/tmp/clearaf-routine-final-fix-backend-tests.log",
+    "/private/tmp/clearaf-routine-final-fix-portal-lint.log",
+    "/private/tmp/clearaf-routine-final-fix-portal-build.log"
+  ],
+  "lastCodeCommit": "a7eea1cabe504f1ec0c108b2f78b3d182ab15c8b",
+  "hygiene": {
+    "source": "passed",
+    "diff": "passed",
+    "committedRangeSecretScan": "passed through a7eea1c"
+  },
+  "acceptanceAudit": {
+    "currentlyAssignedClinicianOnly": "verified",
+    "patientDefinitionWritesDenied": "verified",
+    "immutableRevisionAndCompletionHistory": "verified",
+    "stableIdentityAndDailyDedupe": "verified",
+    "offlineRestartLostResponseRecovery": "verified",
+    "accountIsolation": "verified",
+    "truthfulPatientStatesAndLocalDay": "verified",
+    "portalAssignEditArchiveHistory": "verified",
+    "legacyPreservedNotPromoted": "verified",
+    "migrationAndRecovery": "verified",
+    "syntheticOnlyCleanup": "verified",
+    "testsBuildsAuditsAndIndependentReview": "verified"
+  }
 }
