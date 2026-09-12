@@ -263,10 +263,25 @@ test('capture completion rejects invalid dates before touching storage', async (
     complete(OWNER_A, CAPTURE, 'July 4, 2026'),
     complete(OWNER_A, CAPTURE, '2026-02-30T10:00:00.000Z')
   ]));
+  objects.set(PATH_A, { size: 1024, contentType: 'image/jpeg' });
+  const [invalidHourOffset, invalidMinuteOffset] = await withoutExpectedErrorLog(async () => Promise.all([
+    complete(OWNER_A, CAPTURE, '2026-01-01T12:00:00+24:00'),
+    complete(OWNER_A, CAPTURE, '2026-01-01T12:00:00+23:99')
+  ]));
   assert.equal(malformed.status, 400);
   assert.equal(impossible.status, 400);
+  assert.equal(invalidHourOffset.status, 400);
+  assert.equal(invalidMinuteOffset.status, 400);
   assert.equal(infoRequests.length, 0);
   assert.equal(createCalls, 0);
+});
+
+test('capture completion preserves the instant represented by a valid timezone offset', async () => {
+  objects.set(PATH_A, { size: 1024, contentType: 'image/jpeg' });
+  const response = await complete(OWNER_A, CAPTURE, '2026-01-01T12:00:00+05:30');
+  assert.equal(response.status, 201);
+  assert.equal((await response.json() as any).photo.captureDate, '2026-01-01T06:30:00.000Z');
+  assert.equal(photos[0].captureDate.toISOString(), '2026-01-01T06:30:00.000Z');
 });
 
 for (const [label, object] of [
