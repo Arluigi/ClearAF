@@ -7,6 +7,7 @@ import { privatePhoto, privatePhotos, deletePhotoObject, ownedPhotoPath } from '
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin, PHOTO_BUCKET, generatePhotoPath } from '../config/supabase';
 import { captureIdentity, isMissingStorageObject, isValidCaptureObject } from '../services/photoCapture';
+import { parsePagination } from '../services/pagination';
 
 const router = express.Router();
 
@@ -332,9 +333,7 @@ router.post('/', requirePatient, (_req, res) => {
 // Get user's photos
 router.get('/', requirePatient, async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, 20);
     const sortBy = req.query.sortBy as string || 'captureDate';
     const order = req.query.order as string || 'desc';
 
@@ -361,9 +360,7 @@ router.get('/', requirePatient, async (req, res, next) => {
           }
         }
       },
-      orderBy: {
-        [sortBy]: order
-      },
+      orderBy: [{ captureDate: 'desc' }, { id: 'desc' }],
       skip,
       take: limit
     });
@@ -614,9 +611,7 @@ router.get('/timeline/progress', requirePatient, async (req, res, next) => {
 router.get('/patient/:patientId', requireDermatologist, async (req, res, next) => {
   try {
     const { patientId } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, 20);
 
     // Verify patient is assigned to this dermatologist
     const patient = await prisma.user.findUnique({
@@ -646,7 +641,7 @@ router.get('/patient/:patientId', requireDermatologist, async (req, res, next) =
           }
         }
       },
-      orderBy: { captureDate: 'desc' },
+      orderBy: [{ captureDate: 'desc' }, { id: 'desc' }],
       skip,
       take: limit
     });
