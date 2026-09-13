@@ -8,12 +8,10 @@ struct AuthenticationView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var name = ""
-    @State private var selectedSkinType = ""
     @State private var isLoading = false
     @State private var errorMessage = ""
     @State private var showError = false
 
-    let skinTypes = ["Normal", "Dry", "Oily", "Combination", "Sensitive"]
     let onAuthenticationSuccess: () -> Void
 
     var body: some View {
@@ -63,25 +61,6 @@ struct AuthenticationView: View {
                             placeholder: "Enter your password",
                             isSecure: true
                         )
-
-                        if isRegistering {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Skin Type")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-
-                                Picker("Skin Type", selection: $selectedSkinType) {
-                                    Text("Not specified").tag("")
-                                    ForEach(skinTypes, id: \.self) { type in
-                                        Text(type).tag(type)
-                                    }
-                                }
-                                .pickerStyle(MenuPickerStyle())
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                            }
-                        }
                     }
                     .padding(.horizontal, 24)
 
@@ -165,8 +144,7 @@ struct AuthenticationView: View {
             defer { isLoading = false }
             do {
                 let hasSession = try await supabaseService.signUp(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                    password: password, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                    skinType: selectedSkinType.isEmpty ? nil : selectedSkinType)
+                    password: password, name: name.trimmingCharacters(in: .whitespacesAndNewlines))
                 if !hasSession {
                     information = "Check your email to confirm your account, then sign in."
                     isRegistering = false
@@ -203,7 +181,6 @@ struct AuthenticationView: View {
         email = ""
         password = ""
         name = ""
-        selectedSkinType = ""
         errorMessage = ""
     }
 }

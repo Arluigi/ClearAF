@@ -6,7 +6,7 @@
 - Today retains the latest real local photo and assigned routine status. The prescription and hard-coded clinician cards and their unused implementations were removed.
 - Profile now exposes the persisted name editor, signed-in email, recoverable save state, sign-out, a labeled Close control, and the existing truthful account-removal explanation.
 - Onboarding is one scrollable factual photo/routine introduction and a trimmed 2–100 character name form. Completion uses a name-only PATCH, shows progress, and leaves the form available with retry after failure.
-- Registration keeps skin classification optional and initially selects “Not specified”; omitted classification is absent from Supabase metadata.
+- Registration collects only name, email, and password. The service keeps its optional skin-classification parameter for legacy callers; the new flow omits it from Supabase metadata.
 - Shared fixed-size font aliases now map to semantic Dynamic Type styles. The foreground accent is adaptive by appearance and action-gradient fills remain fixed colors that support white text.
 - Existing photo/routine repository entry signatures and account-generation barriers were not changed. Photo paging and physical-device networking remain outside this task.
 
@@ -137,3 +137,19 @@ These users were absent from `.local/t4-before-ios-users.json` and were created 
 - The simulator/Xcode runner repeatedly logged `DebuggerLLDB.DebuggerVersionStore.StoreError: no debugger version`; passing test and build results were still produced. One serial attempt also hit a stale Simulator connection UUID, so the named Simulator was shut down, booted, and the same command then passed.
 - Legacy onboarding/profile helper view types remain in their source files to avoid broad deletion of shared compile-time references; they are no longer reachable from the retained flows.
 - This task does not claim physical-device, camera-permission, photo paging/memory, or Debug Bonjour networking verification; those remain later work under the approved spec.
+
+## Scope correction: registration fields
+
+Review found that offering an optional skin-classification picker still asked new users for a clinical field outside the approved minimal account flow. The picker and all view state/options supporting it were removed from `AuthenticationView`; the optional `SupabaseService.signUp` parameter remains for source compatibility.
+
+TDD RED used the signup/onboarding UI test with `XCTAssertFalse(app.staticTexts["Skin Type"].exists)`. It failed against the existing registration screen in 24.651s, proving the assertion detected the reachable picker. After removal:
+
+- `AccountProfileTests/registrationMetadataOmitsUnselectedSkinClassification`: **passed**, exit 0. Evidence: `/private/tmp/clearaf-t3-build/Logs/Test/Test-ClearAF-2026.09.12_21-43-58--0500.xcresult`.
+- `AccountFlowUITests/testConfirmationOnboardingColdLaunchAndOfflineLogout`: **passed in 46.593s**, including the absent-classification assertion and successful name/email/password signup plus name-only onboarding. Evidence: `/private/tmp/clearaf-t3-build/Logs/Test/Test-ClearAF-2026.09.12_21-44-31--0500.xcresult`.
+
+Two further exact synthetic accounts were created while verifying this correction:
+
+| ID | Email |
+| --- | --- |
+| `60949fbc-0f78-434b-8624-24b89d4f79b9` | `clearaf-ui-dacdaf20-aee1-49d6-bc8a-25a5e1a0e72e@example.invalid` |
+| `63b76af8-4cef-4f20-8883-d984de63ea0b` | `clearaf-ui-f65af42e-2280-468b-b907-7f8554c9d800@example.invalid` |
