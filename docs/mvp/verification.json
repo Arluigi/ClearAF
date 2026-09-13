@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": "T4",
-  "status": "in_progress",
+  "status": "verification_stopped_at_user_request",
   "productionAccess": false,
   "measuredAt": "2026-09-13",
   "serverVolume": {
@@ -125,7 +125,9 @@
     "ios": "55 Swift Testing tests/provider XCTest passed; one opt-in diagnostic skipped; same-device account switch/Profile edit/PKCE recovery UI passed104.845s; raw audits failed as explicitly recorded"
   },
   "independentWholeBranchReview": {
-    "status": "pending"
+    "status": "interrupted_at_user_request",
+    "reviewedThrough": "db7eaa6",
+    "knownUnresolvedFinding": "Today photo action inherits a dark-mode tint with insufficient contrast; reviewer identified this before interruption. Not fixed or retested."
   },
   "cleanup": {
     "status": "passed_with_documented_device_scope_caveat",

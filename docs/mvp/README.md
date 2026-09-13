@@ -1,6 +1,6 @@
 # MVP experience verification
 
-T4 is **in progress**. This document separates measured evidence from pending acceptance. T5 pilot/release readiness is a separate phase; clinical guidance, review coverage, retention/removal policy, support ownership and pilot decisions remain unresolved.
+T4 verification was **stopped at the user’s request** before final whole-branch approval. This document separates measured evidence from pending acceptance. T5 pilot/release readiness is a separate phase; clinical guidance, review coverage, retention/removal policy, support ownership and pilot decisions remain unresolved.
 
 ## Retained scope and decisions
 
@@ -71,3 +71,5 @@ Run the hosted writer with `xcodebuild test-without-building -xctestrun <writer.
 After physical UI termination, rebuild/run only the hosted `ClearAFTests/MVPVolumeTests` suite with writer environments absent and `CLEARAF_MVP_ISOLATION_CLEANUP` set to a credential-free JSON **string** containing UUID `run` and exactly two `accountIDs`. Cleanup refuses active account/session/persistence state, deletes only those account directories and exact export, verifies unrelated directory names unchanged and writes `Documents/MVPIsolationCleanup.json`. It does not reset the Debug container. Exact Auth fixture cleanup remains controller-owned.
 
 The final isolation cleanup passed on the physical phone with the final compiled source (`/private/tmp/clearaf-t4-device-isolation-cleanup-final.log`): both exact account directories absent, unrelated directory names preserved, no active session and export absent. The two exact Auth accounts were removed, all server Auth accounts returned to zero, and the exact Simulator export was removed. The focused UI proof passed in57.175 seconds.
+
+The user stopped further checks on 2026-09-13. The running final reviewer was interrupted. Its identified Today photo-button dark-mode contrast issue remains unresolved; T4 is not claimed fully accepted. No further testing or review is authorized by the prior autonomous verification plan after this instruction.
