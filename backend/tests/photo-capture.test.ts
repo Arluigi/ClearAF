@@ -20,6 +20,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'synthetic-service';
 type StoredObject = { size: number; contentType: string };
 
 let photos: any[] = [];
+let pendingCleanup=false,afterLock:(()=>void)|undefined;
 let objects = new Map<string, StoredObject>();
 let uploadAuthorizations: Array<{ path: string; options: unknown }> = [];
 let downloadAuthorizations: string[] = [];
@@ -61,6 +62,8 @@ const skinPhoto = {
 
 const db: any = {
   skinPhoto,
+  photoCleanup:{findUnique:async()=>pendingCleanup?{photoId:PHOTO_A,userId:OWNER_A,photoUrl:PATH_A}:null},
+  $queryRaw:async()=>{afterLock?.();afterLock=undefined;return[]},
   user: { update: async (input: any) => { userUpdates.push(input); return input; } },
   $transaction: async (callback: any) => callback(db)
 };
@@ -129,7 +132,7 @@ before(async () => {
 after(() => new Promise<void>(resolve => server.close(resolve)));
 
 beforeEach(() => {
-  photos = [];
+  photos = [];pendingCleanup=false;afterLock=undefined;
   objects = new Map();
   uploadAuthorizations = [];
   downloadAuthorizations = [];
@@ -315,3 +318,9 @@ test('clinicians cannot create patient capture intents or completions', async ()
   assert.equal(infoRequests.length, 0);
   assert.equal(createCalls, 0);
 });
+
+for(const kind of ['capture','legacy']){
+ const finish=()=>kind==='capture'?complete(OWNER_A,CAPTURE):request('/photos/complete-upload',OWNER_A,{storagePath:PATH_A});
+ test(`${kind} completion refuses pending cleanup before recreation`,async()=>{objects.set(PATH_A,{size:100,contentType:'image/jpeg'});pendingCleanup=true;const response=await finish();assert.equal(response.status,409);assert.equal(createCalls,0)});
+ test(`${kind} completion checks storage after patient lock`,async()=>{objects.set(PATH_A,{size:100,contentType:'image/jpeg'});afterLock=()=>objects.delete(PATH_A);const response=await finish();assert.equal(response.status,400);assert.equal(createCalls,0)});
+}

@@ -1,3 +1,4 @@
+import type { PhotoReview, ReviewQueueItem } from './photo-review';
 // API Service for Clear AF Web Portal
 // Connects to the configured ClearAF API.
 
@@ -395,6 +396,18 @@ class APIService {
 
   async getPhotoThumbnail(id: string, signal?: AbortSignal): Promise<Blob> {
     return this.request<Blob>(`/photos/${encodeURIComponent(id)}/thumbnail`, { signal }, 'blob');
+  }
+
+  async getPhotoReviewStatus(photoIds: string[]): Promise<{ reviews: PhotoReview[] }> {
+    return this.request(`/photo-reviews/status?${new URLSearchParams({ photoIds: photoIds.join(',') })}`);
+  }
+
+  async markPhotoReviewed(id: string): Promise<{ review: PhotoReview }> {
+    return this.request(`/photo-reviews/photos/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({}) });
+  }
+
+  async getPhotoReviewQueue(page = 1): Promise<PaginatedResponse<ReviewQueueItem>> {
+    return this.request(`/photo-reviews/queue?${new URLSearchParams({ page: String(page), limit: '20' })}`);
   }
 
   async getPhotoOriginal(id: string, signal?: AbortSignal): Promise<{ photoUrl: string }> {

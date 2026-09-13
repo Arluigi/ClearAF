@@ -9,3 +9,9 @@ const ledger=[{version:files[0].version,name:files[0].name,statements:[baseline]
 const approved={version:files[0].version,name:files[0].name,fileSha256:crypto.createHash('sha256').update(baseline).digest('hex'),statementsSha256:digest(ledger[0].statements)};
 test('recovery accepts approved baseline followed by fully applied additive migration',()=>{assert.doesNotThrow(()=>recovery.validateMigrationChain(files,ledger,approved))});
 test('recovery refuses missing, extra, renamed, or altered baseline migrations',()=>{for(const [changedFiles,changedLedger] of [[files,ledger.slice(0,1)],[files,[...ledger,{version:'99999999999999',name:'unexpected',statements:['bad']}]],[files,[ledger[0],{...ledger[1],name:'renamed'}]],[[{...files[0],sql:'changed'},files[1]],ledger],[files,[{...ledger[0],statements:['changed']},ledger[1]]]])assert.throws(()=>recovery.validateMigrationChain(changedFiles,changedLedger,approved), /migration chain|baseline/)});
+
+test('recovery includes every application table represented in Prisma',()=>{
+ const fs=require('node:fs');
+ const schema=fs.readFileSync('prisma/schema.prisma','utf8');
+ for(const match of schema.matchAll(/@@map\("([a-z_]+)"\)/g)) assert(recovery.applicationTables?.includes(match[1]),`Recovery omits ${match[1]}`);
+});

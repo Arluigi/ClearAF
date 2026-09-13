@@ -1,0 +1,17 @@
+# Photo comparison and review workflow verification
+
+Scope: portal two-photo comparison and new-upload queue; explicit clinician acknowledgement; patient shared-photo detail review visibility. Uses the approved Care Journal foundations. No automated interpretation of photos, clinical defaults, or notification promises.
+
+Implementation review checked current assignment/role/session boundaries, immutable review acknowledgement, pagination, stale-response handling and both clients. The review uncovered an older photo deletion risk: storage could be removed before the review FK rejected deleting its record. A service-only cleanup intent now makes storage cleanup retryable after authorized record deletion, and reviewed photos are explicitly protected. Upload completion is checked against pending cleanup.
+
+## Local evidence
+
+- Portal: 69 tests, lint, production build and typecheck passed. Synthetic browser flow: queue → patient → select two photos → comparison/zoom/reset/Escape → mark reviewed → return to empty queue. Dates and reviewer timestamp visible. Desktop dark appearance inspected; 390px document/dialog widths checked without overflow. No fresh light/VoiceOver matrix.
+- iOS: signed iPhone 17 Simulator build and 11 focused review/account-boundary tests passed. One Simulator launch/preflight failure passed on retry. Shared-detail UI is code/build/test verified; no new camera or physical-device walkthrough.
+- API: real loopback synthetic checks cover role/assignment and batch ownership, immutable concurrent/repeated acknowledgement, queue grouping/order/paging, reassignment, patient-visible status and Data API denial. The later deletion compatibility tests cover preserved originals for reviewed photos and owned cleanup retry. Exact fixture identities/objects are tracked privately and cleaned after use.
+
+Detailed final test totals and hosted deployment state are recorded at release below. Retained hosted demo data is preserved. Account deletion/clinical retention, review coverage/support, and distribution remain separate pilot decisions.
+
+Final local results: 143 backend tests passed; the three migration-chain tests also pass after adding a regression check that every Prisma application table is included in the recovery archive. The real API fixture passed seven groups including deletion/cleanup retry, then removed its exact actors and rows. Retained browser fixtures were signed out and removed with their exact storage objects. Portal 69 and iOS 11 results above remain valid; those client sources did not change during the deletion fix.
+
+Known operational limit: pending object cleanup is retried through the existing DELETE endpoint; no background cleanup worker is included. New review/cleanup tables are included in recovery snapshots and dumps. The canonical recovery fixture requires these new tables to be empty, so this release does not claim a populated-review restore drill. Upload completion now checks cleanup and rechecks object existence under the same patient lock.

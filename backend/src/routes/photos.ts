@@ -124,22 +124,16 @@ router.post('/captures/:captureId/complete', requirePatient, async (req, res, ne
       return res.json({ photo: await privatePhoto(existing, req.user!.id) });
     }
 
-    const object = await captureObjectInfo(storagePath);
-    if (object.state !== 'uploaded') {
-      return res.status(400).json({ error: 'Upload is missing or is not a JPEG between 1 byte and 10 MB', code: 'INVALID_UPLOAD' });
-    }
-
     try {
-      const photo = await prisma.$transaction(tx => tx.skinPhoto.create({
-        data: {
-          id,
-          photoUrl: storagePath,
-          skinScore: 0,
-          notes: input.notes,
-          captureDate: new Date(input.captureDate),
-          userId: req.user!.id
-        }
-      }));
+      const photo = await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+        if (await tx.photoCleanup.findUnique({where:{photoId:id}})) throw Object.assign(new Error('Photo cleanup pending'), {statusCode:409,code:'PHOTO_CLEANUP_PENDING'});
+        // Recheck under the deletion lock: a pre-lock storage read may describe
+        // an object that deletion has since removed.
+        const object = await captureObjectInfo(storagePath);
+        if (object.state !== 'uploaded') throw Object.assign(new Error('Upload is missing or is not a JPEG between 1 byte and 10 MB'), {statusCode:400,code:'INVALID_UPLOAD'});
+        return tx.skinPhoto.create({data:{id,photoUrl:storagePath,skinScore:0,notes:input.notes,captureDate:new Date(input.captureDate),userId:req.user!.id}});
+      });
       return res.status(201).json({ photo: await privatePhoto(photo, req.user!.id) });
     } catch (error) {
       if ((error as { code?: string }).code !== 'P2002') throw error;
@@ -192,6 +186,10 @@ router.post('/complete-upload', requirePatient, async (req, res, next) => {
     }
     try {
       const photo = await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+        if (await tx.photoCleanup.findUnique({where:{photoId:id}})) throw Object.assign(new Error('Photo cleanup pending'), {statusCode:409,code:'PHOTO_CLEANUP_PENDING'});
+        const {data:latestObject,error:latestError} = await supabaseAdmin.storage.from(PHOTO_BUCKET).info(path);
+        if (latestError || !latestObject || latestObject.size <= 0 || latestObject.size > 10 * 1024 * 1024 || !['image/jpeg','image/png','image/webp'].includes(latestObject.contentType)) throw Object.assign(new Error('Upload is missing or invalid'), {statusCode:400,code:'INVALID_UPLOAD'});
         const created = await tx.skinPhoto.create({ data: { id, userId: req.user!.id, photoUrl: path, skinScore: input.skinScore, notes: input.notes, appointmentId: input.appointmentId } });
         if (input.skinScore > 0) await tx.user.update({ where: { id: req.user!.id }, data: { currentSkinScore: input.skinScore, streakCount: { increment: 1 } } });
         return created;
@@ -532,25 +530,29 @@ router.delete('/:id', requirePatient, async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Verify photo belongs to user
-    const photo = await prisma.skinPhoto.findUnique({
-      where: {
-        id,
-        userId: req.user!.id
+    // Record deletion and cleanup intent commit together. Never perform remote
+    // object removal inside a transaction that could expire while it is in flight.
+    const cleanup = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+      const pending = await tx.photoCleanup.findUnique({where:{photoId:id}});
+      if (pending) {
+        if (pending.userId !== req.user!.id) throw Object.assign(new Error('Photo not found'), {statusCode:404, code:'PHOTO_NOT_FOUND'});
+        return pending;
       }
+      const photo = await tx.skinPhoto.findUnique({where: {id, userId: req.user!.id}});
+      if (!photo) throw Object.assign(new Error('Photo not found'), {statusCode:404, code:'PHOTO_NOT_FOUND'});
+      const review = await tx.photoReview.findUnique({where:{photoId:id},select:{photoId:true}});
+      if (review) throw Object.assign(new Error('Reviewed photos cannot be deleted'), {statusCode:409, code:'PHOTO_REVIEWED'});
+      const intent = await tx.photoCleanup.create({data:{photoId:id,userId:req.user!.id,photoUrl:photo.photoUrl}});
+      await tx.skinPhoto.delete({where:{id}});
+      return intent;
     });
-
-    if (!photo) {
-      return res.status(404).json({
-        error: 'Photo not found',
-        code: 'PHOTO_NOT_FOUND'
-      });
+    try {
+      await deletePhotoObject(cleanup);
+      await prisma.photoCleanup.deleteMany({where:{photoId:id,userId:req.user!.id}});
+    } catch {
+      throw Object.assign(new Error('Photo removed from history; storage cleanup pending. Retry deletion.'), {statusCode:503, code:'PHOTO_CLEANUP_PENDING'});
     }
-
-    await deletePhotoObject(photo);
-    await prisma.skinPhoto.delete({
-      where: { id }
-    });
 
     res.json({
       message: 'Photo deleted successfully'
