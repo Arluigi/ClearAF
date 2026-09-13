@@ -211,33 +211,9 @@ class APIService {
     limit: number = 10,
     search?: string
   ): Promise<PaginatedResponse<User>> {
-    // Use the new dedicated patients endpoint for dermatologists
-    const response = await this.request<{patients: User[], total: number}>('/users/patients');
-
-    // Filter by search if provided
-    let filteredPatients = response.patients;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredPatients = response.patients.filter(p =>
-        p.name?.toLowerCase().includes(searchLower) ||
-        p.skinType?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Calculate pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedPatients = filteredPatients.slice(startIndex, endIndex);
-
-    return {
-      data: paginatedPatients,
-      pagination: {
-        page: page,
-        totalPages: Math.ceil(filteredPatients.length / limit),
-        total: filteredPatients.length,
-        limit: limit
-      }
-    };
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search?.trim()) params.set('search', search.trim());
+    return this.request<PaginatedResponse<User>>(`/users/?${params}`);
   }
 
   async getPatient(id: string): Promise<User> {

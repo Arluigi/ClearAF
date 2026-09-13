@@ -30,7 +30,7 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/dashboard');
+      router.push('/patients');
     }
   }, [isAuthenticated, router]);
 
@@ -41,7 +41,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      router.push('/dashboard');
+      router.push('/patients');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Login failed. Please try again.');
     } finally {
@@ -72,7 +72,7 @@ export default function LoginPage() {
           <CardHeader className="space-y-2 text-center">
             <CardTitle className="text-2xl">Welcome back</CardTitle>
             <CardDescription>
-              Sign in to your dermatologist account to manage patients and appointments
+              Sign in to review assigned patient photos and routines
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -115,6 +115,7 @@ export default function LoginPage() {
                       size="sm"
                       className="absolute right-0 top-0 h-11 px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4 text-muted-foreground" />

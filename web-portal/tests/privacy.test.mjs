@@ -17,3 +17,11 @@ test('portal does not advertise unverified compliance', async () => {
     assert.doesNotMatch(await readFile(file, 'utf8'), /HIPAA compliant|HIPAA Compliant|All data is encrypted/i, file);
   }
 });
+test('deferred portal routes redirect without rendering fake activity', async () => {
+  for (const route of ['dashboard', 'appointments', 'messages', 'prescriptions']) {
+    const source = await readFile(join('src/app', route, 'page.tsx'), 'utf8');
+    assert.match(source, /redirect\(['"]\/patients['"]\)/, route);
+    assert.doesNotMatch(source, /mock|appointment request|unreadCount|currentSkinScore/i, route);
+  }
+  assert.match(await readFile('src/app/settings/page.tsx', 'utf8'), /redirect\(['"]\/account['"]\)/);
+});
