@@ -1,3 +1,4 @@
+import type { Conversation, MessagePage, MessageBody, MessageRecord, ReferenceResult } from './assigned-messaging';
 import type { Template, TemplateDraft, Form, FormDraft, CheckInResponse, Month } from './care-support';
 import type { PhotoReview, ReviewQueueItem } from './photo-review';
 // API Service for Clear AF Web Portal
@@ -427,6 +428,12 @@ class APIService {
     const params = new URLSearchParams({ page: String(page), limit: String(limit), view: 'summary' });
     return this.request(`/photos/patient/${encodeURIComponent(patientId)}?${params}`);
   }
+
+  async getMessageInbox(cursor?:string):Promise<{conversations:Conversation[];nextCursor:string|null}> { return this.request('/assigned-messages/inbox?'+new URLSearchParams({limit:'20',...(cursor?{cursor}:{})})); }
+  async getAssignedMessages(patientId:string,clinicianId:string,before?:string):Promise<MessagePage> { return this.request(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}?`+new URLSearchParams({limit:'30',...(before?{before}:{})})); }
+  async sendAssignedMessage(patientId:string,clinicianId:string,id:string,body:MessageBody):Promise<MessageRecord> { const result=await this.request<{message:MessageRecord}>(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/messages/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(body)});return result.message; }
+  async acknowledgeMessages(patientId:string,clinicianId:string,messageIds:string[]):Promise<{acknowledgedIds:string[];unreadCount:number}> { return this.request(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/read`,{method:'POST',body:JSON.stringify({messageIds})}); }
+  async getMessageReference(patientId:string,clinicianId:string,messageId:string):Promise<ReferenceResult> { return this.request(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/messages/${encodeURIComponent(messageId)}/reference`); }
 
   // Photo Management
   async getPatientPhotos(

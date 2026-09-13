@@ -53,6 +53,7 @@ function RoutineEditor({
           {editor.routine?.isActive === false && <Badge variant="secondary">Archived</Badge>}
         </div>
       </div>
+      {editor.routine && <a className="text-sm underline" href={"/messages?patient="+encodeURIComponent(editor.routine.userId)+"&referenceType=routineRevision&referenceId="+encodeURIComponent(editor.routine.id)}>Send feedback about this saved revision</a>}
       <CardDescription>Saving creates a new version for this patient.</CardDescription>
     </CardHeader>
     <CardContent className="space-y-5">

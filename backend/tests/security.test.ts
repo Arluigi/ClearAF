@@ -61,9 +61,9 @@ for(const identity of [A,D])test(`client ${identity} cannot reassign a patient`,
 test('sync profile preserves existing assignment',async()=>{const r=await request('/auth-supabase/sync-profile',A,'POST',{});assert.equal(r.status,200);assert.equal(users[0].dermatologistId,D)});
 test('unassigned clinician cannot prescribe',async()=>{const r=await request('/prescriptions',D,'POST',{patientId:B,medicationName:'synthetic',dosage:'synthetic',instructions:'test only'});assert.equal(r.status,404);assert.equal(writes.length,0)});
 test('assigned clinician can prescribe',async()=>{const r=await request('/prescriptions',D,'POST',{patientId:A,medicationName:'synthetic',dosage:'synthetic',instructions:'test only'});assert.equal(r.status,201);assert.equal(writes.length,1)});
-test('unassigned clinician cannot reply',async()=>{const r=await request('/messages/reply',D,'POST',{patientId:B,content:'synthetic'});assert.equal(r.status,404);assert.equal(writes.length,0)});
-test('assigned clinician can reply',async()=>{const r=await request('/messages/reply',D,'POST',{patientId:A,content:'synthetic'});assert.equal(r.status,201)});
-test('patient cannot send to unassigned clinician',async()=>{const r=await request('/messages/send',A,'POST',{recipientId:E,content:'synthetic'});assert.equal(r.status,404);assert.equal(writes.length,0)});
+test('unassigned clinician cannot reply',async()=>{const r=await request('/messages/reply',D,'POST',{patientId:B,content:'synthetic'});assert.equal(r.status,410);assert.equal(writes.length,0)});
+test('legacy assigned clinician reply is retired',async()=>{const r=await request('/messages/reply',D,'POST',{patientId:A,content:'synthetic'});assert.equal(r.status,410)});
+test('patient cannot send to unassigned clinician',async()=>{const r=await request('/messages/send',A,'POST',{recipientId:E,content:'synthetic'});assert.equal(r.status,410);assert.equal(writes.length,0)});
 test('patient cannot register arbitrary photo URLs',async()=>{const r=await request('/photos',A,'POST',{photoUrl:`https://security-test.supabase.co/storage/v1/object/public/patient-photos/${B}/stolen.jpg`});assert.equal(r.status,410);assert.equal(writes.length,0)});
 test('anonymous photo reads denied',async()=>assert.equal((await request('/photos',undefined)).status,401));
 test('patient cannot read another patient photo',async()=>{assert.equal((await request('/photos/'+P,B)).status,404);assert.equal(signed.length,0)});
@@ -83,7 +83,7 @@ test('former clinician appointment list is empty',async()=>{const r=await reques
 test('patient cannot book unassigned clinician',async()=>{const r=await request('/appointments',A,'POST',{dermatologistId:E,type:'consultation',scheduledDate:'2027-01-01T12:00:00Z',concern:'synthetic testing only'});assert.equal(r.status,403);assert.equal(writes.length,0)});
 test('historical appointment patient still has access',async()=>{const r=await request('/appointments/'+P,B);assert.equal(r.status,200)});
 test('authorized appointment nested photos are private',async()=>{appointments[0].patientId=A;appointments[0].relatedPhotos=photos;const r=await request('/appointments/'+P,D);assert.equal(r.status,200);const body:any=await r.json();assert.match(body.appointment.relatedPhotos[0].photoUrl,/\/object\/sign\//)});
-test('former clinician cannot retrieve messages or mark them read',async()=>{const r=await request('/messages?receiverId='+B,D);assert.equal(r.status,404);assert.equal(writes.length,0)});
+test('former clinician cannot retrieve messages or mark them read',async()=>{const r=await request('/messages?receiverId='+B,D);assert.equal(r.status,410);assert.equal(writes.length,0)});
 
 test('direct upload intent returns only own server-generated path',async()=>{const r=await request('/photos/upload-url',A,'POST',{mimeType:'image/png'});assert.equal(r.status,200);const body:any=await r.json();assert.match(body.storagePath,new RegExp('^'+A+'/[a-f0-9-]+\\.png$'));assert.match(body.signedUrl,/\/object\/upload\/sign\//)});
 test('direct upload completion creates owned photo after storage verification',async()=>{photos=[];const r=await request('/photos/complete-upload',A,'POST',{storagePath:A+'/'+P+'.png',notes:'synthetic'});assert.equal(r.status,201);const body:any=await r.json();assert.equal(body.photo.userId,A);assert.match(body.photo.photoUrl,/\/object\/sign\//);assert.equal(writes.length,1)});

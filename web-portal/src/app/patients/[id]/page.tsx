@@ -35,6 +35,7 @@ function Workspace() {
     <Button variant="link" className="px-0" asChild><a href={'/patients?' + patientListQuery(context.page, context.search)}><ArrowLeft aria-hidden />Back to patients</a></Button>
     {failed ? <div role="alert" className="space-y-4"><h1 className="text-2xl font-semibold">Patient unavailable</h1><p>This patient could not be opened. Check your connection and current assignment.</p><Button onClick={() => setAttempt(value => value + 1)}>Try again</Button></div> : !patient ? <p role="status">Opening patient…</p> : <>
       <header className="space-y-3 border-b pb-6"><h1 className="editorial-title break-words text-4xl">{patient.name || 'Unnamed patient'}</h1><p className="text-muted-foreground">Shared care record</p></header>
+      <a className="underline" href={"/messages?patient="+encodeURIComponent(id)}>Open messages</a>
       <PatientPhotoHistory key={'photos-' + id} patientId={id} />
       <PatientCheckIns key={'check-ins-' + id} patientId={id} />
       <PatientRoutineCare key={'routines-' + id} patientId={id} onDirtyChange={setDirty} />

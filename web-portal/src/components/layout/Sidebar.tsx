@@ -1,11 +1,11 @@
 'use client';
 import { usePathname } from 'next/navigation';
-import { LogOut, Stethoscope, UserRound, Users } from 'lucide-react';
+import { MessageSquare, LogOut, Stethoscope, UserRound, Users } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
-const navigation = [{ name: 'Assigned patients', href: '/patients', icon: Users }, { name: 'Templates', href: '/templates', icon: Stethoscope }, { name: 'Account', href: '/account', icon: UserRound }];
+const navigation = [{ name: 'Assigned patients', href: '/patients', icon: Users }, { name: 'Messages', href: '/messages', icon: MessageSquare }, { name: 'Templates', href: '/templates', icon: Stethoscope }, { name: 'Account', href: '/account', icon: UserRound }];
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname(); const { user, logout } = useAuth();
   return <div className="flex h-full w-64 flex-col border-r border-border bg-card">
