@@ -40,7 +40,10 @@ async function run(){
   for(const account of [a,d])assert.equal((await call('/users/assign-dermatologist',account,'POST',{patientId:b.id,dermatologistId:d.id})).status,403);ok('client reassignment denied');
   assert.equal((await call('/auth/sync-profile',a,'POST',{})).status,200);const assignment=await db.query('select "dermatologistId" from user_profiles where id=$1',[a.id]);assert.equal(assignment.rows[0].dermatologistId,d.id);ok('profile sync preserves assignment');
   assert.equal((await call('/prescriptions',e,'POST',{patientId:a.id,medicationName:'Synthetic only',dosage:'test',instructions:'test'})).status,404);ok('unassigned prescription denied');
-  assert.equal((await call('/messages/reply',e,'POST',{patientId:a.id,content:'Synthetic only'})).status,404);ok('unassigned reply denied');
+  const legacyCount=async()=>Number((await db.query('select count(*) from public.messages where "senderId"=any($1::text[]) or "recipientId"=any($1::text[])',[s.accounts.map(account=>account.id)])).rows[0].count);
+  const beforeLegacy=await legacyCount();
+  for(const clinician of [d,e]){const retired=await call('/messages/reply',clinician,'POST',{patientId:a.id,content:'Synthetic only'});assert.equal(retired.status,410);assert.equal((await retired.json()).code,'MESSAGE_OPERATION_RETIRED')}
+  assert.equal(await legacyCount(),beforeLegacy);ok('legacy replies retired for assigned and unrelated clinicians without writes');
   const form=new FormData();form.set('photo',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII=','base64')],{type:'image/png'}),'synthetic.png');form.set('notes','Synthetic security verification; remove after test.');
   const upload=await call('/photos/upload',a,'POST',form);assert.equal(upload.status,201,'upload failed: '+upload.status);const photo=(await upload.json()).photo;s.photoIds.push(photo.id);s.paths.push(photo.storagePath);save({...s,accounts:s.accounts.map(({token,...x})=>x)});ok('patient upload stored successfully');
   assert.match(photo.photoUrl,/\/object\/sign\//);assert.equal((await fetch(photo.photoUrl)).status,200);ok('authorized signed image downloads');

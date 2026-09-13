@@ -1,487 +1,123 @@
-//
-//  MessagingView.swift
-//  ClearAF
-//
-//  Created by Aryan Sachdev on 7/18/25.
-//
-
 import SwiftUI
-import CoreData
 
 struct MessagingView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.managedObjectContext) private var viewContext
-    
-    @FetchRequest(
-        entity: Message.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \Message.sentDate, ascending: true)]
-    ) private var messages: FetchedResults<Message>
-    
-    @State private var messageText = ""
-    @State private var showingCamera = false
-    @State private var showingPhotoTakenMessage = false
-    @State private var isTyping = false
-    
-    let dermatologist: Dermatologist?
-    
-    init(dermatologist: Dermatologist? = nil) {
-        self.dermatologist = dermatologist
-    }
-    
+    @ObservedObject private var repository = APIService.shared.messaging
+    @State private var selected: AssignedMessage?
+    @State private var visible: Set<UUID> = []
+    @State private var active = false
+    @Environment(\.scenePhase) private var scenePhase
+    init(dermatologist: Dermatologist? = nil) {}
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.backgroundSecondary.ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    // Header with dermatologist info
-                    if let dermatologist = dermatologist {
-                        DermatologistHeader(dermatologist: dermatologist)
-                    }
-                    
-                    // Messages list
-                    ScrollViewReader { proxy in
+        NavigationStack {
+            VStack(spacing: 12) {
+                if let pair = repository.conversation {
+                    HStack { Text(pair.clinicianName).font(.headline); Spacer(); Text("\(pair.unreadCount) unread").font(.caption) }.padding(.horizontal)
+                    GeometryReader { viewport in
                         ScrollView {
-                            LazyVStack(spacing: .spaceMD) {
-                                if messages.isEmpty {
-                                    MessagePlaceholder()
-                                        .padding(.top, 50)
-                                } else {
-                                    ForEach(messages, id: \.id) { message in
-                                        MessageBubble(message: message)
-                                            .id(message.id)
+                            LazyVStack(alignment: .leading, spacing: 16) {
+                                if repository.nextCursor != nil { Button("Load older messages") { Task { await repository.load(older: true) } }.disabled(repository.loading) }
+                                if repository.messages.isEmpty { Text("Start a conversation with your assigned clinician.").foregroundStyle(.secondary) }
+                                ForEach(repository.messages) { message in
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(message.senderType == "patient" ? "You" : pair.clinicianName).font(.caption).foregroundStyle(.secondary)
+                                        Text(message.content).textSelection(.enabled)
+                                        if let reference = message.reference {
+                                            Button { selected = message } label: {
+                                                Label(reference.label ?? (reference.type == "photo" ? "Photo feedback" : "Routine feedback"), systemImage: reference.type == "photo" ? "photo" : "list.bullet")
+                                            }
+                                        }
+                                        if let date = RoutineDates.instant(message.sentAt) {
+                                            HStack { Text(date, style: .date); Text(date, style: .time); if message.senderType == "patient" { Text("Sent") } }.font(.caption2).foregroundStyle(.secondary)
+                                        }
                                     }
+                                    .padding().frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(message.senderType == "patient" ? CareJournal.actionPrimary.opacity(0.10) : Color.cardBackground)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .background(GeometryReader { geometry in
+                                        Color.clear.preference(key: VisibleMessageFrames.self, value: [message.id: geometry.frame(in: .named("messageViewport"))])
+                                    })
                                 }
-                                
-                                // Typing indicator
-                                if isTyping {
-                                    TypingIndicator()
-                                        .id("typing")
-                                }
-                            }
-                            .padding(.horizontal, .spaceXL)
-                            .padding(.vertical, .spaceMD)
+                            }.padding()
                         }
-                        .onChange(of: messages.count) {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                if let lastMessage = messages.last {
-                                    withAnimation(.easeOut(duration: 0.3)) {
-                                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                                    }
-                                }
-                            }
-                        }
-                        .onChange(of: isTyping) {
-                            if isTyping {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation(.easeOut(duration: 0.3)) {
-                                        proxy.scrollTo("typing", anchor: .bottom)
-                                    }
-                                }
-                            }
+                        .coordinateSpace(name: "messageViewport")
+                        .onPreferenceChange(VisibleMessageFrames.self) { frames in
+                            visible = Set(frames.filter { $0.value.intersects(CGRect(origin: .zero, size: viewport.size)) }.keys)
+                            if active && scenePhase == .active && selected == nil { Task { await repository.acknowledgeVisible(visible) } }
                         }
                     }
-                    
-                    // Message input
-                    MessageInputBar(
-                        messageText: $messageText,
-                        showingCamera: $showingCamera,
-                        onSend: sendMessage,
-                        onPhotoCapture: { showingCamera = true }
-                    )
-                }
-            }
-            .navigationTitle(dermatologist?.name ?? "Messages")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(
-                leading: Button("Back") { dismiss() }
-            )
-        }
-        .sheet(isPresented: $showingCamera) {
-            DurablePhotoCaptureView { photo in
-                if let bytes = photo.photoData { sendPhotoMessage(bytes) }
-            }
-        }
-        .overlay(
-            Group {
-                if showingPhotoTakenMessage {
-                    VStack {
-                        Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Write a message", text: Binding(get: { repository.draft?.content ?? "" }, set: { try? repository.edit($0) }), axis: .vertical)
+                            .textFieldStyle(.roundedBorder).lineLimit(2...5).disabled(repository.sending)
                         HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.green)
-                            Text("Photo sent!")
-                                .font(.headlineSmall)
-                                .foregroundColor(.textPrimary)
+                            Text("\(repository.draft?.content.count ?? 0)/4000").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Button(repository.sending ? "Sending…" : repository.draft?.attempted == true ? "Retry message" : "Send") { Task { await repository.send() } }
+                                .buttonStyle(.borderedProminent).disabled(repository.sending || (repository.draft?.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true))
                         }
-                        .padding(.spaceLG)
-                        .background(Color.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                        .softShadow()
-                        .padding(.bottom, 100)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.bouncy, value: showingPhotoTakenMessage)
-                }
+                    }.padding(.horizontal)
+                } else if repository.opened { ContentUnavailableView("Messaging unavailable", systemImage: "message", description: Text("A conversation becomes available when a clinician is assigned to your account.")) }
+                else { Button("Open current conversation") { Task { await repository.openCurrent() } } }
+                if repository.loading { SwiftUI.ProgressView() }
+                if let error = repository.error { Text(error).font(.callout).foregroundStyle(.secondary).padding(.horizontal).accessibilityIdentifier("messagesError") }
+                Text("Refresh to check for new messages.").font(.caption).foregroundStyle(.secondary)
             }
-        )
-    }
-    
-    private func sendMessage() {
-        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
-        let message = Message(context: viewContext)
-        message.id = UUID()
-        message.content = messageText
-        message.sentDate = Date()
-        message.isRead = false
-        message.messageType = "text"
-        
-        // Simulate typing indicator
-        isTyping = true
-        
-        do {
-            try viewContext.save()
-            messageText = ""
-            HapticManager.light()
-            
-            // Simulate doctor response after 2-3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                isTyping = false
-                simulateDoctorResponse()
+            .padding(.vertical, 8).background(CareJournal.canvas)
+            .navigationTitle("Messages")
+            .toolbar { Button("Refresh", systemImage: "arrow.clockwise") { Task { await repository.openCurrent(); if active && scenePhase == .active && selected == nil { await repository.acknowledgeVisible(visible) } } }.disabled(repository.loading || repository.sending) }
+            .sheet(item: $selected) { message in if let pair = repository.conversation { MessageReferenceView(message: message, pair: pair) } }
+            .task {
+                active = true
+                guard let ticket = APIService.shared.access.snapshot() else { return }
+                do { try repository.resume(ticket); await repository.openCurrent() } catch { }
             }
-        } catch {
-            print("Error sending message: \(error)")
-            HapticManager.error()
-            isTyping = false
-        }
-    }
-    
-    private func sendPhotoMessage(_ imageData: Data) {
-        let message = Message(context: viewContext)
-        message.id = UUID()
-        message.content = "Photo shared"
-        message.sentDate = Date()
-        message.isRead = false
-        message.messageType = "photo"
-        message.attachmentData = imageData
-        message.attachmentType = "image"
-        
-        do {
-            try viewContext.save()
-            HapticManager.success()
-        } catch {
-            print("Error sending photo: \(error)")
-            HapticManager.error()
-        }
-    }
-    
-    private func simulateDoctorResponse() {
-        let responses = [
-            "Thank you for sharing that with me. I'll review your photos and get back to you shortly.",
-            "I can see the concern you mentioned. Let's schedule a follow-up to discuss treatment options.",
-            "Based on what you've shared, I recommend continuing your current routine for now.",
-            "That looks much better than before! Keep up the good work with your skincare routine.",
-            "I'd like to adjust your treatment plan. I'll send you updated instructions shortly."
-        ]
-        
-        let response = Message(context: viewContext)
-        response.id = UUID()
-        response.content = responses.randomElement()
-        response.sentDate = Date()
-        response.isRead = true
-        response.messageType = "response"
-        
-        do {
-            try viewContext.save()
-        } catch {
-            print("Error saving doctor response: \(error)")
-        }
-    }
-    
-}
-
-// MARK: - Supporting Views
-
-struct DermatologistHeader: View {
-    let dermatologist: Dermatologist
-    
-    var body: some View {
-        HStack(spacing: .spaceMD) {
-            // Profile image
-            if let imageData = dermatologist.profileImageData,
-               let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(Color.primaryPurple.opacity(0.2))
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Text(String(dermatologist.name?.prefix(1) ?? "D"))
-                            .font(.headlineMedium)
-                            .foregroundColor(.primaryPurple)
-                    )
-            }
-            
-            VStack(alignment: .leading, spacing: .spaceXS) {
-                Text(dermatologist.name ?? "Dr. Amit Om")
-                    .font(.headlineMedium)
-                    .foregroundColor(.textPrimary)
-                
-                HStack(spacing: .spaceXS) {
-                    Circle()
-                        .fill(dermatologist.isAvailable ? Color.green : Color.gray)
-                        .frame(width: 8, height: 8)
-                    
-                    Text(dermatologist.isAvailable ? "Available" : "Away")
-                        .font(.captionMedium)
-                        .foregroundColor(.textSecondary)
-                }
-            }
-            
-            Spacer()
-        }
-        .padding(.cardPadding)
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-        .softShadow()
-        .padding(.horizontal, .spaceXL)
-        .padding(.bottom, .spaceMD)
-    }
-}
-
-struct MessagePlaceholder: View {
-    var body: some View {
-        VStack(spacing: .spaceLG) {
-            Image(systemName: "message.circle")
-                .font(.system(size: 60))
-                .foregroundColor(.textSecondary)
-            
-            VStack(spacing: .spaceMD) {
-                Text("Start a conversation")
-                    .font(.headlineLarge)
-                    .foregroundColor(.textPrimary)
-                
-                Text("Send a message to your dermatologist. They typically respond within a few hours.")
-                    .font(.bodyMedium)
-                    .foregroundColor(.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .padding(.spaceXL)
-    }
-}
-
-struct MessageBubble: View {
-    let message: Message
-    
-    private var isUserMessage: Bool {
-        return message.messageType != "response"
-    }
-    
-    private var messageTime: String {
-        guard let sentDate = message.sentDate else { return "" }
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: sentDate)
-    }
-    
-    var body: some View {
-        HStack {
-            if isUserMessage {
-                Spacer()
-            }
-            
-            VStack(alignment: isUserMessage ? .trailing : .leading, spacing: .spaceXS) {
-                if message.messageType == "photo", let attachmentData = message.attachmentData {
-                    PhotoMessageContent(imageData: attachmentData, isUser: isUserMessage)
-                } else {
-                    TextMessageContent(message: message, isUser: isUserMessage)
-                }
-                
-                // Message status and time
-                HStack(spacing: .spaceXS) {
-                    Text(messageTime)
-                        .font(.captionSmall)
-                        .foregroundColor(.textTertiary)
-                    
-                    if isUserMessage {
-                        MessageStatusIndicator(isRead: message.isRead)
-                    }
-                }
-            }
-            
-            if !isUserMessage {
-                Spacer()
+            .onDisappear { active = false; visible = [] }
+            .onChange(of: selected?.id) { _, id in
+                if id == nil && active && scenePhase == .active { Task { await repository.acknowledgeVisible(visible) } }
             }
         }
     }
 }
-
-struct TextMessageContent: View {
-    let message: Message
-    let isUser: Bool
-    
-    var body: some View {
-        Text(message.content ?? "")
-            .font(.bodyMedium)
-            .foregroundColor(isUser ? .white : .textPrimary)
-            .padding(.spaceMD)
-            .background(
-                RoundedRectangle(cornerRadius: .radiusLarge)
-                    .fill(isUser ? Color.primaryPurple : Color.cardBackground)
-            )
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: isUser ? .trailing : .leading)
-    }
+private struct VisibleMessageFrames: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) { value.merge(nextValue(), uniquingKeysWith: { _, new in new }) }
 }
-
-struct PhotoMessageContent: View {
-    let imageData: Data
-    let isUser: Bool
-    
+private struct MessageReferenceView: View {
+    let message: AssignedMessage; let pair: AssignedConversation
+    @Environment(\.dismiss) private var dismiss
+    @State private var detail: MessageReferenceDetail?
+    @State private var image: UIImage?
+    @State private var unavailable = false
     var body: some View {
-        VStack(alignment: isUser ? .trailing : .leading, spacing: .spaceXS) {
-            if let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 200, height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: .radiusLarge)
-                            .stroke(Color.borderSubtle, lineWidth: 1)
-                    )
-            }
-            
-            Text("Photo")
-                .font(.captionMedium)
-                .foregroundColor(isUser ? .white : .textSecondary)
-                .padding(.horizontal, .spaceMD)
-                .padding(.vertical, .spaceXS)
-                .background(
-                    RoundedRectangle(cornerRadius: .radiusMedium)
-                        .fill(isUser ? Color.primaryPurple : Color.backgroundSecondary)
-                )
-        }
-    }
-}
-
-struct MessageStatusIndicator: View {
-    let isRead: Bool
-    
-    var body: some View {
-        Image(systemName: isRead ? "checkmark.circle.fill" : "checkmark.circle")
-            .font(.captionMedium)
-            .foregroundColor(isRead ? .green : .textTertiary)
-    }
-}
-
-struct TypingIndicator: View {
-    @State private var animationPhase = 0
-    
-    var body: some View {
-        HStack {
-            HStack(spacing: .spaceXS) {
-                ForEach(0..<3) { index in
-                    Circle()
-                        .fill(Color.textSecondary)
-                        .frame(width: 6, height: 6)
-                        .scaleEffect(animationPhase == index ? 1.2 : 1.0)
-                        .opacity(animationPhase == index ? 1.0 : 0.5)
-                }
-            }
-            .padding(.spaceMD)
-            .background(Color.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-            
-            Spacer()
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.6).repeatForever()) {
-                animationPhase = (animationPhase + 1) % 3
-            }
-        }
-    }
-}
-
-struct MessageInputBar: View {
-    @Binding var messageText: String
-    @Binding var showingCamera: Bool
-    let onSend: () -> Void
-    let onPhotoCapture: () -> Void
-    
-    private var canSend: Bool {
-        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.borderSubtle)
-                .frame(height: 1)
-            
-            HStack(spacing: .spaceMD) {
-                // Photo button
-                Button(action: onPhotoCapture) {
-                    Image(systemName: "camera.fill")
-                        .font(.title2)
-                        .foregroundColor(.primaryPurple)
-                }
-                
-                // Text input
-                TextField("Type a message...", text: $messageText, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...4)
-                    .onSubmit {
-                        if canSend {
-                            onSend()
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if unavailable { Text("This referenced record is unavailable.") }
+                    else if let detail {
+                        Text(detail.reference.label ?? "Feedback reference").font(.title2)
+                        if let routine = detail.routine {
+                            Text("\(routine.timeOfDay.capitalized) · Revision \(routine.version)").foregroundStyle(.secondary)
+                            ForEach(Array(routine.steps.enumerated()), id: \.offset) { _, step in VStack(alignment: .leading) { Text(step.title).font(.headline); Text(step.instructions) } }
                         }
-                    }
-                
-                // Send button
-                Button(action: onSend) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(canSend ? .primaryPurple : .textTertiary)
-                }
-                .disabled(!canSend)
+                        if let photo = detail.photo { Text(photo.captureDate).font(.caption); if let image { Image(uiImage: image).resizable().scaledToFit() } else { Text("Photo preview unavailable.") } }
+                    } else { SwiftUI.ProgressView() }
+                }.padding()
+            }.navigationTitle("Linked feedback").toolbar { Button("Done") { dismiss() } }
+            .task {
+                let api = APIService.shared
+                guard let ticket = api.access.snapshot(), let reference = message.reference else { unavailable = true; return }
+                do {
+                    let result = try await api.messageReference(pair: pair, id: message.id, ticket: ticket)
+                    try api.access.require(ticket); try Task.checkCancellation()
+                    guard result.reference.id == reference.id, result.reference.type == reference.type, result.reference.available else { unavailable = true; return }
+                    if reference.type == "routineRevision" { guard let routine = result.routine, routine.id == reference.id, routine.userId == pair.patientId else { unavailable = true; return } }
+                    else if reference.type == "photo" {
+                        guard result.photo?.id == reference.id else { unavailable = true; return }
+                        let bytes = try await api.messagePhotoThumbnail(id: reference.id, ticket: ticket)
+                        try api.access.require(ticket); try Task.checkCancellation(); image = UIImage(data: bytes)
+                    } else { unavailable = true; return }
+                    detail = result
+                } catch { unavailable = true }
             }
-            .padding(.cardPadding)
-            .background(Color.cardBackground)
         }
     }
-}
-
-#Preview {
-    let context = PersistenceController.preview.container.viewContext
-    
-    // Create sample dermatologist
-    let dermatologist = Dermatologist(context: context)
-    dermatologist.id = UUID()
-    dermatologist.name = "Dr. Amit Om"
-    dermatologist.title = "MD, Dermatologist"
-    dermatologist.isAvailable = true
-    
-    // Create sample messages
-    let message1 = Message(context: context)
-    message1.id = UUID()
-    message1.content = "Hi Dr. Om, I've been experiencing some irritation on my cheek area. Can you take a look?"
-    message1.sentDate = Date().addingTimeInterval(-3600)
-    message1.isRead = true
-    message1.messageType = "text"
-    
-    let message2 = Message(context: context)
-    message2.id = UUID()
-    message2.content = "Thank you for reaching out. I'd be happy to help. Can you share a photo of the affected area?"
-    message2.sentDate = Date().addingTimeInterval(-1800)
-    message2.isRead = true
-    message2.messageType = "response"
-    
-    return MessagingView(dermatologist: dermatologist)
-        .environment(\.managedObjectContext, context)
 }

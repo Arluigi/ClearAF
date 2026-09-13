@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const tables = ['care_template_revisions','care_form_revisions','care_form_responses','appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','photo_reviews','photo_cleanup','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles'];
+const tables = ['assigned_messages','care_template_revisions','care_form_revisions','care_form_responses','appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','photo_reviews','photo_cleanup','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles'];
 let phase = 'local target and backup validation';
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 function local(value, protocol) {

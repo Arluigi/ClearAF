@@ -171,6 +171,7 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
           </DialogHeader>
           {detailState.status === 'ready' ? (
             <>
+              <a className="underline" href={"/messages?patient="+encodeURIComponent(patientId)+"&referenceType=photo&referenceId="+encodeURIComponent(detailState.photo.id)}>Send feedback about this photo</a>
               <PrivatePhoto key={detailState.url} photo={detailState.photo} url={detailState.url} full />
               {detailState.photo.notes && <p className="whitespace-pre-wrap break-words">{detailState.photo.notes}</p>}
             </>

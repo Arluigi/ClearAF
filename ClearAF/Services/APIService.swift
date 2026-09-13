@@ -219,6 +219,7 @@ class APIService: ObservableObject {
     @MainActor lazy var reminders = ReminderRepository(access: access, scheduler: SystemReminderScheduler())
     @MainActor lazy var photos = PhotoRepository(access: access, transport: self)
     @MainActor lazy var photoReviews = PhotoReviewRepository(access: access, transport: self)
+    @MainActor lazy var messaging = MessagingRepository(access: access, transport: self)
     @MainActor lazy var checkIns = CheckInRepository(access: access, transport: self)
     @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
     private init() {}
@@ -290,6 +291,7 @@ class APIService: ObservableObject {
         photos.cancel()
         routines.cancel()
         checkIns.cancel()
+        messaging.cancel()
         photoReviews.cancel()
         access.invalidate()
         profileTask?.cancel()
@@ -465,13 +467,6 @@ extension APIService {
             responseType: AppointmentListResponse.self).map(\.appointments).eraseToAnyPublisher()
     }
 
-    func fetchMessages() -> AnyPublisher<[String], Error> {
-        // TODO: Implement when messages API is ready
-        return Just([])
-            .setFailureType(to: Error.self)
-            .eraseToAnyPublisher()
-    }
-
     func fetchProducts() -> AnyPublisher<[String], Error> {
         // TODO: Implement when products API is ready
         return Just([])
@@ -628,3 +623,48 @@ extension APIService: CheckInTransport {
 private struct CheckInFormEnvelope: Decodable { let form: CheckInForm? }
 private struct CheckInResponseEnvelope: Decodable { let response: CheckInResponse }
 private struct CheckInBody: Encodable { let formId: UUID; let submittedAt: String; let answers: [CheckInAnswer] }
+
+
+extension APIService: MessagingTransport {
+    @MainActor func currentMessages(ticket: AccountAccess.Ticket) async throws -> AssignedConversation? {
+        let response: CurrentMessageEnvelope = try await request(endpoint: "/assigned-messages/current", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard response.conversation == nil || response.conversation?.patientId == ticket.accountID else { throw AccountFailure.accountChanged }
+        return response.conversation
+    }
+    @MainActor func messagePage(pair: AssignedConversation, before: String?, ticket: AccountAccess.Ticket) async throws -> AssignedMessagePage {
+        let cursor = before.map { "&before=" + ($0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") } ?? ""
+        return try await request(endpoint: pair.path + "?limit=30" + cursor, method: "GET", body: Optional<String>.none, ticket: ticket)
+    }
+    @MainActor func putMessage(_ draft: MessageDraft, ticket: AccountAccess.Ticket) async throws -> AssignedMessage {
+        let response: SentMessageEnvelope = try await request(endpoint: draft.pair.path + "/messages/" + draft.id.uuidString.lowercased(), method: "PUT", body: PatientMessageBody(content: draft.content), ticket: ticket)
+        return response.message
+    }
+    @MainActor func readMessages(pair: AssignedConversation, ids: [UUID], ticket: AccountAccess.Ticket) async throws -> MessageReadResponse {
+        try await request(endpoint: pair.path + "/read", method: "POST", body: MessageReadBody(messageIds: ids), ticket: ticket)
+    }
+    @MainActor func messageReference(pair: AssignedConversation, id: UUID, ticket: AccountAccess.Ticket) async throws -> MessageReferenceDetail {
+        try await request(endpoint: pair.path + "/messages/" + id.uuidString.lowercased() + "/reference", method: "GET", body: Optional<String>.none, ticket: ticket)
+    }
+}
+private struct CurrentMessageEnvelope: Decodable { let conversation: AssignedConversation? }
+private struct SentMessageEnvelope: Decodable { let message: AssignedMessage }
+private struct MessageReadBody: Encodable { let messageIds: [UUID] }
+private struct PatientMessageBody: Encodable {
+    let content: String
+    enum CodingKeys: String, CodingKey { case content, reference }
+    func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(content, forKey: .content); try c.encodeNil(forKey: .reference) }
+}
+
+extension APIService {
+    @MainActor func messagePhotoThumbnail(id: UUID, ticket: AccountAccess.Ticket) async throws -> Data {
+        try access.require(ticket)
+        let auth = try await SupabaseService.shared.client.auth.session
+        try access.require(ticket)
+        guard auth.user.id == ticket.accountID, let url = URL(string: baseURL + "/photos/" + id.uuidString.lowercased() + "/thumbnail") else { throw AccountFailure.accountChanged }
+        var request = URLRequest(url: url); request.setValue("Bearer " + auth.accessToken, forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        try access.require(ticket)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200, data.count <= 10 * 1024 * 1024 else { throw URLError(.badServerResponse) }
+        return data
+    }
+}

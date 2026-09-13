@@ -46,6 +46,9 @@ struct ContentView: View {
                             Text("Routines")
                         }
                         .tag(2)
+                    MessagingView()
+                        .tabItem { Image(systemName: "message.fill"); Text("Messages") }
+                        .tag(3)
                 }
                 .tint(CareJournal.actionPrimary)
             }

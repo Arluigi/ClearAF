@@ -18,7 +18,7 @@ test('portal does not advertise unverified compliance', async () => {
   }
 });
 test('deferred portal routes redirect without rendering fake activity', async () => {
-  for (const route of ['dashboard', 'appointments', 'messages', 'prescriptions']) {
+  for (const route of ['dashboard', 'appointments', 'prescriptions']) {
     const source = await readFile(join('src/app', route, 'page.tsx'), 'utf8');
     assert.match(source, /redirect\(['"]\/patients['"]\)/, route);
     assert.doesNotMatch(source, /mock|appointment request|unreadCount|currentSkinScore/i, route);

@@ -13,6 +13,7 @@ datasource db {
 // Canonical SQL also owns RLS, grants, signup triggers/functions and migration metadata.
 // Prisma must not replace those platform objects.
 model User {
+  assignedMessages AssignedMessage[]
   id                    String         @id @db.Uuid
   name                  String?
   skinType              String?
@@ -44,6 +45,7 @@ model User {
 }
 
 model Dermatologist {
+  assignedMessages AssignedMessage[]
   id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name            String
   email           String         @unique
@@ -320,4 +322,24 @@ model CareFormResponse {
   @@index([userId, receivedAt, id])
   @@index([formId, userId])
   @@map("care_form_responses")
+}
+
+model AssignedMessage {
+ id String @id @db.Uuid
+ patientId String @db.Uuid
+ clinicianId String @db.Uuid
+ senderId String @db.Uuid
+ senderType String
+ recipientId String @db.Uuid
+ recipientType String
+ content String
+ sentAt DateTime @default(now()) @db.Timestamp(3)
+ readAt DateTime? @db.Timestamp(3)
+ origin String @default("native")
+ referenceType String?
+ referenceId String? @db.Uuid
+ patient User @relation(fields:[patientId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ clinician Dermatologist @relation(fields:[clinicianId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ @@index([patientId,clinicianId,sentAt(sort:Desc),id(sort:Desc)],map:"assigned_messages_pair_page_idx")
+ @@map("assigned_messages")
 }
