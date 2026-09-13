@@ -87,7 +87,16 @@
       "durationSeconds": 57.175,
       "log": "/private/tmp/clearaf-t4-device-isolation-test.log",
       "noCameraOrLibraryInteraction": true,
-      "fixtureCleanup": "hosted exact cleanup pending"
+      "fixtureCleanup": {
+        "status": "passed",
+        "hostedLog": "/private/tmp/clearaf-t4-device-isolation-cleanup-final.log",
+        "finalSourceCompiled": true,
+        "remainingOwnedDirectories": 0,
+        "unrelatedDirectoryNamesPreserved": true,
+        "serverExactAccountsRemoved": 2,
+        "serverAccountsRemaining": 0,
+        "simulatorExactExportRemoved": true
+      }
     }
   },
   "finalRegression": {
