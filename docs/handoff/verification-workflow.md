@@ -13,3 +13,5 @@ User feedback after T4: the four-hour verification cycle was unacceptable. Subse
 This is a workflow constraint, not permission to conceal defects or skip checks required for the changed behavior.
 
 - Finish each authorized release with a sanitized deployment/verification record and current handoff status committed and integrated into GitHub. Do not wait for the user to request routine documentation housekeeping. Keep demo credentials, account manifests, photos and signing artifacts private.
+
+- Simulator UI checks that exercise Keychain-backed authentication must retain normal Simulator code signing. An unsigned build can compile and launch while sign-in fails. Use actual Simulator appearance settings for dark-mode evidence; launch-argument labels alone do not prove the rendered theme.

@@ -35,7 +35,7 @@ struct ContentView: View {
                     
                     ProgressView()
                         .tabItem {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
+                            Image(systemName: "photo.on.rectangle")
                             Text("Photos")
                         }
                         .tag(1)
@@ -47,7 +47,7 @@ struct ContentView: View {
                         }
                         .tag(2)
                 }
-                .tint(.primaryPurple)
+                .tint(CareJournal.actionPrimary)
             }
         }
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)

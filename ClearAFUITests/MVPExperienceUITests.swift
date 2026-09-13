@@ -1,6 +1,37 @@
 import XCTest
 
 final class MVPExperienceUITests: XCTestCase {
+    @MainActor func testCareJournalAffectedScreens() throws {
+        let app = try signedIn(largestText: false)
+        defer { app.terminate() }
+        for (theme, size) in [("System", "UICTContentSizeCategoryL"),
+                              ("System", "UICTContentSizeCategoryAccessibilityXXXL")] {
+            app.terminate()
+            app.launchArguments = ["-UIPreferredContentSizeCategoryName", size]
+            app.launch()
+            XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+            for screen in ["Today", "Photos", "Routines"] {
+                try tapTab(screen, in: app)
+                if screen == "Photos" && size == "UICTContentSizeCategoryL" {
+                    XCTAssertTrue(app.segmentedControls.buttons["List"].waitForExistence(timeout: 5))
+                    app.segmentedControls.buttons["List"].tap()
+                    XCTAssertTrue(app.segmentedControls.buttons["List"].isSelected)
+                    app.segmentedControls.buttons["Grid"].tap()
+                }
+                if screen == "Routines" && size == "UICTContentSizeCategoryL" {
+                    XCTAssertTrue(app.segmentedControls.buttons["Evening"].waitForExistence(timeout: 5))
+                    app.segmentedControls.buttons["Evening"].tap()
+                    XCTAssertTrue(app.segmentedControls.buttons["Evening"].isSelected)
+                    app.segmentedControls.buttons["Morning"].tap()
+                }
+                let shot = XCTAttachment(screenshot: app.screenshot())
+                shot.name = "CareJournal-\(screen)-\(theme)-\(size)"
+                shot.lifetime = .keepAlways
+                add(shot)
+            }
+        }
+    }
+
     /// Run in the signed UI runner on hardware; reports only endpoint labels/status/error codes.
     /// Uses no credentials and never follows a redirect to a different origin.
     func testPhysicalLocalConnectivity() async throws {

@@ -402,3 +402,46 @@ extension Animation {
     static let quick = Animation.easeInOut(duration: 0.15)
     static let smooth = Animation.easeOut(duration: 0.5)
 }
+
+// Care Journal content roles. Native navigation and controls retain system materials.
+enum CareJournal {
+    private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
+        Color(UIColor { traits in
+            let hex = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: CGFloat((hex >> 16) & 255) / 255,
+                           green: CGFloat((hex >> 8) & 255) / 255,
+                           blue: CGFloat(hex & 255) / 255, alpha: 1)
+        })
+    }
+    static let canvas = adaptive(0xF4F6F8, 0x18232D)
+    static let surface = adaptive(0xFFFFFF, 0x202D39)
+    static let textPrimary = adaptive(0x213B50, 0xE7EFF6)
+    static let textSecondary = adaptive(0x536779, 0xAEC0CF)
+    static let actionPrimary = adaptive(0x265579, 0xB0D5F2)
+    static let onPrimary = adaptive(0xFFFFFF, 0x172C3D)
+    static let accentSubtle = adaptive(0xE3EDF5, 0x2B4356)
+    static let separator = adaptive(0xC8D4DF, 0x435564)
+    static let display = Font.system(.largeTitle, design: .serif)
+}
+
+extension View {
+    func careJournalSurface() -> some View {
+        self.padding(20).background(CareJournal.surface, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// Equivalent local choices share native control behavior and large-text adaptation.
+struct CareJournalPicker<Selection: Hashable, Options: View>: View {
+    let title: String
+    @Binding var selection: Selection
+    @ViewBuilder let options: () -> Options
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            Picker(title, selection: $selection, content: options).pickerStyle(.menu)
+                .frame(minHeight: 44)
+        } else {
+            Picker(title, selection: $selection, content: options).pickerStyle(.segmented)
+        }
+    }
+}

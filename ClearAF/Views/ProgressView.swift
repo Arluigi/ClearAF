@@ -15,7 +15,10 @@ struct ProgressView: View {
                 VStack(spacing: .spaceLG) {
                     Text("\(store.total) photos").font(.captionLarge)
                         .accessibilityIdentifier("photoCount")
-                    EnhancedSegmentedControl(selection: $selectedViewMode, options: ["Grid", "List"])
+                    CareJournalPicker(title: "Photo layout", selection: $selectedViewMode) {
+                        Text("Grid").tag(0)
+                        Text("List").tag(1)
+                    }
                     if store.loading { SwiftUI.ProgressView("Loading photos") }
                     if let error = store.error {
                         Text(error)
@@ -27,20 +30,17 @@ struct ProgressView: View {
                     } else {
                         EnhancedPhotoListView(photos: store.photos, images: store.images)
                     }
-                }.padding()
+                    if dynamicTypeSize.isAccessibilitySize { photoActions }
+                }.padding(20)
             }
-            .background(Color.backgroundSecondary.ignoresSafeArea())
+            .foregroundStyle(CareJournal.textPrimary)
+            .tint(CareJournal.actionPrimary)
+            .background(CareJournal.canvas.ignoresSafeArea())
             .navigationTitle("Photos")
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    pagination
-                    Button { showingCamera = true } label: {
-                    Label("Add photo", systemImage: "camera.fill")
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    photoActions.padding(20).background(CareJournal.canvas)
                 }
-                .buttonStyle(.borderedProminent).tint(.primaryActionPurple)
-                    .accessibilityLabel("Capture photo")
-                }.padding().background(Color.backgroundSecondary)
             }
             .refreshable { store.refresh() }
             .sheet(isPresented: $showingCamera, onDismiss: { store.refresh() }) { DurablePhotoCaptureView() }
@@ -48,15 +48,28 @@ struct ProgressView: View {
             .onDisappear { store.dispose() }
         }
     }
+    private var photoActions: some View {
+        VStack(spacing: 12) {
+            pagination
+            Button { showingCamera = true } label: {
+                Label("Take a photo", systemImage: "camera")
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent).tint(CareJournal.actionPrimary)
+            .foregroundStyle(CareJournal.onPrimary)
+            .accessibilityLabel("Capture photo")
+        }
+    }
+
     private var pagination: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: .spaceMD))
             : AnyLayout(HStackLayout(spacing: .spaceMD))
         return layout {
-            Button { store.previous() } label: { Text("Previous").foregroundStyle(Color.textPrimary) }
+            Button { store.previous() } label: { Text("Previous").foregroundStyle(CareJournal.textPrimary) }
                 .frame(maxWidth: .infinity).disabled(!store.hasPrevious)
             Text("Page \(store.page + 1)").font(.caption)
-            Button { store.next() } label: { Text("Next").foregroundStyle(Color.textPrimary) }
+            Button { store.next() } label: { Text("Next").foregroundStyle(CareJournal.textPrimary) }
                 .frame(maxWidth: .infinity).disabled(!store.hasNext)
         }
         .buttonStyle(.bordered)
@@ -67,102 +80,17 @@ struct ProgressView: View {
 
 // MARK: - Enhanced Progress Components
 
-struct EnhancedSegmentedControl: View {
-    @Binding var selection: Int
-    let options: [String]
-    @Namespace private var namespace
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<options.count, id: \.self) { index in
-                Button(action: {
-                    withAnimation(.bouncy) {
-                        selection = index
-                        HapticManager.selection()
-                    }
-                }) {
-                    Text(options[index])
-                        .font(.bodyLarge)
-                        .fontWeight(.medium)
-                        .foregroundColor(selection == index ? .white : .textSecondary)
-                        .padding(.horizontal, .spaceXL)
-                        .padding(.vertical, .spaceMD)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            Group {
-                                if selection == index {
-                                    RoundedRectangle(cornerRadius: .radiusLarge)
-                                        .fill(Color.primaryGradient)
-                                        .matchedGeometryEffect(id: "selectedSegment", in: namespace)
-                                }
-                            }
-                        )
-                }
-                .accessibilityAddTraits(selection == index ? .isSelected : [])
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: .radiusLarge)
-                .fill(Color.backgroundSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: .radiusLarge)
-                        .stroke(Color.borderSubtle, lineWidth: 1)
-                )
-                .softShadow()
-        )
-    }
-}
-
 struct EnhancedEmptyProgressView: View {
     var body: some View {
-        VStack(spacing: .spaceXXL) {
-            Spacer()
-            
-            VStack(spacing: .spaceLG) {
-                // Consistent icon with Dashboard design
-                ZStack {
-                    Circle()
-                        .fill(Color.primaryPurple.opacity(0.2))
-                        .frame(width: 120, height: 120)
-                    
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.primaryPurple)
-                }
-                
-                VStack(spacing: .spaceMD) {
-                    Text("No photos yet")
-                        .font(.headlineLarge)
-                        .foregroundColor(.textPrimary)
-                        .fontWeight(.semibold)
-                    
-                    Text("Start tracking your progress with consistent photos")
-                        .font(.bodyLarge)
-                        .foregroundColor(.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, .spaceXL)
-                }
-            }
-            
-            // Photo tips section
-            VStack(spacing: .spaceMD) {
-                Text("📸 Tips for best results")
-                    .font(.headlineSmall)
-                    .foregroundColor(.textPrimary)
-                    .fontWeight(.medium)
-                
-                VStack(spacing: .spaceXS) {
-                    ProgressPhotoTip(icon: "lightbulb.fill", text: "Take photos in consistent lighting")
-                    ProgressPhotoTip(icon: "clock.fill", text: "Same time each day for accuracy")
-                    ProgressPhotoTip(icon: "face.smiling", text: "Use front camera for face tracking")
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .wellnessCard(style: .flat)
-            .padding(.horizontal, .spaceXL)
-            
-            Spacer()
+        VStack(alignment: .leading, spacing: 12) {
+            Text("No photos yet").font(.title2).foregroundStyle(CareJournal.textPrimary)
+            Text("Take a photo to start your care record. Photos stay on this device until you share them.")
+                .foregroundStyle(CareJournal.textSecondary)
+            Text("Use consistent lighting when possible.")
+                .font(.footnote).foregroundStyle(CareJournal.textSecondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 24)
     }
 }
 
@@ -175,12 +103,12 @@ struct ProgressPhotoTip: View {
         HStack(spacing: .spaceMD) {
             Image(systemName: icon)
                 .font(.captionLarge)
-                .foregroundColor(.primaryPurple)
+                .foregroundColor(CareJournal.actionPrimary)
                 .frame(width: 20)
             
             Text(text)
                 .font(.bodyMedium)
-                .foregroundColor(.textSecondary)
+                .foregroundColor(CareJournal.textSecondary)
             
             Spacer()
         }
@@ -264,7 +192,7 @@ struct EnhancedPhotoListItem: View {
             }
             Spacer()
         }
-        .wellnessCard(style: .elevated)
+        .careJournalSurface()
         .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo, images: images) }
     }
 }
@@ -368,7 +296,7 @@ struct PhotoDetailView: View {
                     PhotoSharingStatusView(photo: photo)
                     if photo.uploadState == "shared" { Text("Shared with your care team. This does not indicate clinician review.").font(.caption) }
                     if let notes = photo.notes, !notes.isEmpty { Text(notes) }
-                    Text("Photo removal is not available yet.").font(.caption).foregroundColor(.textSecondary)
+                    Text("Photo removal is not available yet.").font(.caption).foregroundColor(CareJournal.textSecondary)
                 }.padding()
             }
             .navigationTitle("Photo Details")

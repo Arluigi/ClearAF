@@ -4,6 +4,8 @@ September 13 update: PRs #1–5 are merged; T0–T4 are complete with the docume
 
 Prepared September 11, 2026. T2 implementation and verification are recorded in the [account reliability report](../accounts/README.md). No T2 production deployment occurred. See the [T2 plan](../superpowers/plans/2026-09-10-account-reliability.md), [baseline and recovery procedure](../baseline/README.md), and [security notes](../security/README.md).
 
+Design update: the first [Care Journal iPhone pass](../design/ios-care-journal.md) applies the [approved design language](../design/design-language.md) to Today, Photos and Routines. Portal migration and refreshing the physical demo installation are still separate follow-ups.
+
 ## Preserve the old laptop first
 
 The original `/Users/aryansachdev/code/ClearAF` checkout has user work and private documents that are not represented by a fresh Git clone. Preserve them in an encrypted, access-controlled backup before replacing or wiping the laptop. A Git bundle or pushed branch does not preserve untracked/ignored files or uncommitted edits. Keep private documents out of GitHub and deployment uploads. Do not reset, clean, stash indiscriminately, delete worktrees, or copy production secrets into development configuration.
