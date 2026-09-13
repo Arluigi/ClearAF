@@ -287,6 +287,9 @@ struct ProgressInsight: View {
     }
 }
 
+// The prominent Today action uses the same white-on-action pairing as Photos and Capture.
+enum TodayPhotoActionAppearance { static let tint: Color = .primaryActionPurple }
+
 // Photo Display Section Component
 struct PhotoDisplaySection: View {
     let todayPhoto: SkinPhoto?
@@ -302,9 +305,11 @@ struct PhotoDisplaySection: View {
             }
             Button { showingCamera = true } label: {
                 Label(todayPhoto == nil ? "Take a photo" : "Take another photo", systemImage: "camera")
+                    .foregroundStyle(.white)
             }
             .accessibilityLabel("Take daily progress photo")
             .buttonStyle(.borderedProminent)
+            .tint(TodayPhotoActionAppearance.tint)
         }
         .frame(maxWidth: .infinity)
     }

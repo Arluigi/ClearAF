@@ -23,5 +23,7 @@ export class PatientListController {
   search(search: string) { this.publish({ ...this.state, search, page: 1 }); return this.load(1); }
   goToPage(page: number) { return this.load(page); }
   retry() { return this.load(); }
+  // Effect cleanup retires its request; subscription cleanup owns listener removal.
+  cancelPending() { this.request += 1; }
   dispose() { this.disposed = true; this.request += 1; this.listeners.clear(); }
 }

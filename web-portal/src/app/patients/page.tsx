@@ -20,7 +20,7 @@ export default function PatientsPage() {
   const api = useClinicalAPI();
   const controller = useMemo(() => new PatientListController((page, search) => api.getPatients(page, 20, search)), [api]);
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
-  useEffect(() => { void controller.load(1); return () => controller.dispose(); }, [controller]);
+  useEffect(() => { void controller.load(1); return () => controller.cancelPending(); }, [controller]);
   return <DashboardLayout title="Assigned patients"><div className="space-y-6 p-4 sm:p-6"><div><h2 className="text-3xl font-bold tracking-tight">Assigned patients</h2><p className="text-muted-foreground">Review routines and photos shared by patients assigned to you.</p></div>
     <Card><CardHeader><CardTitle>Patient list</CardTitle><CardDescription>{state.total} assigned {state.total === 1 ? 'patient' : 'patients'}</CardDescription></CardHeader><CardContent className="space-y-4">
       <div className="relative max-w-xl"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search assigned patients by name" placeholder="Search by patient name" value={state.search} onChange={event => void controller.search(event.target.value)} className="pl-9" /></div>

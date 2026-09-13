@@ -64,3 +64,24 @@ test('changing search resets the requested page to one', async () => {
   assert.deepEqual(calls, [[3, ''], [1, 'Ada']]);
   assert.equal(controller.snapshot().page, 1);
 });
+
+test('effect cleanup/setup replay publishes fresh results and suppresses the retired request', async () => {
+  const old = deferred<PaginatedResponse<User>>();
+  const fresh = deferred<PaginatedResponse<User>>();
+  let calls = 0;
+  const controller = new PatientListController(() => ++calls === 1 ? old.promise : fresh.promise);
+  const first = controller.load(1);
+  controller.cancelPending();
+  let publications = 0;
+  const unsubscribe = controller.subscribe(() => { publications += 1; });
+  const replay = controller.load(1);
+  fresh.resolve(response([patient('fresh')]));
+  await replay;
+  old.resolve(response([patient('retired')]));
+  await first;
+  assert.equal(controller.snapshot().status, 'ready');
+  assert.deepEqual(controller.snapshot().patients.map(p => p.id), ['fresh']);
+  assert.equal(publications, 2);
+  unsubscribe();
+  controller.dispose();
+});

@@ -11,6 +11,13 @@ struct AccountProfileTests {
         #expect(AccountName.canSubmit("  Valid Patient  ", isSaving: false))
     }
 
+    @Test func actualTodayPhotoActionMeetsWhiteTextContrastInBothAppearances() {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let fill = UIColor(TodayPhotoActionAppearance.tint).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+            #expect(contrast(.white, fill) >= 4.5)
+        }
+    }
+
     @Test func actualRoutineRecordActionMeetsWhiteTextContrastInBothAppearances() {
         for style in [UIUserInterfaceStyle.light, .dark] {
             let traits = UITraitCollection(userInterfaceStyle: style)
