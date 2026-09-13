@@ -118,3 +118,5 @@ xcodebuild -project ClearAF.xcodeproj -scheme ClearAF -configuration Debug \
 Use an installed device name on the new machine. The UI suite requires the local API and Supabase/Mailpit to be running. Local ad-hoc signing does not require distribution credentials or authorize an App Store upload.
 
 T4 integrated MVP evidence, commands and remaining gates: [MVP verification](../mvp/README.md).
+
+Verification pacing and scope after T4: [working agreement](verification-workflow.md).

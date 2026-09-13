@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": "T4",
-  "status": "verification_stopped_at_user_request",
+  "status": "complete_with_documented_limits",
   "productionAccess": false,
   "measuredAt": "2026-09-13",
   "serverVolume": {
@@ -50,7 +50,7 @@
     "source": "parent task-6-cua-check.md"
   },
   "physicalDevice": {
-    "status": "partial",
+    "status": "passed",
     "method": "Actual iPhone, prior automated permission/cancel probes plus user manual neutral-photo selection/camera/retry after Debug fix",
     "passed": [
       "hosted local API/Auth200",
@@ -100,7 +100,7 @@
     }
   },
   "finalRegression": {
-    "status": "partial",
+    "status": "passed_with_documented_raw_audit_findings",
     "backend": {
       "tests": 134,
       "failed": 0,
@@ -125,9 +125,11 @@
     "ios": "55 Swift Testing tests/provider XCTest passed; one opt-in diagnostic skipped; same-device account switch/Profile edit/PKCE recovery UI passed104.845s; raw audits failed as explicitly recorded"
   },
   "independentWholeBranchReview": {
-    "status": "interrupted_at_user_request",
-    "reviewedThrough": "db7eaa6",
-    "knownUnresolvedFinding": "Today photo action inherits a dark-mode tint with insufficient contrast; reviewer identified this before interruption. Not fixed or retested."
+    "status": "approved_after_fixes",
+    "base": "aa4b26f",
+    "reviewedHead": "c7ae5b6",
+    "evidence": "code-review.md",
+    "unresolvedImportantOrCritical": 0
   },
   "cleanup": {
     "status": "passed_with_documented_device_scope_caveat",
@@ -169,5 +171,14 @@
     "commits": 23,
     "leaks": 0,
     "log": "/private/tmp/clearaf-t4-secret-scan.log"
+  },
+  "finalFocusedFixes": {
+    "commit": "c7ae5b6",
+    "todayContrast": "actual action tint light/dark focused test passed",
+    "patientListLifecycle": "5 focused tests passed; setup/cleanup replay and stale result suppression",
+    "logs": [
+      "/private/tmp/clearaf-t4-final-today-executed.log",
+      "/private/tmp/clearaf-t4-final-list-green.log"
+    ]
   }
 }
