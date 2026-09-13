@@ -76,3 +76,43 @@ test('TTL and LRU byte budget evict cached bytes', async () => {
   await f.service.get('c', actor); await f.service.get('b', actor); assert.equal(f.downloads(), 4);
   now = 61; await f.service.get('b', actor); assert.equal(f.downloads(), 5);
 });
+test('timed-out signing retains capacity until the real upstream HTTP operations settle', async () => {
+  const { createServer } = await import('node:http');
+  const responses: import('node:http').ServerResponse[] = [];
+  let outstanding = 0;
+  let maximum = 0;
+  const server = createServer((_req, res) => {
+    outstanding++;
+    maximum = Math.max(maximum, outstanding);
+    responses.push(res);
+    res.on('finish', () => { outstanding--; });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address() as import('node:net').AddressInfo;
+  let settled = 0;
+  let resolveSettled!: () => void;
+  const signersSettled = new Promise<void>(resolve => { resolveSettled = resolve; });
+  const f = fixture({ timeoutMs: 30 }, { sign: async () => {
+    const response = await fetch(`http://127.0.0.1:${address.port}/synthetic-signing`);
+    await response.text();
+    if (++settled === 2) resolveSettled();
+    return 'https://security-test.supabase.co/trusted';
+  } });
+  try {
+    await Promise.all([1, 2].map(id => assert.rejects(f.service.get(String(id), actor), { status: 504 })));
+    assert.equal(outstanding, 2);
+    await Promise.all([3, 4].map(id => assert.rejects(f.service.get(String(id), actor), { status: 503 })));
+    assert.equal(maximum, 2);
+    responses.forEach(response => response.end('signed'));
+    await signersSettled;
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(outstanding, 0);
+    assert.equal(f.downloads(), 0); // Timed-out jobs cannot continue to fetch or cache bytes.
+    f.deps.sign = async () => 'https://security-test.supabase.co/trusted';
+    assert.ok((await f.service.get('recovered', actor)).length > 0);
+  } finally {
+    responses.forEach(response => { if (!response.writableEnded) response.end('cleanup'); });
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});

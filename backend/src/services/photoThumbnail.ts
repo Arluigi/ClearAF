@@ -76,25 +76,41 @@ export class PhotoThumbnailService {
     }
     if (this.active >= this.limits.jobs) throw new ThumbnailError(503, 'Photos are busy. Please retry.');
     this.active++;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    // The response deadline must not retire actual upstream work. In particular,
+    // the Storage SDK's signing request has no per-call AbortSignal support.
+    // A timed-out signer keeps its slot until it settles; further misses fail fast.
+    const job = this.generate(path, abort.signal).finally(() => { this.active--; });
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new ThumbnailError(504, 'Photo download timed out. Please retry.'));
+        abort.abort();
+      }, this.limits.timeoutMs);
+    });
+    try { return await Promise.race([job, timeout]); }
+    finally { clearTimeout(timer!); abort.abort(); }
+  }
+
+  private async generate(path: string, signal: AbortSignal): Promise<Buffer> {
+    const input = await this.download(path, signal);
+    let bytes: Buffer;
     try {
-      const input = await this.download(path);
-      let bytes: Buffer;
-      try {
-        const image = sharp(input, { limitInputPixels: this.limits.pixels, failOn: 'warning' });
-        const info = await image.metadata();
-        if (!['jpeg', 'png', 'webp', 'heif'].includes(info.format ?? '')) throw new Error('Unsupported photo');
-        // Defaults strip all metadata. Rotation respects orientation before removal.
-        bytes = await image.rotate().resize(400, 400, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 80 }).timeout({ seconds: 15 }).toBuffer();
-      } catch { throw new ThumbnailError(422, 'Photo cannot be processed.'); }
-      if (bytes.length <= this.limits.cacheBytes) {
-        this.remove(path);
-        while (this.cacheSize + bytes.length > this.limits.cacheBytes) this.remove(this.cache.keys().next().value!);
-        this.cache.set(path, { bytes, expires: this.now() + this.limits.ttlMs });
-        this.cacheSize += bytes.length;
-      }
-      return bytes;
-    } finally { this.active--; }
+      const image = sharp(input, { limitInputPixels: this.limits.pixels, failOn: 'warning' });
+      const info = await image.metadata();
+      if (!['jpeg', 'png', 'webp', 'heif'].includes(info.format ?? '')) throw new Error('Unsupported photo');
+      // Defaults strip all metadata. Rotation respects orientation before removal.
+      bytes = await image.rotate().resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 80 }).timeout({ seconds: 15 }).toBuffer();
+    } catch { throw new ThumbnailError(422, 'Photo cannot be processed.'); }
+    signal.throwIfAborted();
+    if (bytes.length <= this.limits.cacheBytes) {
+      this.remove(path);
+      while (this.cacheSize + bytes.length > this.limits.cacheBytes) this.remove(this.cache.keys().next().value!);
+      this.cache.set(path, { bytes, expires: this.now() + this.limits.ttlMs });
+      this.cacheSize += bytes.length;
+    }
+    return bytes;
   }
 
   private remove(path: string) {
@@ -102,53 +118,43 @@ export class PhotoThumbnailService {
     if (value) { this.cacheSize -= value.bytes.length; this.cache.delete(path); }
   }
 
-  private async download(path: string): Promise<Buffer> {
-    const abort = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    const timeout = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => {
-        reject(new ThumbnailError(504, 'Photo download timed out. Please retry.'));
-        abort.abort();
-      }, this.limits.timeoutMs);
-    });
+  private async download(path: string, signal: AbortSignal): Promise<Buffer> {
     try {
-      return await Promise.race([timeout, (async () => {
-        const url = await this.deps.sign(path);
-        abort.signal.throwIfAborted();
-        // The signer only receives a validated owned path; redirects cannot widen that trust.
-        const response = await this.deps.fetch(url, { signal: abort.signal, redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer' });
-        if (!response.ok || !response.body) {
-          await response.body?.cancel();
-          throw new ThumbnailError(502, 'Unable to load photo. Please retry.');
+      const url = await this.deps.sign(path);
+      signal.throwIfAborted();
+      // The signer only receives a validated owned path; redirects cannot widen that trust.
+      const response = await this.deps.fetch(url, { signal, redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer' });
+      if (!response.ok || !response.body) {
+        await response.body?.cancel();
+        throw new ThumbnailError(502, 'Unable to load photo. Please retry.');
+      }
+      const reader = response.body.getReader();
+      let size = 0;
+      const chunks: Buffer[] = [];
+      const cancel = () => { void reader.cancel().catch(() => {}); };
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        if (Number(response.headers.get('content-length')) > this.limits.inputBytes) throw new ThumbnailError(422, 'Photo exceeds the size limit.');
+        while (true) {
+          signal.throwIfAborted();
+          const part = await reader.read();
+          if (part.done) break;
+          size += part.value.byteLength;
+          if (size > this.limits.inputBytes) throw new ThumbnailError(422, 'Photo exceeds the size limit.');
+          chunks.push(Buffer.from(part.value));
         }
-        const reader = response.body.getReader();
-        let size = 0;
-        const chunks: Buffer[] = [];
-        const cancel = () => { void reader.cancel().catch(() => {}); };
-        abort.signal.addEventListener('abort', cancel, { once: true });
-        try {
-          if (Number(response.headers.get('content-length')) > this.limits.inputBytes) throw new ThumbnailError(422, 'Photo exceeds the size limit.');
-          while (true) {
-            abort.signal.throwIfAborted();
-            const part = await reader.read();
-            if (part.done) break;
-            size += part.value.byteLength;
-            if (size > this.limits.inputBytes) throw new ThumbnailError(422, 'Photo exceeds the size limit.');
-            chunks.push(Buffer.from(part.value));
-          }
-          abort.signal.throwIfAborted();
-          if (!size) throw new ThumbnailError(422, 'Photo is empty.');
-          return Buffer.concat(chunks, size);
-        } finally {
-          abort.signal.removeEventListener('abort', cancel);
-          await reader.cancel().catch(() => {});
-          reader.releaseLock();
-        }
-      })()]);
+        signal.throwIfAborted();
+        if (!size) throw new ThumbnailError(422, 'Photo is empty.');
+        return Buffer.concat(chunks, size);
+      } finally {
+        signal.removeEventListener('abort', cancel);
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
+      }
     } catch (error) {
       if (error instanceof ThumbnailError) throw error;
       throw new ThumbnailError(502, 'Unable to load photo. Please retry.');
-    } finally { clearTimeout(timer!); abort.abort(); }
+    }
   }
 }
 

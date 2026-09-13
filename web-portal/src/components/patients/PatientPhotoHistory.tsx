@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useClinicalAPI } from '@/lib/auth';
 import { sessionBoundary } from '@/lib/api';
-import { PhotoHistoryController } from '@/lib/photo-history';
+import { PhotoHistoryController, photoDetailState, type PhotoOriginalState } from '@/lib/photo-history';
 import { PrivateThumbnailController, type ThumbnailState } from '@/lib/private-thumbnail';
 import type { PhotoSummary } from '@/types/api';
 
@@ -39,9 +39,10 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
   const previews = useSyncExternalStore(thumbnails.subscribe, thumbnails.snapshot, thumbnails.snapshot);
   const [selected, setSelected] = useState<string | null>(null);
-  const [detail, setDetail] = useState<{ id: string; url?: string; error?: boolean } | null>(null);
+  const [detail, setDetail] = useState<PhotoOriginalState | null>(null);
   const [detailRevision, setDetailRevision] = useState(0);
   const selectedPhoto = state.photos.find(photo => photo.id === selected);
+  const detailState = photoDetailState(state, selected, detail);
 
   useEffect(() => {
     void controller.load(1);
@@ -113,14 +114,12 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
             <DialogTitle>Patient photo</DialogTitle>
             <DialogDescription>{selectedPhoto ? captureDate(selectedPhoto) : 'Reloading private photo access'}</DialogDescription>
           </DialogHeader>
-          {selectedPhoto && detail?.id === selected && detail.url ? (
+          {detailState.status === 'ready' ? (
             <>
-              <PrivatePhoto key={detail.url} photo={selectedPhoto} url={detail.url} full />
-              {selectedPhoto.notes && <p className="whitespace-pre-wrap break-words">{selectedPhoto.notes}</p>}
+              <PrivatePhoto key={detailState.url} photo={detailState.photo} url={detailState.url} full />
+              {detailState.photo.notes && <p className="whitespace-pre-wrap break-words">{detailState.photo.notes}</p>}
             </>
-          ) : detail?.id === selected && detail.error ? (
-            <p role="alert">Photo could not be loaded. Use Refresh images to retry.</p>
-          ) : <p role="status">Loading photo…</p>}
+          ) : <p role={detailState.status === 'error' ? 'alert' : 'status'}>{detailState.message}</p>}
           <Button variant="outline" disabled={state.status === 'loading'} onClick={refresh}>Refresh images</Button>
         </DialogContent>
       </Dialog>
