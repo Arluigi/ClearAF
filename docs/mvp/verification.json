@@ -117,7 +117,7 @@
     "ui": "two current accounts exact cleanup passed",
     "simulator": "five initial plus one recreated routine directory exact removed;12unrelated preserved",
     "physical": "two exact rows/objects removed; full Debug data container reset caveat recorded",
-    "routineAndRecovery": "routine exact cleanup passed; recovery running separately",
+    "routineAndRecovery": "routine exact cleanup passed; recovery passed and post-recovery accounts/photos/objects all zero",
     "serverFinalCounts": {
       "accounts": 0,
       "photos": 0,
@@ -135,5 +135,21 @@
       "support ownership",
       "pilot readiness"
     ]
+  },
+  "recovery": {
+    "passed": true,
+    "verifiedAt": "2026-09-13T05:22:26.255Z",
+    "elapsedSeconds": 37,
+    "freshDestination": true,
+    "liveChecksAfterRestore": 28,
+    "scope": "Synthetic local database, auth identities and storage bytes; no production patient data",
+    "log": "/private/tmp/clearaf-t4-final-recovery.log"
+  },
+  "secretScan": {
+    "base": "aa4b26f",
+    "head": "f070f65",
+    "commits": 23,
+    "leaks": 0,
+    "log": "/private/tmp/clearaf-t4-secret-scan.log"
   }
 }
