@@ -12,6 +12,20 @@ Verified on Node 24.4.0, npm lockfiles, Xcode 26.6 and iOS 26.5 Simulator. Supab
 
 Debug uses the distinct `com.aryansachdev.ClearAF.dev` app and local endpoints. The generated local anon key is required; there is no production fallback. Release uses production HTTPS endpoints, a production public anon key, and the original app ID. Neither client contains service-role credentials. Do not copy production `.env` files into the local checkout. The configuration generator refuses to overwrite an existing nonlocal backend configuration.
 
+## Physical iPhone Debug connection
+
+Keep the standard API on 3001 for Simulator and portal tests. With local setup complete and the phone on the same trusted network as this Mac, start a second API from the repository root:
+
+```sh
+node scripts/device-local.cjs Aryans-MacBook-Pro.local
+```
+
+The script verifies that the single Bonjour hostname resolves only to this Mac, checks the existing loopback development database/API configuration, and overrides only the child API's `PORT=3002` and `SUPABASE_URL=http://Aryans-MacBook-Pro.local:54321`. It retains the local keys in memory, never writes credentials or edits `.env`, and forwards termination to its child. Stop it with Ctrl-C when testing ends. Local Supabase remains on 54321; allow the Debug app's local network permission on the phone.
+
+Build **Debug** with `CLEARAF_LOCAL_DEVICE_HOST=Aryans-MacBook-Pro.local` as an Xcode build setting (or in ignored `ClearAF/Config/Local.generated.xcconfig`). An empty value preserves Simulator loopback. For example, append that setting to the existing `xcodebuild -configuration Debug -destination 'id=<device-udid>'` command. The strict single-label `.local` grammar rejects URLs, ports, public domains, subdomains and malformed labels. Release ignores this setting and contains no local-network usage description. Do not launch Release for local acceptance. Regenerating local configuration resets the optional host; the generated anon key remains required.
+
+Physical acceptance must separately record camera allow/deny/Settings recovery, system photo picker selection/cancel, local-network permission and authenticated sharing. Simulator camera-unavailable checks do not establish physical camera acceptance. The account signup UI test's Mailpit loopback helper runs only in Simulator; use a preconfirmed synthetic fixture for a physical device.
+
 ## Database changes
 
 Supabase migrations are the only active migration chain. `supabase/migrations/20260910183704_application_baseline.sql` represents the verified application schema and security boundary. `supabase/baseline.json` binds the reviewed file, ledger statements and schema fingerprint. The destructive old Prisma chain is archived under `supabase/legacy-migrations` and must never be replayed.

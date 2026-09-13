@@ -115,6 +115,51 @@ export interface Photo {
   relatedAppointment?: Appointment;
 }
 
+export type RoutineTimeOfDay = 'morning' | 'evening';
+
+export interface RoutineStep {
+  title: string;
+  instructions: string;
+}
+
+export interface RoutineRevision {
+  id: string;
+  userId: string;
+  timeOfDay: RoutineTimeOfDay;
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  name: string;
+  isActive: boolean;
+  steps: RoutineStep[];
+}
+
+export interface RoutineCompletion {
+  id: string;
+  userId: string;
+  revisionId: string;
+  completedAt: string;
+  localDate: string;
+  timeZone: string;
+  receivedAt: string;
+}
+
+export interface RoutineSnapshot {
+  routines: RoutineRevision[];
+  completions: RoutineCompletion[];
+}
+
+export interface RoutineCompletionRecord extends RoutineCompletion {
+  routine: RoutineRevision;
+}
+
+export interface SaveRoutineRevisionInput {
+  expectedRevisionId: string | null;
+  name: string;
+  isActive: boolean;
+  steps: RoutineStep[];
+}
+
 // API Request/Response Types
 export interface LoginRequest {
   email: string;
@@ -146,10 +191,21 @@ export interface RegisterResponse {
   userType: string;
 }
 
-export interface APIError {
+export interface APIErrorPayload {
   error: string;
   code?: string;
   details?: ValidationError[];
+}
+
+export class APIError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'APIError';
+  }
 }
 
 export interface ValidationError {
@@ -182,6 +238,9 @@ export interface PaginatedResponse<T> {
 export interface APIResponse<T> {
   success: boolean;
   data?: T;
-  error?: APIError;
+  error?: APIErrorPayload;
   message?: string;
 }
+
+// Summary grids never receive an original Storage URL.
+export type PhotoSummary = Omit<Photo, 'photoUrl'>;

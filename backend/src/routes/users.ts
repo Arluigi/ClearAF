@@ -1,7 +1,7 @@
 import express from 'express';
-import { privatePhotos } from '../services/photoAccess';
 import { z } from 'zod';
 import { prisma } from '../config/database';
+import { parsePagination, parsePatientSearch } from '../services/pagination';
 
 const router = express.Router();
 
@@ -15,8 +15,8 @@ const updateProfileSchema = z.object({
   currentMedications: z.string().optional(),
   onboardingCompleted: z.boolean().optional()
 }).strict().superRefine((value, context) => {
-  if (value.onboardingCompleted === true && (!value.name || !value.skinType)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Name and skin type are required to finish onboarding' });
+  if (value.onboardingCompleted === true && !value.name) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Name is required to finish onboarding' });
   }
 });
 
@@ -318,12 +318,8 @@ router.get('/', async (req, res, next) => {
       });
     }
 
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const search = req.query.search as string;
-    const userType = req.query.userType as string;
-
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, 10);
+    const search = parsePatientSearch(req.query.search);
 
     // Build where clause
     const where: any = {};
@@ -333,10 +329,7 @@ router.get('/', async (req, res, next) => {
 
     // Add search functionality
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
-      ];
+      where.name = { contains: search, mode: 'insensitive' };
     }
 
     // Get patients with pagination
@@ -345,7 +338,7 @@ router.get('/', async (req, res, next) => {
         where,
         skip,
         take: limit,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         select: {
           id: true,
           name: true,
@@ -391,10 +384,16 @@ router.get("/patients", async (req, res, next) => {
       });
     }
 
-    const patients = await prisma.user.findMany({
-      where: {
-        dermatologistId: req.user!.id
-      },
+    const { page, limit, skip } = parsePagination(req.query, 20);
+    const search = parsePatientSearch(req.query.search);
+    const where = {
+      dermatologistId: req.user!.id,
+      ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {})
+    };
+    const [patients, total] = await Promise.all([prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
       select: {
         id: true,
         name: true,
@@ -406,46 +405,14 @@ router.get("/patients", async (req, res, next) => {
         allergies: true,
         currentMedications: true,
         skinConcerns: true,
-        skinPhotos: {
-          orderBy: { captureDate: "desc" },
-          take: 10,
-          select: {
-            id: true,
-            photoUrl: true,
-            skinScore: true,
-            captureDate: true,
-            notes: true
-          }
-        },
-        appointments: {
-          orderBy: { scheduledDate: "desc" },
-          take: 5,
-          select: {
-            id: true,
-            scheduledDate: true,
-            type: true,
-            status: true,
-            concern: true
-          }
-        },
-        prescriptions: {
-          where: { isActive: true },
-          select: {
-            id: true,
-            medicationName: true,
-            dosage: true,
-            prescribedDate: true
-          }
-        }
       },
-      orderBy: {
-        createdAt: "desc"
-      }
-    });
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+    }), prisma.user.count({ where })]);
 
     res.json({
-      patients: await Promise.all(patients.map(async patient => ({ ...patient, skinPhotos: await privatePhotos(patient.skinPhotos, patient.id) }))),
-      total: patients.length
+      patients,
+      total,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
     });
 
   } catch (error) {

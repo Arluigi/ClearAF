@@ -1,4 +1,5 @@
 import express from 'express';
+import { photoThumbnails, photoOriginal, ThumbnailError } from '../services/photoThumbnail';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
@@ -7,6 +8,7 @@ import { privatePhoto, privatePhotos, deletePhotoObject, ownedPhotoPath } from '
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin, PHOTO_BUCKET, generatePhotoPath } from '../config/supabase';
 import { captureIdentity, isMissingStorageObject, isValidCaptureObject } from '../services/photoCapture';
+import { parsePagination } from '../services/pagination';
 
 const router = express.Router();
 
@@ -332,9 +334,7 @@ router.post('/', requirePatient, (_req, res) => {
 // Get user's photos
 router.get('/', requirePatient, async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, 20);
     const sortBy = req.query.sortBy as string || 'captureDate';
     const order = req.query.order as string || 'desc';
 
@@ -361,9 +361,7 @@ router.get('/', requirePatient, async (req, res, next) => {
           }
         }
       },
-      orderBy: {
-        [sortBy]: order
-      },
+      orderBy: [{ captureDate: 'desc' }, { id: 'desc' }],
       skip,
       take: limit
     });
@@ -405,6 +403,33 @@ router.get('/', requirePatient, async (req, res, next) => {
 });
 
 // Get specific photo
+// Authentication is applied to the photos router by the application.
+router.get('/:id/thumbnail', async (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const bytes = await photoThumbnails.get(req.params.id, req.user);
+    return res.type('image/jpeg').send(bytes);
+  } catch (error) {
+    if (error instanceof ThumbnailError) {
+      if (error.status === 503) res.set('Retry-After', '1');
+      return res.status(error.status).json({ error: error.message, code: 'PHOTO_UNAVAILABLE' });
+    }
+    return next(error);
+  }
+});
+
+router.get('/:id/original', async (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    return res.json(await photoOriginal(req.params.id, req.user));
+  } catch (error) {
+    if (error instanceof ThumbnailError) return res.status(error.status).json({ error: error.message, code: 'PHOTO_UNAVAILABLE' });
+    return next(error);
+  }
+});
+
 router.get('/:id', requirePatient, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -614,9 +639,8 @@ router.get('/timeline/progress', requirePatient, async (req, res, next) => {
 router.get('/patient/:patientId', requireDermatologist, async (req, res, next) => {
   try {
     const { patientId } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, 20);
+    const view = z.enum(['summary']).optional().parse(req.query.view);
 
     // Verify patient is assigned to this dermatologist
     const patient = await prisma.user.findUnique({
@@ -646,7 +670,7 @@ router.get('/patient/:patientId', requireDermatologist, async (req, res, next) =
           }
         }
       },
-      orderBy: { captureDate: 'desc' },
+      orderBy: [{ captureDate: 'desc' }, { id: 'desc' }],
       skip,
       take: limit
     });
@@ -656,7 +680,9 @@ router.get('/patient/:patientId', requireDermatologist, async (req, res, next) =
     });
 
     res.json({
-      data: await privatePhotos(photos, patientId),
+      data: view === 'summary'
+        ? photos.map(({ photoUrl: _photoUrl, ...summary }) => summary)
+        : await privatePhotos(photos, patientId),
       pagination: {
         page,
         limit,

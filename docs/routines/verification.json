@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "phase": "T3 clinician routines",
+  "status": "complete_locally",
+  "baseCommit": "2a7f3925552c62d0194630d0d439fd46cf307c88",
+  "implementationCommits": {
+    "backend": "22c462b",
+    "patient": "89bbde8",
+    "portal": "90024cd",
+    "portalReviewFix": "c1c9d81",
+    "finalReviewFix": "a7eea1c"
+  },
+  "tests": {
+    "backend": 104,
+    "patientDebug": 37,
+    "portal": 48,
+    "patientRoutineTests": 9,
+    "portalRoutineTests": 20,
+    "routineUI": {
+      "passed": true,
+      "runs": 2,
+      "covers": [
+        "assigned steps",
+        "no patient authoring",
+        "record completion",
+        "cold launch",
+        "yesterday does not complete today",
+        "new revision requires its own completion"
+      ]
+    },
+    "accountUI": {
+      "passed": true,
+      "flows": 2
+    },
+    "fixtureHelperTests": 9
+  },
+  "builds": {
+    "backend": "passed",
+    "portalProduction": "passed",
+    "patientReleaseSimulator": "passed",
+    "patientDebug": "passed"
+  },
+  "security": {
+    "dependencyAuditVulnerabilities": {
+      "backend": 0,
+      "portal": 0
+    },
+    "directDataApiCRUDDenied": true,
+    "localOnlySyntheticData": true,
+    "productionMigration": false,
+    "productionDeployment": false
+  },
+  "recovery": {
+    "passed": true,
+    "seconds": 36,
+    "postRestoreGroups": 28,
+    "nonemptyRoutineHistory": true,
+    "fullMigrationChainAndFreshSchemaSecurityParity": true,
+    "migrationVersions": [
+      "20260910183704",
+      "20260912212136"
+    ]
+  },
+  "integration": {
+    "verifiedAt": "2026-09-12T22:22:55.417Z",
+    "passed": true,
+    "revisionCount": 5,
+    "completionGroups": [
+      {
+        "timeOfDay": "evening",
+        "version": 1,
+        "localDate": "2026-09-11",
+        "timeZone": "America/Chicago",
+        "count": 1
+      },
+      {
+        "timeOfDay": "morning",
+        "version": 1,
+        "localDate": "2026-09-12",
+        "timeZone": "America/Chicago",
+        "count": 1
+      },
+      {
+        "timeOfDay": "morning",
+        "version": 2,
+        "localDate": "2026-09-12",
+        "timeZone": "America/Chicago",
+        "count": 1
+      }
+    ],
+    "originalInstructionsPreserved": true,
+    "conflictDidNotCreateRevision": true,
+    "failedSaveRetrySingleRevision": true,
+    "archivePreservedHistory": true
+  },
+  "browser": {
+    "passed": [
+      "assignment edit",
+      "two-tab409 conflict and reload",
+      "real outage draft preservation and retry",
+      "step title validation",
+      "step add/move/remove",
+      "archive",
+      "v1/v2 completion history",
+      "pagination20+1",
+      "clean production-build login/panel/logout"
+    ],
+    "paginationEvents": 21,
+    "portalPort": 3003,
+    "apiPort": 3001
+  },
+  "fixtureHelper": {
+    "path": "backend/scripts/routine-ui-fixture.cjs",
+    "sha256": "4181887f8e560a126ab944cfa3445b331f0c23266cb6f07f294ffbc61003aba8",
+    "guardsPassed": true,
+    "createInspectCleanupPassed": true,
+    "partialCleanupResumePassed": true
+  },
+  "cleanup": {
+    "authUsers": 0,
+    "routineRevisions": 0,
+    "routineCompletions": 0,
+    "storageObjects": 0,
+    "exactIdentityRevalidation": true
+  },
+  "reviews": {
+    "backend": "approved",
+    "patient": "approved",
+    "portal": "approved after c1c9d81 scoped re-review",
+    "wholeBranch": "approved after a7eea1c scoped re-review; no open Critical/Important findings",
+    "reviewedCodeCommit": "a7eea1cabe504f1ec0c108b2f78b3d182ab15c8b",
+    "deferredMinor": [
+      "Dense backend route/test formatting",
+      "Expected rejection logging in backend tests",
+      "Deprecated existing ContentView onChange closure form"
+    ]
+  },
+  "limitations": [
+    "Physical-device Data Protection and locked-device behavior cannot be verified on Simulator.",
+    "Existing portal lint and Xcode warnings remain; successful verification is not warning-free.",
+    "Hosted clinical configuration, clinical retention/removal and distribution/device gates remain separate.",
+    "Routine branch is not deployed; photo PR4 remains the released baseline."
+  ],
+  "evidenceLogs": [
+    "/private/tmp/clearaf-routine-final-tests.log",
+    "/private/tmp/clearaf-routine-recovery-final.log",
+    "/private/tmp/clearaf-t3-routine-final-unit3.log",
+    "/private/tmp/clearaf-t3-routine-ui-green2.log",
+    "/private/tmp/clearaf-t3-routine-account-ui.log",
+    "/private/tmp/clearaf-t3-routine-release.log",
+    "/private/tmp/clearaf-routine-integration-ui.log",
+    "/private/tmp/clearaf-routine-final-fix-portal-tests.log",
+    "/private/tmp/clearaf-routine-final-fix-backend-tests.log",
+    "/private/tmp/clearaf-routine-final-fix-portal-lint.log",
+    "/private/tmp/clearaf-routine-final-fix-portal-build.log"
+  ],
+  "lastCodeCommit": "a7eea1cabe504f1ec0c108b2f78b3d182ab15c8b",
+  "hygiene": {
+    "source": "passed",
+    "diff": "passed",
+    "committedRangeSecretScan": "passed through a7eea1c"
+  },
+  "acceptanceAudit": {
+    "currentlyAssignedClinicianOnly": "verified",
+    "patientDefinitionWritesDenied": "verified",
+    "immutableRevisionAndCompletionHistory": "verified",
+    "stableIdentityAndDailyDedupe": "verified",
+    "offlineRestartLostResponseRecovery": "verified",
+    "accountIsolation": "verified",
+    "truthfulPatientStatesAndLocalDay": "verified",
+    "portalAssignEditArchiveHistory": "verified",
+    "legacyPreservedNotPromoted": "verified",
+    "migrationAndRecovery": "verified",
+    "syntheticOnlyCleanup": "verified",
+    "testsBuildsAuditsAndIndependentReview": "verified"
+  }
+}

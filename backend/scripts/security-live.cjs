@@ -25,6 +25,9 @@ async function run(){
    if(role.startsWith('doctor'))await db.query('insert into public.dermatologists (id,name,email,password,"createdAt","updatedAt") values ($1,$2,$3,$4,now(),now())',[account.id,'Synthetic Security Clinician',account.email,'UNUSED_SUPABASE_AUTH']);
   }
   const [a,b,d,e]=s.accounts;await db.query('update public.user_profiles set "dermatologistId"=case when id=$1::uuid then $3::uuid else $4::uuid end where id in ($1::uuid,$2::uuid)',[a.id,b.id,d.id,e.id]);
+  s.routineRevisionIds=[crypto.randomUUID()];s.routineCompletionIds=[crypto.randomUUID()];save(s);
+  await db.query('insert into public.care_routine_revisions (id,"userId","timeOfDay",version,"createdBy",name,"isActive",steps) values ($1,$2,$3,1,$4,$5,true,$6)',[s.routineRevisionIds[0],a.id,'morning',d.id,'Synthetic recovery routine',JSON.stringify([{title:'Synthetic recovery step',instructions:'Synthetic fixture only'}])]);
+  await db.query('insert into public.care_routine_completions (id,"userId","revisionId","completedAt","localDate","timeZone") values ($1,$2,$3,$4,$5,$6)',[s.routineCompletionIds[0],a.id,s.routineRevisionIds[0],'2026-01-01T12:00:00Z','2026-01-01','UTC']);
   console.log('Prepared four isolated synthetic accounts; auth trigger/profile creation passed.');
  }else if(mode==='verify'){
   const s=JSON.parse(fs.readFileSync(statePath));const [a,b,d,e]=s.accounts;
@@ -45,7 +48,10 @@ async function run(){
   assert.equal((await call('/photos/'+photo.id,b)).status,404);assert.equal((await call('/photos/'+photo.id,b,'PATCH',{notes:'not allowed'})).status,404);assert.equal((await call('/photos/'+photo.id,b,'DELETE')).status,404);ok('other patient read/edit/delete denied');
   assert.equal((await call('/photos/patient/'+a.id,e)).status,404);ok('unassigned clinician photo list denied');
   const assigned=await call('/photos/patient/'+a.id,d);assert.equal(assigned.status,200);const gallery=await assigned.json();assert(gallery.data.some(p=>p.id===photo.id));assert.equal((await fetch(gallery.data.find(p=>p.id===photo.id).photoUrl)).status,200);ok('assigned clinician can retrieve shared photo');
-  const nested=await call('/users/patients',d);assert.equal(nested.status,200);const nestedBody=await nested.json();assert.match(nestedBody.patients.find(p=>p.id===a.id).skinPhotos[0].photoUrl,/\/object\/sign\//);ok('portal nested photo links are signed');
+  const listed=await call('/users/patients?page=1&limit=20',d);assert.equal(listed.status,200);const listedBody=await listed.json();
+  assert(listedBody.patients.some(p=>p.id===a.id));assert(listedBody.patients.length<=20);assert.equal(listedBody.pagination.limit,20);
+  for(const patient of listedBody.patients)for(const excluded of ['skinPhotos','appointments','prescriptions','photoUrl'])assert.equal(excluded in patient,false);
+  ok('assigned patient list is bounded metadata without embedded private originals');
   const intent=await call('/photos/upload-url',a,'POST',{mimeType:'image/png'});assert.equal(intent.status,200);const uploadIntent=await intent.json();assert(uploadIntent.storagePath.startsWith(a.id+'/'));
   const largeImage=Buffer.alloc(5*1024*1024);Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII=','base64').copy(largeImage);
   s.paths.push(uploadIntent.storagePath);save({...s,accounts:s.accounts.map(({token,...x})=>x)});
@@ -61,13 +67,17 @@ async function run(){
   const repeated=await call('/photos/complete-upload',a,'POST',{storagePath:uploadIntent.storagePath});assert.equal(repeated.status,200);assert.equal((await repeated.json()).photo.id,largePhoto.id);ok('direct upload finalizes once and repeat completion is idempotent');
   const largeGallery=await call('/photos/patient/'+a.id,d);assert((await largeGallery.json()).data.some(p=>p.id===largePhoto.id));ok('assigned clinician sees large direct upload');
   // Data API privileges are tested with no real rows selected or changed.
-  for(const token of [process.env.SUPABASE_ANON_KEY,a.token,d.token])for(const table of ['_prisma_migrations','appointments','dermatologists','messages','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles']){
+  for(const token of [process.env.SUPABASE_ANON_KEY,a.token,d.token])for(const table of ['_prisma_migrations','appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles']){
    const r=await fetch(`${process.env.SUPABASE_URL}/rest/v1/${table}?select=id&limit=0`,{headers:{apikey:process.env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`}});assert([401,403].includes(r.status),`direct ${table} access: ${r.status}`);
-  }ok('all 11 tables deny anonymous, patient and clinician direct reads');
+  }ok('all 13 tables deny anonymous, patient and clinician direct reads');
   for(const token of [process.env.SUPABASE_ANON_KEY,a.token,d.token])for(const method of ['POST','PATCH','DELETE']){
    const url=`${process.env.SUPABASE_URL}/rest/v1/skin_photos${method==='POST'?'':`?id=eq.${photo.id}`}`;
    const r=await fetch(url,{method,headers:{apikey:process.env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:method==='DELETE'?undefined:JSON.stringify(method==='POST'?{id:crypto.randomUUID(),userId:a.id,photoUrl:'synthetic'}:{notes:'must not update'})});assert([401,403].includes(r.status),`direct write ${method}: ${r.status}`);
   }ok('anonymous/patient/clinician direct create, update and delete denied');
+  for(const token of [process.env.SUPABASE_ANON_KEY,a.token,d.token])for(const [table,rowId] of [['care_routine_revisions',s.routineRevisionIds[0]],['care_routine_completions',s.routineCompletionIds[0]]])for(const method of ['POST','PATCH','DELETE']){
+   const r=await fetch(`${process.env.SUPABASE_URL}/rest/v1/${table}${method==='POST'?'':`?id=eq.${rowId}`}`,{method,headers:{apikey:process.env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:method==='DELETE'?undefined:JSON.stringify({id:method==='POST'?crypto.randomUUID():rowId})});assert([401,403].includes(r.status),`direct routine write ${method}: ${r.status}`);
+  }ok('routine revision and completion direct writes denied for all client roles');
+
   const legacy=`${process.env.SUPABASE_URL}/storage/v1/object/public/patient-photos/${photo.storagePath}`;assert.notEqual((await fetch(legacy)).status,200);ok('public photo URL cannot download private object');
   for(const account of [undefined,a,b,d]){
    const c=account?createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY,{global:{headers:{Authorization:`Bearer ${account.token}`}},auth:{persistSession:false}}):publicClient();
@@ -87,6 +97,8 @@ async function run(){
   if(s.paths.length){const{error}=await admin.storage.from('patient-photos').remove(s.paths);if(error)throw error}
   for(const a of s.accounts){const{data,error}=await admin.auth.admin.getUserById(a.id);if(error||data.user.email!==a.email)throw Error('Fixture identity mismatch; cleanup stopped')}
   const ids=s.accounts.map(a=>a.id);
+  await db.query('delete from public.care_routine_completions where id=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.routineCompletionIds||[],ids]);
+  await db.query('delete from public.care_routine_revisions where id=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.routineRevisionIds||[],ids]);
   await db.query('delete from public.user_profiles where name=$1 and not exists(select 1 from auth.users where auth.users.id=user_profiles.id)',[`clearaf-security-${s.run}-postmigration@example.invalid`]);
   await db.query('delete from public.skin_photos where "userId"=any($1::uuid[])',[ids]);
   await db.query('delete from public.messages where "senderId"=any($1::text[]) or "recipientId"=any($1::text[])',[ids]);

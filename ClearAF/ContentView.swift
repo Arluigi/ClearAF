@@ -29,14 +29,14 @@ struct ContentView: View {
                     DashboardViewEnhanced(selectedTab: $selectedTab)
                         .tabItem {
                             Image(systemName: "house.fill")
-                            Text("Home")
+                            Text("Today")
                         }
                         .tag(0)
                     
                     ProgressView()
                         .tabItem {
                             Image(systemName: "chart.line.uptrend.xyaxis")
-                            Text("Progress")
+                            Text("Photos")
                         }
                         .tag(1)
                     
@@ -46,31 +46,25 @@ struct ContentView: View {
                             Text("Routines")
                         }
                         .tag(2)
-                    
-                    CareView()
-                        .tabItem {
-                            Image(systemName: "stethoscope")
-                            Text("Care")
-                        }
-                        .tag(3)
-                    
-                    ShopView()
-                        .tabItem {
-                            Image(systemName: "bag.fill")
-                            Text("Shop")
-                        }
-                        .tag(4)
                 }
                 .tint(.primaryPurple)
             }
         }
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)
         .id(apiService.access.snapshot()?.generation)
-        .task { apiService.start(); resumePhotos() }
-        .onChange(of: apiService.phase) { _ in resumePhotos() }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active { resumePhotos() }
-            else { apiService.photos.cancel() }
+        .task { apiService.start(); resumeRepositories() }
+        .onChange(of: apiService.phase) { _, _ in resumeRepositories() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { resumeRepositories() }
+            else { apiService.photos.cancel(); apiService.routines.cancel() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            guard scenePhase == .active, apiService.phase == .ready else { return }
+            let ticket = apiService.access.snapshot()
+            Task { @MainActor in
+                guard apiService.access.snapshot() == ticket else { return }
+                await apiService.routines.refresh()
+            }
         }
         .overlay(alignment: .bottom) { PhotoPersistenceErrorView(repository: apiService.photos) }
         .onOpenURL { url in
@@ -80,9 +74,10 @@ struct ContentView: View {
             }
         }
     }
-    private func resumePhotos() {
+    private func resumeRepositories() {
         guard scenePhase == .active, (apiService.phase == .ready || apiService.phase == .onboarding), let ticket = apiService.access.snapshot() else { return }
         apiService.photos.resume(context: apiService.persistence.container.viewContext, ticket: ticket)
+        apiService.routines.resume(accountID: ticket.accountID, ticket: ticket)
     }
 }
 

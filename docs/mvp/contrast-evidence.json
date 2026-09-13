@@ -1,0 +1,37 @@
+{
+  "appearances": [
+    "light",
+    "dark"
+  ],
+  "backgrounds": [
+    "systemBackground",
+    "secondarySystemBackground",
+    "tertiarySystemBackground",
+    "systemGray6"
+  ],
+  "foregrounds": [
+    "secondary",
+    "error"
+  ],
+  "ratiosInLoopOrder": [
+    7.863099547221424,
+    7.57073500011597,
+    7.046603323671659,
+    6.784597612439751,
+    7.863099547221424,
+    7.57073500011597,
+    7.046603323671659,
+    6.784597612439751,
+    12.409631909498186,
+    12.227696051616087,
+    10.054600047833992,
+    9.907190978918424,
+    8.235650130388581,
+    8.114908428892807,
+    10.054600047833992,
+    9.907190978918424
+  ],
+  "minimum": 6.784597612439751,
+  "required": 4.5,
+  "test": "AccountProfileTests.retainedSecondaryAndErrorTextMeetContrastAcrossBothAppearances"
+}

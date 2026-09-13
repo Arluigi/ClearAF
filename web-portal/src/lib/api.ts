@@ -11,9 +11,16 @@ import {
   Message,
   Prescription,
   Photo,
+  PhotoSummary,
   LoginResponse,
   DashboardStats,
-  PaginatedResponse
+  PaginatedResponse,
+  APIError,
+  RoutineCompletionRecord,
+  RoutineRevision,
+  RoutineSnapshot,
+  RoutineTimeOfDay,
+  SaveRoutineRevisionInput,
 } from '@/types/api';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -72,9 +79,11 @@ class APIService {
   // Helper method to make HTTP requests
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    bodyType: 'json' | 'blob' = 'json',
   ): Promise<T> {
     if (authStorage.recoveryAccount()) throw new Error('Finish or cancel password recovery before accessing clinical data.');
+    options.signal?.throwIfAborted();
     const generation = sessionBoundary.snapshot();
     const url = `${this.baseURL}${endpoint}`;
 
@@ -86,6 +95,7 @@ class APIService {
     this.acceptSession(session);
     sessionBoundary.assert(generation);
     if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
+    options.signal?.throwIfAborted();
     const token = session?.access_token;
 
     const config: RequestInit = {
@@ -111,14 +121,20 @@ class APIService {
       sessionBoundary.assert(generation);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          error: `HTTP ${response.status}: ${response.statusText}`
-        }));
-        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+        const errorData: unknown = await response.json().catch(() => null);
+        // Parsing an error body is asynchronous too; never publish it across an account boundary.
+        sessionBoundary.assert(generation);
+        const payload = typeof errorData === 'object' && errorData !== null ? errorData as { error?: unknown; code?: unknown } : {};
+        const message = typeof payload.error === 'string'
+          ? payload.error
+          : `Request failed with status ${response.status}`;
+        throw new APIError(response.status, message, typeof payload.code === 'string' ? payload.code : undefined);
       }
 
-      const body = await response.json();
+      options.signal?.throwIfAborted();
+      const body = bodyType === 'blob' ? await response.blob() : await response.json();
       sessionBoundary.assert(generation);
+      options.signal?.throwIfAborted();
       return body;
     } catch (error) {
 
@@ -201,33 +217,9 @@ class APIService {
     limit: number = 10,
     search?: string
   ): Promise<PaginatedResponse<User>> {
-    // Use the new dedicated patients endpoint for dermatologists
-    const response = await this.request<{patients: User[], total: number}>('/users/patients');
-
-    // Filter by search if provided
-    let filteredPatients = response.patients;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredPatients = response.patients.filter(p =>
-        p.name?.toLowerCase().includes(searchLower) ||
-        p.skinType?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Calculate pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedPatients = filteredPatients.slice(startIndex, endIndex);
-
-    return {
-      data: paginatedPatients,
-      pagination: {
-        page: page,
-        totalPages: Math.ceil(filteredPatients.length / limit),
-        total: filteredPatients.length,
-        limit: limit
-      }
-    };
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search?.trim()) params.set('search', search.trim());
+    return this.request<PaginatedResponse<User>>(`/users/?${params}`);
   }
 
   async getPatient(id: string): Promise<User> {
@@ -246,6 +238,35 @@ class APIService {
       method: 'POST',
       body: JSON.stringify({ patientId, dermatologistId }),
     });
+  }
+
+  async getPatientRoutines(patientId: string, localDate: string): Promise<RoutineSnapshot> {
+    const params = new URLSearchParams({ localDate });
+    return this.request<RoutineSnapshot>(`/routines/patients/${encodeURIComponent(patientId)}?${params}`);
+  }
+
+  async savePatientRoutine(
+    patientId: string,
+    timeOfDay: RoutineTimeOfDay,
+    revisionId: string,
+    data: SaveRoutineRevisionInput,
+  ): Promise<RoutineRevision> {
+    const response = await this.request<{ routine: RoutineRevision }>(
+      `/routines/patients/${encodeURIComponent(patientId)}/${timeOfDay}/revisions/${encodeURIComponent(revisionId)}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+    );
+    return response.routine;
+  }
+
+  async getPatientRoutineCompletions(
+    patientId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedResponse<RoutineCompletionRecord>> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return this.request<PaginatedResponse<RoutineCompletionRecord>>(
+      `/routines/patients/${encodeURIComponent(patientId)}/completions?${params}`,
+    );
   }
 
   // Appointment Management
@@ -370,6 +391,19 @@ class APIService {
   // Dashboard Statistics
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request<DashboardStats>('/dashboard/stats');
+  }
+
+  async getPhotoThumbnail(id: string, signal?: AbortSignal): Promise<Blob> {
+    return this.request<Blob>(`/photos/${encodeURIComponent(id)}/thumbnail`, { signal }, 'blob');
+  }
+
+  async getPhotoOriginal(id: string, signal?: AbortSignal): Promise<{ photoUrl: string }> {
+    return this.request(`/photos/${encodeURIComponent(id)}/original`, { signal });
+  }
+
+  async getPatientPhotoSummaries(patientId: string, page = 1, limit = 12): Promise<PaginatedResponse<PhotoSummary>> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit), view: 'summary' });
+    return this.request(`/photos/patient/${encodeURIComponent(patientId)}?${params}`);
   }
 
   // Photo Management

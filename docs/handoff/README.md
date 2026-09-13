@@ -1,5 +1,7 @@
 # New-laptop handoff
 
+September 12 update: PRs #1–4 are merged. Use latest `main`; stacked-branch references below describe the old transfer snapshot. See [new-Mac verification](2026-09-12-new-mac.md), [photo release](../photos/release-2026-09-12.md), and the active [routine goal plan](../superpowers/plans/2026-09-12-routine-loop.md).
+
 Prepared September 11, 2026. T2 implementation and verification are recorded in the [account reliability report](../accounts/README.md). No T2 production deployment occurred. See the [T2 plan](../superpowers/plans/2026-09-10-account-reliability.md), [baseline and recovery procedure](../baseline/README.md), and [security notes](../security/README.md).
 
 ## Preserve the old laptop first
@@ -20,7 +22,7 @@ These locations share Git metadata. Copying a linked worktree alone does not cre
 ## Fresh setup
 
 1. Install Git, Node 24 with npm, Xcode and an iOS Simulator runtime, and a Docker-compatible runtime. The baseline used Node 24.4.0, Xcode 26.6 and iOS 26.5 Simulator. Supabase CLI is pinned by the scripts to 2.117.0. Open Xcode once to finish installation and choose its command-line tools.
-2. Authenticate GitHub, clone `https://github.com/Arluigi/ClearAF.git`, and check out `codex/account-reliability` from origin. Until T1 is merged, T2 depends on its history; do not start from an older `main` and assume the baseline exists.
+2. Authenticate GitHub, clone `https://github.com/Arluigi/ClearAF.git`, and use the latest `main`. For an existing checkout, preserve local work before fetching and updating; do not reset or clean it indiscriminately.
 3. Install dependencies separately:
 
    ```sh
@@ -114,3 +116,7 @@ xcodebuild -project ClearAF.xcodeproj -scheme ClearAF -configuration Debug \
 ```
 
 Use an installed device name on the new machine. The UI suite requires the local API and Supabase/Mailpit to be running. Local ad-hoc signing does not require distribution credentials or authorize an App Store upload.
+
+T4 integrated MVP evidence, commands and remaining gates: [MVP verification](../mvp/README.md).
+
+Verification pacing and scope after T4: [working agreement](verification-workflow.md).

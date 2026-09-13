@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "phase": "T4",
+  "status": "complete_with_documented_limits",
+  "productionAccess": false,
+  "measuredAt": "2026-09-13",
+  "serverVolume": {
+    "status": "passed",
+    "patients": 500,
+    "photos": 1000,
+    "warmRequestsPerEndpoint": 20,
+    "patientP95Ms": 26.759417,
+    "photoP95Ms": 24.062042,
+    "warmThumbnailPageMs": 316.586416,
+    "thumbnailPageCount": 24,
+    "thumbnailWorkers": 2,
+    "rawEvidence": ".local/mvp-volume-api-evidence.json",
+    "evidence": "server-volume-evidence.json"
+  },
+  "nativeVolume": {
+    "status": "passed",
+    "photos": 1000,
+    "pages": 42,
+    "maximumRecordsPerPage": 24,
+    "cacheMaximumEntries": 32,
+    "cacheMaximumBytes": 16777216,
+    "realPageCacheSamples": 21,
+    "actualAppMemoryIterations": 40,
+    "peakKB": 149817.888,
+    "finalAbsoluteKB": 131566.112,
+    "evidence": "native-volume-evidence.json"
+  },
+  "accessibility": {
+    "status": "raw_audits_failed_disposition_recorded",
+    "evidence": "accessibility-disposition.md",
+    "largestRetainedAuditFindings": 16,
+    "assignedRoutineAuditFindings": 2,
+    "functionalReachabilityAssertions": "passed in covering run",
+    "captureFollowup": "actual frame containment and five audit types passed; Cancel toolbar partial Dynamic Type remains, command65"
+  },
+  "portalCUA": {
+    "status": "passed_in_retained_scope",
+    "checks": [
+      "500 patients,20 rows/page,25pages,next and exact-name search",
+      "1000photos,12 thumbnails/page,84pages;400x300authenticatedblobimages",
+      "loading and assignment-revocation error/retry then exact restoration",
+      "390x844 original containment,no horizontal overflow",
+      "Tab focus trap,Escape dismissal,exact origin focus restoration"
+    ],
+    "source": "parent task-6-cua-check.md"
+  },
+  "physicalDevice": {
+    "status": "passed",
+    "method": "Actual iPhone, prior automated permission/cancel probes plus user manual neutral-photo selection/camera/retry after Debug fix",
+    "passed": [
+      "hosted local API/Auth200",
+      "camera denial explanation and Settings recovery to actual shutter",
+      "scoped library cancellation",
+      "user-selected prepared neutral photo saved locally",
+      "same saved capture preserved through Debug app update and manual Retry shared",
+      "user camera capture accepted and server row verified",
+      "assigned clinician authorized original and private object download200",
+      "camera JPEG verified 3114970 bytes 4032x3024",
+      "both originals foreign patient404 and anonymous401",
+      "user manual sign-out and cold reopen to sign-in",
+      "focused generated local A photo visible; sign-out to B Today no A image/status andPhotos0; same after cold launch; final sign-out,57.175seconds"
+    ],
+    "pending": [],
+    "privateEvidence": [
+      ".local/t4-physical-capture-manifest.json",
+      ".local/t4-physical-sharing-proof.json"
+    ],
+    "verifiedLibraryJPEG": {
+      "bytes": 3500454,
+      "width": 5712,
+      "height": 4284
+    },
+    "verifiedOwnerPhotoRows": 2,
+    "cleanup": {
+      "server": "exact two rows/two objects removed; all1000 unrelated volume photo IDs preserved",
+      "device": "entire Debug data container reset unexpectedly by devicectl cleanup; not narrow path-only removal; preinventory only routine fixture account",
+      "photosLibrary": "user confirmed deletion of blue-wall test image on 2026-09-13"
+    },
+    "accountIsolation": {
+      "status": "passed",
+      "method": "Actual iPhone prebuilt UI test, generated640x480local photo from test-only production CoreData export",
+      "durationSeconds": 57.175,
+      "log": "/private/tmp/clearaf-t4-device-isolation-test.log",
+      "noCameraOrLibraryInteraction": true,
+      "fixtureCleanup": {
+        "status": "passed",
+        "hostedLog": "/private/tmp/clearaf-t4-device-isolation-cleanup-final.log",
+        "finalSourceCompiled": true,
+        "remainingOwnedDirectories": 0,
+        "unrelatedDirectoryNamesPreserved": true,
+        "serverExactAccountsRemoved": 2,
+        "serverAccountsRemaining": 0,
+        "simulatorExactExportRemoved": true
+      }
+    }
+  },
+  "finalRegression": {
+    "status": "passed_with_documented_raw_audit_findings",
+    "backend": {
+      "tests": 134,
+      "failed": 0,
+      "build": "passed",
+      "log": "/private/tmp/clearaf-t4-final-backend-tests.log"
+    },
+    "portal": {
+      "tests": 61,
+      "failed": 0,
+      "build": "passed",
+      "lint": "passed",
+      "typecheck": "passed"
+    },
+    "live": {
+      "accounts": "6 groups passed",
+      "routine": "12 groups passed",
+      "photoCapture": "passed",
+      "thumbnails": "passed",
+      "security": "28 groups passed after updating obsolete nested-original assertion",
+      "exactCleanup": "passed for each live probe"
+    },
+    "ios": "55 Swift Testing tests/provider XCTest passed; one opt-in diagnostic skipped; same-device account switch/Profile edit/PKCE recovery UI passed104.845s; raw audits failed as explicitly recorded"
+  },
+  "independentWholeBranchReview": {
+    "status": "approved_after_fixes",
+    "base": "aa4b26f",
+    "reviewedHead": "c7ae5b6",
+    "evidence": "code-review.md",
+    "unresolvedImportantOrCritical": 0
+  },
+  "cleanup": {
+    "status": "passed_with_documented_device_scope_caveat",
+    "volume": "501 Auth identities and1000 objects/photos exact cleanup passed",
+    "ui": "two current accounts exact cleanup passed",
+    "simulator": "five initial plus one recreated routine directory exact removed;12unrelated preserved",
+    "physical": "two exact rows/objects removed; full Debug data container reset caveat recorded",
+    "routineAndRecovery": "routine exact cleanup passed; recovery passed and post-recovery accounts/photos/objects all zero",
+    "serverFinalCounts": {
+      "accounts": 0,
+      "photos": 0,
+      "storageObjects": 0,
+      "routineRevisions": 0,
+      "completions": 0
+    }
+  },
+  "T5": {
+    "status": "separate_phase",
+    "unresolved": [
+      "clinical guidance",
+      "review coverage",
+      "retention and removal",
+      "support ownership",
+      "pilot readiness"
+    ]
+  },
+  "recovery": {
+    "passed": true,
+    "verifiedAt": "2026-09-13T05:22:26.255Z",
+    "elapsedSeconds": 37,
+    "freshDestination": true,
+    "liveChecksAfterRestore": 28,
+    "scope": "Synthetic local database, auth identities and storage bytes; no production patient data",
+    "log": "/private/tmp/clearaf-t4-final-recovery.log"
+  },
+  "secretScan": {
+    "base": "aa4b26f",
+    "head": "f070f65",
+    "commits": 23,
+    "leaks": 0,
+    "log": "/private/tmp/clearaf-t4-secret-scan.log"
+  },
+  "finalFocusedFixes": {
+    "commit": "c7ae5b6",
+    "todayContrast": "actual action tint light/dark focused test passed",
+    "patientListLifecycle": "5 focused tests passed; setup/cleanup replay and stale result suppression",
+    "logs": [
+      "/private/tmp/clearaf-t4-final-today-executed.log",
+      "/private/tmp/clearaf-t4-final-list-green.log"
+    ]
+  }
+}

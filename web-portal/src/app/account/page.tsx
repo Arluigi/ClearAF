@@ -1,0 +1,7 @@
+'use client';
+import Link from 'next/link';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/lib/auth';
+export default function AccountPage() { const { user, logout } = useAuth(); return <DashboardLayout title="Account"><div className="max-w-2xl space-y-6 p-4 sm:p-6"><div><h2 className="text-3xl font-bold tracking-tight">Account</h2><p className="text-muted-foreground">Your verified clinician identity and account actions.</p></div><Card><CardHeader><CardTitle>Clinician identity</CardTitle><CardDescription>These details come from your current signed-in profile.</CardDescription></CardHeader><CardContent><dl className="space-y-4"><div><dt className="text-sm text-muted-foreground">Name</dt><dd className="font-medium">{user?.name}</dd></div><div><dt className="text-sm text-muted-foreground">Email</dt><dd className="break-all font-medium">{user?.email}</dd></div></dl></CardContent></Card><Card><CardHeader><CardTitle>Account access</CardTitle><CardDescription>Recover your password or end this session.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-3"><Button variant="outline" asChild><Link href="/forgot-password">Reset password</Link></Button><Button variant="destructive" onClick={() => void logout()}>Sign out</Button></CardContent></Card></div></DashboardLayout>; }

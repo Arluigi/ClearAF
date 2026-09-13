@@ -2,6 +2,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import Module from 'node:module';
+import { ZodError } from 'zod';
 
 // External services are isolated; all HTTP routing, validation and authorization are real.
 const A='11111111-1111-4111-8111-111111111111', B='22222222-2222-4222-8222-222222222222';
@@ -11,21 +12,21 @@ process.env.SUPABASE_URL='https://security-test.supabase.co';
 process.env.SUPABASE_ANON_KEY='synthetic-anon';
 process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic-service';
 let writes:any[], signed:string[], removed:string[], failRemove=false;
-let users:any[], photos:any[], appointments:any[];
+let users:any[], photos:any[], appointments:any[], queries:any[];
 let uploadSize=68;
 function matches(row:any,where:any={}):boolean {
  return Object.entries(where).every(([k,v]:any)=> {
   if(k==='OR') return v.some((w:any)=>matches(row,w));
   if(k==='AND') return v.every((w:any)=>matches(row,w));
   if(k==='patient') return matches(users.find(u=>u.id===row.patientId),v);
-  if(v&&typeof v==='object') { if('in' in v)return v.in.includes(row[k]); if('gte' in v)return row[k]>=v.gte; }
+  if(v&&typeof v==='object') { if('in' in v)return v.in.includes(row[k]); if('gte' in v)return row[k]>=v.gte; if('contains' in v)return typeof row[k]==='string'&&row[k].toLowerCase().includes(String(v.contains).toLowerCase()); }
   return row?.[k]===v;
  });
 }
 const model=(rows:()=>any[])=>({
  findUnique:async({where}:any)=>rows().find(r=>matches(r,where))??null,
  findFirst:async({where}:any={})=>rows().find(r=>matches(r,where))??null,
- findMany:async({where}:any={})=>rows().filter(r=>matches(r,where)),
+ findMany:async(args:any={})=>{queries.push(args);let result=rows().filter(r=>matches(r,args.where));if(args.orderBy){const orders=Array.isArray(args.orderBy)?args.orderBy:[args.orderBy];result=[...result].sort((a,b)=>{for(const order of orders){const [field,direction]=Object.entries(order)[0] as [string,any];if(a[field]===b[field])continue;return (a[field]<b[field]?-1:1)*(direction==='desc'?-1:1)}return 0})}return result.slice(args.skip??0,(args.skip??0)+(args.take??result.length))},
  count:async({where}:any={})=>rows().filter(r=>matches(r,where)).length,
  create:async({data}:any)=>{writes.push(data);const row={id:P,...data};rows().push(row);return row},
  update:async({where,data}:any)=>{const r=rows().find(r=>matches(r,where));if(!r)throw Error('record missing');writes.push(data);return Object.assign(r,data)},
@@ -48,12 +49,12 @@ config.supabaseAdmin.storage.from=()=>({
 const app=express();app.use(express.json());
 app.use((req:any,res,next)=>{const identity=req.header('x-test-identity');if(!identity)return res.sendStatus(401);req.user={id:identity,userType:[D,E].includes(identity)?'dermatologist':'patient'};next()});
 for(const route of ['users','photos','prescriptions','messages','auth-supabase','appointments','dashboard'])app.use('/'+route,require('../src/routes/'+route).default);
-app.use((err:any,_req:any,res:any,_next:any)=>res.status(err.status??500).json({error:err.message}));
+app.use((err:any,_req:any,res:any,_next:any)=>res.status(err instanceof ZodError?400:err.status??500).json({error:err.message}));
 (Module as any)._load=originalLoad;
 let server:any,base:string;
 before(async()=>{server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`});
 after(()=>new Promise<void>(r=>server.close(r)));
-beforeEach(()=>{writes=[];signed=[];removed=[];failRemove=false;uploadSize=68;users=[{id:A,dermatologistId:D},{id:B,dermatologistId:E}];appointments=[{id:P,patientId:B,dermatologistId:D,status:"scheduled",scheduledDate:new Date(),relatedPhotos:[]}];photos=[{id:P,userId:A,photoUrl:`https://security-test.supabase.co/storage/v1/object/public/patient-photos/${A}/photo.jpg`,skinScore:0,captureDate:new Date()}]});
+beforeEach(()=>{writes=[];signed=[];removed=[];queries=[];failRemove=false;uploadSize=68;users=[{id:A,name:'Assigned Patient',skinType:'Sensitive',dermatologistId:D,createdAt:new Date('2026-01-02'),updatedAt:new Date('2026-01-02')},{id:B,name:'Other Patient',dermatologistId:E,createdAt:new Date('2026-01-01'),updatedAt:new Date('2026-01-01')}];appointments=[{id:P,patientId:B,dermatologistId:D,status:"scheduled",scheduledDate:new Date(),relatedPhotos:[]}];photos=[{id:P,userId:A,photoUrl:`https://security-test.supabase.co/storage/v1/object/public/patient-photos/${A}/photo.jpg`,skinScore:0,captureDate:new Date()}]});
 async function request(path:string,identity:string|undefined,method='GET',body?:any){return fetch(base+path,{method,headers:{...(identity?{'x-test-identity':identity}:{}),'content-type':'application/json',authorization:'Bearer e30.'+Buffer.from(JSON.stringify({session_id:A})).toString('base64url')+'.synthetic'},body:body?JSON.stringify(body):undefined})}
 for(const identity of [A,D])test(`client ${identity} cannot reassign a patient`,async()=>{const r=await request('/users/assign-dermatologist',identity,'POST',{patientId:B,dermatologistId:D});assert.equal(r.status,403);assert.equal(writes.length,0)});
 test('sync profile preserves existing assignment',async()=>{const r=await request('/auth-supabase/sync-profile',A,'POST',{});assert.equal(r.status,200);assert.equal(users[0].dermatologistId,D)});
@@ -88,9 +89,10 @@ test('direct upload completion refuses another account path',async()=>{const r=a
 test('direct upload completion rejects oversized stored file',async()=>{uploadSize=11*1024*1024;const r=await request('/photos/complete-upload',A,'POST',{storagePath:A+'/'+P+'.png'});assert.equal(r.status,400);assert.equal(writes.length,0)});
 test('former clinician stats exclude historical appointments',async()=>{const r=await request('/users/stats',D);assert.equal(r.status,200);const body:any=await r.json();assert.equal(body.stats.totalAppointments,0)});
 test('repeat direct completion returns the same record',async()=>{photos=[];const body={storagePath:A+'/'+P+'.png'};const first=await request('/photos/complete-upload',A,'POST',body);const second=await request('/photos/complete-upload',A,'POST',body);assert.equal(first.status,201);assert.equal(second.status,200);assert.equal(writes.length,1)});
-test('onboarding persists trimmed name and completion for only the signed-in patient', async () => {
- const r = await request('/users/profile', A, 'PATCH', { name:'  Synthetic Name  ', skinType:'Sensitive', onboardingCompleted:true });
+test('name-only onboarding preserves legacy skin type for the signed-in patient', async () => {
+ const r = await request('/users/profile', A, 'PATCH', { name:'  Synthetic Name  ', onboardingCompleted:true });
  assert.equal(r.status,200); assert.equal(users[0].name,'Synthetic Name'); assert.equal(users[0].onboardingCompleted,true); assert.equal(users[1].onboardingCompleted,undefined);
+ assert.equal(users[0].skinType,'Sensitive'); assert.equal(writes[0].skinType,undefined);
 });
 test('incomplete onboarding cannot write a completion flag', async () => {
  const r = await request('/users/profile', A, 'PATCH', { onboardingCompleted:true });
@@ -99,4 +101,69 @@ test('incomplete onboarding cannot write a completion flag', async () => {
 test('patient profile cannot accept role or assignment fields', async () => {
  const r = await request('/users/profile', A, 'PATCH', { name:'Synthetic Name', userType:'dermatologist', dermatologistId:E });
  assert.notEqual(r.status,200); assert.equal(writes.length,0);
+});
+test('invalid patient pagination is rejected before database access', async () => {
+ const r=await request('/users?page=1x',D);assert.equal(r.status,400);assert.equal(queries.length,0);
+});
+test('patient search stays assigned and queries the existing name column only', async () => {
+ const r=await request('/users?search=Assigned',D);assert.equal(r.status,200);const body:any=await r.json();assert.deepEqual(body.data.map((patient:any)=>patient.id),[A]);
+ const query=queries.find(entry=>entry.take===10);assert.deepEqual(query.where,{dermatologistId:D,name:{contains:'Assigned',mode:'insensitive'}});
+});
+test('legacy patient list is bounded without deferred relation graphs', async () => {
+ users.push(...Array.from({length:60},(_,index)=>({id:`synthetic-${index}`,name:`Synthetic ${index}`,dermatologistId:D,createdAt:new Date(2025,0,index+1)})));
+ const r=await request('/users/patients?limit=50',D);assert.equal(r.status,200);const body:any=await r.json();assert.equal(body.patients.length,50);assert.equal(body.total,61);assert.deepEqual(body.pagination,{page:1,limit:50,total:61,totalPages:2});
+ const query=queries.find(entry=>entry.take===50);assert.equal(query.select.skinPhotos,undefined);assert.equal(query.select.appointments,undefined);assert.equal(query.select.prescriptions,undefined);
+});
+
+test('summary photo view omits original URLs and never signs; legacy view is unchanged', async () => {
+  const response = await request('/photos/patient/' + A + '?view=summary', D);
+  assert.equal(response.status, 200);
+  const body: any = await response.json();
+  assert.equal('photoUrl' in body.data[0], false);
+  assert.equal(body.data[0].id, P);
+  assert.equal(signed.length, 0);
+  for (const view of ['invalid', 'summary&view=summary']) {
+    assert.equal((await request('/photos/patient/' + A + '?view=' + view, D)).status, 400);
+  }
+});
+test('original endpoint freshly authorizes owner/assignment and validates owned paths', async () => {
+  for (const identity of [A, D]) {
+    const response = await request('/photos/' + P + '/original', identity);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.match((await response.json() as any).photoUrl, /\/object\/sign\//);
+  }
+  for (const identity of [undefined, B, E]) assert.equal((await request('/photos/' + P + '/original', identity)).status, identity ? 404 : 401);
+  users[0].dermatologistId = E;
+  assert.equal((await request('/photos/' + P + '/original', D)).status, 404);
+  photos[0].photoUrl = B + '/foreign.jpg';
+  assert.equal((await request('/photos/' + P + '/original', A)).status, 422);
+  assert.equal(signed.length, 2);
+  assert.equal((await request('/photos/' + P, D)).status, 403);
+});
+test('warm thumbnail HTTP access rechecks authorization/path and uses no-store JPEG', async () => {
+  const originalFetch = globalThis.fetch;
+  let downloads = 0;
+  const sharp = require('sharp');
+  const bytes = await sharp({ create: { width: 800, height: 600, channels: 3, background: 'red' } }).jpeg().toBuffer();
+  globalThis.fetch = async (input, options) => {
+    if (String(input).startsWith('https://security-test.supabase.co/')) { downloads++; return new Response(bytes); }
+    return originalFetch(input, options);
+  };
+  try {
+    for (const identity of [A, D]) {
+      const response = await request('/photos/' + P + '/thumbnail', identity);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'private, no-store');
+      assert.match(response.headers.get('content-type')!, /^image\/jpeg/);
+      assert.ok((await response.arrayBuffer()).byteLength > 0);
+    }
+    assert.equal(downloads, 1);
+    for (const identity of [undefined, B, E]) assert.equal((await request('/photos/' + P + '/thumbnail', identity)).status, identity ? 404 : 401);
+    users[0].dermatologistId = E;
+    assert.equal((await request('/photos/' + P + '/thumbnail', D)).status, 404);
+    photos[0].photoUrl = B + '/foreign.jpg';
+    assert.equal((await request('/photos/' + P + '/thumbnail', A)).status, 422);
+    assert.equal(downloads, 1);
+  } finally { globalThis.fetch = originalFetch; }
 });

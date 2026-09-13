@@ -12,8 +12,14 @@ import UIKit
 // MARK: - Color System
 extension Color {
     // Primary Brand Colors - Confidence & Trust
-    static let primaryPurple = Color(red: 0.42, green: 0.27, blue: 0.76) // #6B46C1
-    static let primaryTeal = Color(red: 0.02, green: 0.71, blue: 0.83) // #06B6D4
+    static let primaryPurple = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.714, green: 0.612, blue: 1.0, alpha: 1) // #B69CFF
+            : UIColor(red: 0.42, green: 0.27, blue: 0.76, alpha: 1) // #6B46C1
+    })
+    static let primaryActionPurple = Color(red: 0.42, green: 0.27, blue: 0.76)
+    static let primaryActionTeal = Color(red: 0.0, green: 0.478, blue: 0.529) // #007A87
+    static let primaryTeal = primaryActionTeal
     
     // Wellness & Skincare Palette - Calm & Nurturing
     static let skinPeach = Color(red: 1.0, green: 0.89, blue: 0.82) // #FFE4D1
@@ -30,7 +36,16 @@ extension Color {
     
     // Dark Theme Neutral System - Elegant & Modern
     static let textPrimary = Color.primary // Adapts to light/dark mode
-    static let textSecondary = Color.secondary // Adapts to light/dark mode  
+    static let textSecondary = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(white: 0.78, alpha: 1)
+            : UIColor(white: 0.32, alpha: 1)
+    })
+    static let retainedErrorText = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 0.70, blue: 0.66, alpha: 1)
+            : UIColor(red: 0.65, green: 0.10, blue: 0.10, alpha: 1)
+    })
     static let textTertiary = Color(UIColor.tertiaryLabel) // System tertiary
     static let backgroundPrimary = Color(UIColor.systemBackground) // Adapts to theme
     static let backgroundSecondary = Color(UIColor.secondarySystemBackground) // Darker in dark mode
@@ -39,13 +54,13 @@ extension Color {
     static let cardBackground = Color(UIColor.systemGray6) // Card backgrounds
     
     // Interactive States
-    static let buttonPrimary = primaryPurple
+    static let buttonPrimary = primaryActionPurple
     static let buttonSecondary = skinPeach
     static let buttonDisabled = Color(red: 0.85, green: 0.87, blue: 0.90) // #D9DEE6
     
     // Gradients for Visual Impact
     static let primaryGradient = LinearGradient(
-        colors: [primaryPurple, primaryTeal],
+        colors: [primaryActionPurple, primaryActionTeal],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -66,24 +81,24 @@ extension Color {
 // MARK: - Typography System
 extension Font {
     // Display Fonts - Heroes & Key Metrics
-    static let displayLarge = Font.system(size: 34, weight: .bold, design: .rounded)
-    static let displayMedium = Font.system(size: 28, weight: .semibold, design: .rounded)
-    static let displaySmall = Font.system(size: 24, weight: .medium, design: .rounded)
+    static let displayLarge = Font.largeTitle.weight(.bold)
+    static let displayMedium = Font.title.weight(.semibold)
+    static let displaySmall = Font.title2.weight(.medium)
     
     // Headlines - Section Titles
-    static let headlineLarge = Font.system(size: 22, weight: .semibold, design: .default)
-    static let headlineMedium = Font.system(size: 18, weight: .medium, design: .default)
-    static let headlineSmall = Font.system(size: 16, weight: .medium, design: .default)
+    static let headlineLarge = Font.title2.weight(.semibold)
+    static let headlineMedium = Font.headline.weight(.medium)
+    static let headlineSmall = Font.subheadline.weight(.medium)
     
     // Body Text - Readable Content
-    static let bodyLarge = Font.system(size: 17, weight: .regular, design: .default)
-    static let bodyMedium = Font.system(size: 15, weight: .regular, design: .default)
-    static let bodySmall = Font.system(size: 13, weight: .regular, design: .default)
+    static let bodyLarge = Font.body
+    static let bodyMedium = Font.callout
+    static let bodySmall = Font.footnote
     
     // Captions & Labels
-    static let captionLarge = Font.system(size: 13, weight: .medium, design: .default)
-    static let captionMedium = Font.system(size: 11, weight: .medium, design: .default)
-    static let captionSmall = Font.system(size: 9, weight: .regular, design: .default)
+    static let captionLarge = Font.footnote.weight(.medium)
+    static let captionMedium = Font.caption.weight(.medium)
+    static let captionSmall = Font.caption2
     
     // Dynamic Type Support
     static func dynamicTitle() -> Font {

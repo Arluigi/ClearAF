@@ -3,6 +3,35 @@ import Combine
 import CoreData
 import Auth
 
+enum AccountName {
+    static func canSubmit(_ value: String, isSaving: Bool) -> Bool {
+        let count = value.trimmingCharacters(in: .whitespacesAndNewlines).count
+        return (2...100).contains(count) && !isSaving
+    }
+}
+
+@MainActor
+final class AccountSaveState: ObservableObject {
+    @Published private(set) var isSaving = false
+    @Published private(set) var errorMessage: String?
+    @Published private(set) var successMessage: String?
+
+    func perform(success: String? = "Saved", failure: String = "Changes could not be saved. Try again.",
+                 operation: () async throws -> Void) async {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = nil
+        successMessage = nil
+        defer { isSaving = false }
+        do {
+            try await operation()
+            successMessage = success
+        } catch {
+            errorMessage = failure
+        }
+    }
+}
+
 // MARK: - API Models
 struct APIUser: Codable {
     let id: String
@@ -26,6 +55,16 @@ struct UpdateProfileRequest: Codable {
     let allergies: String?
     let currentMedications: String?
     let skinConcerns: String?
+
+    static func onboarding(name: String) -> Self {
+        Self(name: name, onboardingCompleted: true, skinType: nil, allergies: nil,
+             currentMedications: nil, skinConcerns: nil)
+    }
+
+    static func nameEdit(_ name: String) -> Self {
+        Self(name: name, onboardingCompleted: nil, skinType: nil, allergies: nil,
+             currentMedications: nil, skinConcerns: nil)
+    }
 }
 
 struct UserProfileResponse: Codable {
@@ -178,6 +217,7 @@ class APIService: ObservableObject {
     private var profileTask: Task<Void, Never>?
     private var loadingTicket: AccountAccess.Ticket?
     @MainActor lazy var photos = PhotoRepository(access: access, transport: self)
+    @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
     private init() {}
 
     @MainActor func start() {
@@ -244,6 +284,7 @@ class APIService: ObservableObject {
 
     @MainActor func clearAccount() {
         photos.cancel()
+        routines.cancel()
         access.invalidate()
         profileTask?.cancel()
         profileTask = nil
@@ -256,16 +297,27 @@ class APIService: ObservableObject {
         SupabaseService.shared.signOut()
     }
 
-    @MainActor func finishOnboarding(name: String, skinType: String) async throws {
+    @MainActor func finishOnboarding(name: String) async throws {
         let ticket = access.snapshot()
-        let body = UpdateProfileRequest(name: name, onboardingCompleted: true, skinType: skinType,
-            allergies: nil, currentMedications: nil, skinConcerns: nil)
+        let body = UpdateProfileRequest.onboarding(name: name)
         let response: UpdateProfileResponse = try await request(endpoint: "/users/profile", method: "PATCH", body: body, ticket: ticket)
         try access.require(ticket)
         guard UUID(uuidString: response.user.id) == ticket?.accountID else { throw AccountFailure.accountChanged }
         try hydrate(response.user, in: persistence.container.viewContext)
         currentUser = response.user
         phase = .ready
+    }
+
+    @MainActor func updateName(_ name: String) async throws {
+        let ticket = access.snapshot()
+        let response: UpdateProfileResponse = try await request(
+            endpoint: "/users/profile", method: "PATCH",
+            body: UpdateProfileRequest.nameEdit(name), ticket: ticket
+        )
+        try access.require(ticket)
+        guard UUID(uuidString: response.user.id) == ticket?.accountID else { throw AccountFailure.accountChanged }
+        try hydrate(response.user, in: persistence.container.viewContext)
+        currentUser = response.user
     }
 
     @MainActor func updateRecoveredPassword(_ password: String) async throws {
@@ -361,6 +413,13 @@ class APIService: ObservableObject {
 // MARK: - API Service Extensions for Future Features
 extension APIService {
     // MARK: - Photo Upload
+    static func photoStorageOriginMatches(_ destination: URLComponents, _ origin: URLComponents) -> Bool {
+        // DNS hostnames are case-insensitive; Supabase normalizes signed URL hosts.
+        destination.scheme == origin.scheme && destination.host?.lowercased() == origin.host?.lowercased()
+            && (destination.port ?? (destination.scheme == "https" ? 443 : 80))
+                == (origin.port ?? (origin.scheme == "https" ? 443 : 80))
+    }
+
     static func privatePhotoUploadRequest(signedURL: String, imageData: Data) throws -> URLRequest {
         guard imageData.count <= 10 * 1024 * 1024 else { throw PhotoUploadError.tooLarge }
         guard let origin = URLComponents(string: SupabaseConfig.url) else {
@@ -368,10 +427,7 @@ extension APIService {
         }
         let prefix = origin.path + "/storage/v1/object/upload/sign/patient-photos/"
         guard let components = URLComponents(string: signedURL),
-              components.scheme == origin.scheme,
-              components.host == origin.host,
-              (components.port ?? (components.scheme == "https" ? 443 : 80)) ==
-                (origin.port ?? (origin.scheme == "https" ? 443 : 80)),
+              Self.photoStorageOriginMatches(components, origin),
               components.user == nil, components.password == nil, components.fragment == nil,
               components.path.hasPrefix(prefix),
               components.path.count > prefix.count,
@@ -489,3 +545,34 @@ private struct CaptureRecord: Decodable {
         return id
     }
 }
+
+
+extension APIService: RoutineTransport {
+    @MainActor func fetchRoutines(localDate: String, ticket: AccountAccess.Ticket) async throws -> RoutineSnapshot {
+        try access.require(ticket)
+        let response: RoutineSnapshot = try await request(endpoint: "/routines?localDate=\(localDate)",
+            method: "GET", body: Optional<String>.none, ticket: ticket)
+        try access.require(ticket)
+        guard response.routines.allSatisfy({ $0.userId == ticket.accountID }),
+              response.completions.allSatisfy({ $0.userId == ticket.accountID }) else { throw AccountFailure.accountChanged }
+        return response
+    }
+    @MainActor func sendCompletion(_ pending: PendingRoutineCompletion, ticket: AccountAccess.Ticket) async throws -> CareRoutineCompletion {
+        try access.require(ticket)
+        guard pending.userId == ticket.accountID else { throw AccountFailure.accountChanged }
+        let body = RoutineCompletionBody(revisionId: pending.revisionId.uuidString.lowercased(),
+            completedAt: pending.completedAt, localDate: pending.localDate, timeZone: pending.timeZone)
+        let response: RoutineCompletionResponse = try await request(
+            endpoint: "/routines/completions/\(pending.id.uuidString.lowercased())", method: "PUT", body: body, ticket: ticket)
+        try access.require(ticket)
+        guard response.completion.userId == ticket.accountID else { throw AccountFailure.accountChanged }
+        return response.completion
+    }
+}
+private struct RoutineCompletionBody: Encodable {
+    let revisionId: String
+    let completedAt: String
+    let localDate: String
+    let timeZone: String
+}
+private struct RoutineCompletionResponse: Decodable { let completion: CareRoutineCompletion }
