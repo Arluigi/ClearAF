@@ -48,7 +48,10 @@ async function run(){
   assert.equal((await call('/photos/'+photo.id,b)).status,404);assert.equal((await call('/photos/'+photo.id,b,'PATCH',{notes:'not allowed'})).status,404);assert.equal((await call('/photos/'+photo.id,b,'DELETE')).status,404);ok('other patient read/edit/delete denied');
   assert.equal((await call('/photos/patient/'+a.id,e)).status,404);ok('unassigned clinician photo list denied');
   const assigned=await call('/photos/patient/'+a.id,d);assert.equal(assigned.status,200);const gallery=await assigned.json();assert(gallery.data.some(p=>p.id===photo.id));assert.equal((await fetch(gallery.data.find(p=>p.id===photo.id).photoUrl)).status,200);ok('assigned clinician can retrieve shared photo');
-  const nested=await call('/users/patients',d);assert.equal(nested.status,200);const nestedBody=await nested.json();assert.match(nestedBody.patients.find(p=>p.id===a.id).skinPhotos[0].photoUrl,/\/object\/sign\//);ok('portal nested photo links are signed');
+  const listed=await call('/users/patients?page=1&limit=20',d);assert.equal(listed.status,200);const listedBody=await listed.json();
+  assert(listedBody.patients.some(p=>p.id===a.id));assert(listedBody.patients.length<=20);assert.equal(listedBody.pagination.limit,20);
+  for(const patient of listedBody.patients)for(const excluded of ['skinPhotos','appointments','prescriptions','photoUrl'])assert.equal(excluded in patient,false);
+  ok('assigned patient list is bounded metadata without embedded private originals');
   const intent=await call('/photos/upload-url',a,'POST',{mimeType:'image/png'});assert.equal(intent.status,200);const uploadIntent=await intent.json();assert(uploadIntent.storagePath.startsWith(a.id+'/'));
   const largeImage=Buffer.alloc(5*1024*1024);Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII=','base64').copy(largeImage);
   s.paths.push(uploadIntent.storagePath);save({...s,accounts:s.accounts.map(({token,...x})=>x)});

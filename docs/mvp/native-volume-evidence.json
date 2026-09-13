@@ -1,0 +1,276 @@
+{
+  "generatedJPEGBytes": 31204,
+  "pages": 42,
+  "photos": 1000,
+  "samples": [
+    {
+      "cacheCount": 24,
+      "decodedBytes": 11520000,
+      "page": 1,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 2,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 3,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 4,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 5,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 6,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 7,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 8,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 9,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 10,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 11,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 12,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 13,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 14,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 15,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 16,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 17,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 18,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 19,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 20,
+      "records": 24
+    },
+    {
+      "cacheCount": 32,
+      "decodedBytes": 15360000,
+      "page": 21,
+      "records": 24
+    }
+  ],
+  "evidenceKind": "Actual test-target CoreData history and production page/cache APIs; UI application memory recorded separately",
+  "applicationMemory": {
+    "status": "passed",
+    "iterations": 40,
+    "instrument": "XCTMemoryMetric(application: XCUIApplication(com.aryansachdev.ClearAF.dev))",
+    "unit": "decimal kB as reported by XCTest",
+    "samples": {
+      "Memory Physical (dev)": [
+        4554.752,
+        7323.672,
+        3391.488,
+        3407.872,
+        7618.584,
+        3522.584,
+        3047.424,
+        3424.256,
+        3342.36,
+        4210.688,
+        3112.984,
+        3375.104,
+        3080.192,
+        3440.664,
+        3080.192,
+        3211.288,
+        81.92,
+        -901.12,
+        -851.968,
+        622.592,
+        -1245.184,
+        -1015.808,
+        -1146.88,
+        -835.584,
+        -1376.256,
+        -376.832,
+        -294.912,
+        -540.672,
+        -360.448,
+        376.832,
+        -311.296,
+        -1212.416,
+        -1228.8,
+        -1163.264,
+        -1228.8,
+        -196.608,
+        -245.76,
+        -81.92,
+        -98.304,
+        -1015.808
+      ],
+      "Absolute Memory Physical (dev)": [
+        87624.056,
+        94947.728,
+        98339.216,
+        101747.088,
+        109365.672,
+        112888.256,
+        115935.68,
+        119359.936,
+        122702.296,
+        126912.984,
+        130025.968,
+        133401.072,
+        136481.264,
+        139921.928,
+        143002.12,
+        146213.408,
+        146295.328,
+        145394.208,
+        144542.24,
+        145164.832,
+        143919.648,
+        142903.84,
+        141756.96,
+        140921.376,
+        139545.12,
+        139168.288,
+        138873.376,
+        138332.704,
+        137972.256,
+        138349.088,
+        138037.792,
+        136825.376,
+        135596.576,
+        134433.312,
+        133204.512,
+        133007.904,
+        132762.144,
+        132680.224,
+        132581.92,
+        131566.112
+      ],
+      "Memory Peak Physical (dev)": [
+        87624.056,
+        95406.48,
+        98929.04,
+        102238.608,
+        109644.2,
+        113461.696,
+        116754.88,
+        120080.832,
+        123439.576,
+        127175.128,
+        130894.32,
+        134040.048,
+        137284.08,
+        140593.672,
+        143837.704,
+        146885.152,
+        149817.888,
+        148933.152,
+        147950.112,
+        147212.832,
+        147687.968,
+        146704.928,
+        145443.36,
+        144394.784,
+        143002.144,
+        141838.88,
+        141380.128,
+        141216.288,
+        140413.472,
+        139971.104,
+        140610.08,
+        140380.704,
+        139119.136,
+        137939.488,
+        136677.92,
+        135596.576,
+        135449.12,
+        135268.896,
+        135268.896,
+        134728.224
+      ]
+    },
+    "absoluteMaximumKB": 146295.328,
+    "lastAbsoluteKB": 131566.112,
+    "peakMaximumKB": 149817.888,
+    "interpretation": "Warm-up increases until iteration17; remaining23iterations trend downward rather than growing with total history. This measures the actual app, not the UI runner.",
+    "testSeconds": 95.081,
+    "log": "/private/tmp/clearaf-t4-audit-fix1.log",
+    "xcresult": "/Users/aryansachdev/Library/Developer/Xcode/DerivedData/ClearAF-hknniyvcazscwxfyjdoqampnisoh/Logs/Test/Test-ClearAF-2026.09.12_23-47-10--0500.xcresult",
+    "suiteNote": "Memory test passed; combined command failed because separate accessibility audit still had findings."
+  }
+}

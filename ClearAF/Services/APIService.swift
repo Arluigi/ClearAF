@@ -413,6 +413,13 @@ class APIService: ObservableObject {
 // MARK: - API Service Extensions for Future Features
 extension APIService {
     // MARK: - Photo Upload
+    static func photoStorageOriginMatches(_ destination: URLComponents, _ origin: URLComponents) -> Bool {
+        // DNS hostnames are case-insensitive; Supabase normalizes signed URL hosts.
+        destination.scheme == origin.scheme && destination.host?.lowercased() == origin.host?.lowercased()
+            && (destination.port ?? (destination.scheme == "https" ? 443 : 80))
+                == (origin.port ?? (origin.scheme == "https" ? 443 : 80))
+    }
+
     static func privatePhotoUploadRequest(signedURL: String, imageData: Data) throws -> URLRequest {
         guard imageData.count <= 10 * 1024 * 1024 else { throw PhotoUploadError.tooLarge }
         guard let origin = URLComponents(string: SupabaseConfig.url) else {
@@ -420,10 +427,7 @@ extension APIService {
         }
         let prefix = origin.path + "/storage/v1/object/upload/sign/patient-photos/"
         guard let components = URLComponents(string: signedURL),
-              components.scheme == origin.scheme,
-              components.host == origin.host,
-              (components.port ?? (components.scheme == "https" ? 443 : 80)) ==
-                (origin.port ?? (origin.scheme == "https" ? 443 : 80)),
+              Self.photoStorageOriginMatches(components, origin),
               components.user == nil, components.password == nil, components.fragment == nil,
               components.path.hasPrefix(prefix),
               components.path.count > prefix.count,

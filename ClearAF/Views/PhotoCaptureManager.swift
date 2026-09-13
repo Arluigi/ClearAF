@@ -61,7 +61,7 @@ struct PhotoCaptureView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     Text(title).font(.largeTitle).bold().multilineTextAlignment(.center)
-                    Text(subtitle).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text(subtitle).foregroundStyle(Color.textSecondary).multilineTextAlignment(.center)
                     Button(action: requestCamera) {
                         Label("Take Photo", systemImage: "camera").frame(maxWidth: .infinity).padding(.vertical, 12)
                     }
@@ -87,7 +87,7 @@ struct PhotoCaptureView: View {
                         Label("Choose from Library", systemImage: "photo.on.rectangle")
                             .frame(maxWidth: .infinity).padding(.vertical, 12)
                     }.buttonStyle(.bordered)
-                    if let pickerError { Text(pickerError).foregroundStyle(.secondary).accessibilityIdentifier("photoPickerError") }
+                    if let pickerError { Text(pickerError).foregroundStyle(Color.textSecondary).accessibilityIdentifier("photoPickerError") }
                 }.padding(24)
             }
             .navigationTitle("Camera").navigationBarTitleDisplayMode(.inline)
@@ -223,6 +223,10 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
             guard let provider = results.first?.itemProvider else {
                 delivery.finish(.cancelled, deliver: parent.onResult); parent.dismiss(); return
             }
+            load(provider: provider)
+        }
+        // Shared production conversion entry point, also exercised with real test providers.
+        func load(provider: NSItemProvider) {
             guard !started else { return }; started = true
             provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { [self] bytes, error in
                 // Decode and JPEG encode off the main thread. Upload representation stays unchanged.

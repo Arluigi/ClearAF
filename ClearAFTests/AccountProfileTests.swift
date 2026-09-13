@@ -74,6 +74,19 @@ struct AccountProfileTests {
         }
     }
 
+    @Test func retainedSecondaryAndErrorTextMeetContrastAcrossBothAppearances() {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            for background in [UIColor.systemBackground, .secondarySystemBackground, .tertiarySystemBackground, .systemGray6] {
+                for (label, color) in [("secondary", Color.textSecondary), ("error", Color.retainedErrorText)] {
+                    let ratio = contrast(UIColor(color).resolvedColor(with: traits), background.resolvedColor(with: traits))
+                    #expect(ratio >= 4.5)
+                    print("MVP contrast \(style.rawValue) \(label): \(ratio)")
+                }
+            }
+        }
+    }
+
     private func contrast(_ first: UIColor, _ second: UIColor) -> Double {
         let values = [first, second].map { color -> Double in
             var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0

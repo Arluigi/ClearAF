@@ -46,7 +46,7 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Routines"].exists)
         XCTAssertFalse(app.tabBars.buttons["Care"].exists)
         XCTAssertFalse(app.tabBars.buttons["Shop"].exists)
-        XCTAssertTrue(app.staticTexts["Welcome, Synthetic UI Patient"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic UI Patient"].exists)
         app.terminate(); app.launch()
         let restored = app.tabBars.buttons["Today"].waitForExistence(timeout: 15)
         if !restored {
@@ -58,12 +58,12 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(restored)
         guard restored else { return }
         XCTAssertFalse(app.buttons["onboardingContinue"].exists)
-        XCTAssertTrue(app.staticTexts["Welcome, Synthetic UI Patient"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic UI Patient"].exists)
         app.terminate()
         app.launchEnvironment["CLEARAF_TEST_OFFLINE"] = "1"
         app.launch()
         XCTAssertTrue(app.buttons["Try again"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.staticTexts["Welcome, Synthetic UI Patient"].exists)
+        XCTAssertFalse(app.staticTexts["Synthetic UI Patient"].exists)
         app.buttons["Sign out"].tap()
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 5))
         // An unsolicited callback must never lower the durable logout barrier.
@@ -86,27 +86,27 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         let a = try await register(app, name: "Synthetic Alpha")
         try await finishOnboarding(app)
-        XCTAssertTrue(app.staticTexts["Welcome, Synthetic Alpha"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Synthetic Alpha"].waitForExistence(timeout: 10))
         signOut(app)
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
         _ = try await register(app, name: "Synthetic Beta")
-        XCTAssertFalse(app.staticTexts["Welcome, Synthetic Alpha"].exists)
+        XCTAssertFalse(app.staticTexts["Synthetic Alpha"].exists)
         try await finishOnboarding(app)
-        XCTAssertTrue(app.staticTexts["Welcome, Synthetic Beta"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.staticTexts["Welcome, Synthetic Alpha"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic Beta"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Synthetic Alpha"].exists)
         app.buttons["Profile"].tap()
         XCTAssertTrue(app.staticTexts["profileEmail"].waitForExistence(timeout: 5))
-        let nameField = app.textFields["profileName"]
+        let nameField = app.descendants(matching: .any).matching(identifier: "profileName").firstMatch
         nameField.tap()
         nameField.clearAndEnterText("Synthetic Beta Updated")
         app.buttons["profileSaveName"].tap()
         XCTAssertTrue(app.staticTexts["Name saved"].waitForExistence(timeout: 10))
         app.buttons["Close profile"].tap()
-        XCTAssertTrue(app.staticTexts["Welcome, Synthetic Beta Updated"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic Beta Updated"].waitForExistence(timeout: 5))
         signOut(app)
         login(app, email: a.email, password: a.password)
-        XCTAssertTrue(app.staticTexts["Welcome, Synthetic Alpha"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.staticTexts["Welcome, Synthetic Beta"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic Alpha"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Synthetic Beta"].exists)
         XCTAssertFalse(app.buttons["onboardingContinue"].exists)
         signOut(app)
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
@@ -134,7 +134,7 @@ final class AccountFlowUITests: XCTestCase {
         app.buttons["Update password"].tap()
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         login(app, email: a.email, password: replacement)
-        XCTAssertTrue(app.staticTexts["Welcome, Synthetic Alpha"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Synthetic Alpha"].waitForExistence(timeout: 15))
         signOut(app)
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
     }
@@ -231,7 +231,11 @@ final class AccountFlowUITests: XCTestCase {
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
         if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
         login(app, email: email, password: password)
-        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+        guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else {
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.lifetime = .keepAlways; add(attachment)
+            throw NSError(domain: "SyntheticFixtureSignIn", code: 1)
+        }
         dismissPasswordPrompt(app)
         app.terminate()
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]

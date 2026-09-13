@@ -5,6 +5,16 @@ import Testing
 struct PhotoUploadSecurityTests {
     private let prefix = SupabaseConfig.url + "/storage/v1/object/upload/sign/patient-photos/"
 
+    @Test func storageOriginTreatsDNSHostCaseAsEquivalentWithoutRelaxingOtherBounds() throws {
+        let origin = try #require(URLComponents(string: "http://Aryans-MacBook-Pro.local:54321"))
+        let signed = try #require(URLComponents(string: "http://aryans-macbook-pro.local:54321/storage/v1/object/upload/sign/patient-photos/user/photo.jpg?token=synthetic"))
+        #expect(APIService.photoStorageOriginMatches(signed, origin))
+        for unsafe in ["https://aryans-macbook-pro.local:54321", "http://aryans-macbook-pro.local:54322", "http://different.local:54321", "http://example.com:54321"] {
+            let other = try #require(URLComponents(string: unsafe))
+            #expect(!APIService.photoStorageOriginMatches(other, origin))
+        }
+    }
+
     @Test func validPrivateDestinationHasNoBearerToken() throws {
         let bytes = Data(repeating: 1, count: 5 * 1024 * 1024)
         let request = try APIService.privatePhotoUploadRequest(signedURL: prefix + "user/photo.jpg?token=secret", imageData: bytes)

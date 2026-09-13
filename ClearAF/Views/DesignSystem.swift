@@ -36,7 +36,16 @@ extension Color {
     
     // Dark Theme Neutral System - Elegant & Modern
     static let textPrimary = Color.primary // Adapts to light/dark mode
-    static let textSecondary = Color.secondary // Adapts to light/dark mode  
+    static let textSecondary = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(white: 0.78, alpha: 1)
+            : UIColor(white: 0.32, alpha: 1)
+    })
+    static let retainedErrorText = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 0.70, blue: 0.66, alpha: 1)
+            : UIColor(red: 0.65, green: 0.10, blue: 0.10, alpha: 1)
+    })
     static let textTertiary = Color(UIColor.tertiaryLabel) // System tertiary
     static let backgroundPrimary = Color(UIColor.systemBackground) // Adapts to theme
     static let backgroundSecondary = Color(UIColor.secondarySystemBackground) // Darker in dark mode

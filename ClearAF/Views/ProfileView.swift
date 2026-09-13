@@ -14,7 +14,7 @@ struct ProfileView: View {
                 VStack(alignment: .leading, spacing: .spaceXXL) {
                     VStack(alignment: .leading, spacing: .spaceSM) {
                         Text("Name").font(.headline)
-                        TextField("Your name", text: $name)
+                        TextField("Your name", text: $name, axis: .vertical)
                             .textContentType(.name)
                             .standardTextField()
                             .accessibilityIdentifier("profileName")
@@ -28,10 +28,10 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profileSaveName")
                         .disabled(!validName || saveState.isSaving)
                         if let saveError = saveState.errorMessage {
-                            Text(saveError).foregroundStyle(.red).accessibilityIdentifier("profileSaveError")
+                            Text(saveError).foregroundStyle(Color.retainedErrorText).accessibilityIdentifier("profileSaveError")
                         }
                         if let saveConfirmation = saveState.successMessage {
-                            Text(saveConfirmation).foregroundStyle(.secondary).accessibilityIdentifier("profileSaveConfirmation")
+                            Text(saveConfirmation).foregroundStyle(Color.textSecondary).accessibilityIdentifier("profileSaveConfirmation")
                         }
                     }
                     VStack(alignment: .leading, spacing: .spaceSM) {
@@ -39,11 +39,16 @@ struct ProfileView: View {
                         Text(APIService.shared.currentUser?.email ?? "Unavailable")
                             .font(.body)
                             .textSelection(.enabled)
+                            .accessibilityLabel("Email")
+                            .accessibilityValue(APIService.shared.currentUser?.email ?? "Unavailable")
+                            .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("profileEmail")
                     }
                     Button("Account removal") { showingRemovalInfo = true }
                         .accessibilityHint("Explains the current account removal process")
-                    Button("Sign out", role: .destructive) { APIService.shared.logout() }
+                    Button(role: .destructive) { APIService.shared.logout() } label: {
+                        Text("Sign out").foregroundStyle(Color.retainedErrorText)
+                    }
                         .accessibilityIdentifier("profileSignOut")
                 }
                 .padding(.spaceXXL)
@@ -52,7 +57,8 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", action: { dismiss() }).accessibilityLabel("Close profile")
+                    Button(action: { dismiss() }) { Text("Close").font(.body) }
+                        .accessibilityLabel("Close profile")
                 }
             }
             .alert("Account removal is not available yet", isPresented: $showingRemovalInfo) {

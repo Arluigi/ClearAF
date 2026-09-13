@@ -27,19 +27,20 @@ struct ProgressView: View {
                     } else {
                         EnhancedPhotoListView(photos: store.photos, images: store.images)
                     }
-                    pagination
                 }.padding()
             }
             .background(Color.backgroundSecondary.ignoresSafeArea())
             .navigationTitle("Photos")
             .safeAreaInset(edge: .bottom) {
-                Button { showingCamera = true } label: {
+                VStack(spacing: 8) {
+                    pagination
+                    Button { showingCamera = true } label: {
                     Label("Add photo", systemImage: "camera.fill")
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }
                 .buttonStyle(.borderedProminent).tint(.primaryActionPurple)
-                .accessibilityLabel("Capture photo")
-                .padding().background(Color.backgroundSecondary)
+                    .accessibilityLabel("Capture photo")
+                }.padding().background(Color.backgroundSecondary)
             }
             .refreshable { store.refresh() }
             .sheet(isPresented: $showingCamera, onDismiss: { store.refresh() }) { DurablePhotoCaptureView() }
@@ -52,10 +53,10 @@ struct ProgressView: View {
             ? AnyLayout(VStackLayout(spacing: .spaceMD))
             : AnyLayout(HStackLayout(spacing: .spaceMD))
         return layout {
-            Button("Previous") { store.previous() }
+            Button { store.previous() } label: { Text("Previous").foregroundStyle(Color.textPrimary) }
                 .frame(maxWidth: .infinity).disabled(!store.hasPrevious)
             Text("Page \(store.page + 1)").font(.caption)
-            Button("Next") { store.next() }
+            Button { store.next() } label: { Text("Next").foregroundStyle(Color.textPrimary) }
                 .frame(maxWidth: .infinity).disabled(!store.hasNext)
         }
         .buttonStyle(.bordered)
@@ -97,6 +98,7 @@ struct EnhancedSegmentedControl: View {
                             }
                         )
                 }
+                .accessibilityAddTraits(selection == index ? .isSelected : [])
             }
         }
         .background(
@@ -217,7 +219,7 @@ struct EnhancedPhotoGridItem: View {
             Button { showingPhotoDetail = true } label: {
                 VStack {
                     ProgressPhotoThumbnail(photo: photo, images: images, size: 100)
-                    if let date = photo.captureDate { Text(date, style: .date).font(.caption) }
+                    if let date = photo.captureDate { Text(date, style: .date).font(.caption).fixedSize(horizontal: false, vertical: true) }
                 }
             }.buttonStyle(.plain)
             PhotoSharingStatusView(photo: photo, compact: true)
@@ -335,7 +337,8 @@ struct PhotoSharingStatusView: View {
     }
     var body: some View {
         VStack(alignment: compact ? .center : .leading, spacing: 4) {
-            Text(label).font(.caption).foregroundColor(photo.uploadState == "error" ? .orange : .textSecondary)
+            Text(label).font(.caption).foregroundColor(photo.uploadState == "error" ? .retainedErrorText : .textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("photoSharingStatus")
             if photo.uploadState != "shared" {
                 Button(photo.uploadState == nil ? "Share" : "Retry") {
@@ -365,11 +368,11 @@ struct PhotoDetailView: View {
                     PhotoSharingStatusView(photo: photo)
                     if photo.uploadState == "shared" { Text("Shared with your care team. This does not indicate clinician review.").font(.caption) }
                     if let notes = photo.notes, !notes.isEmpty { Text(notes) }
-                    Text("Photo removal is not available yet.").font(.caption).foregroundColor(.secondary)
+                    Text("Photo removal is not available yet.").font(.caption).foregroundColor(.textSecondary)
                 }.padding()
             }
             .navigationTitle("Photo Details")
-            .navigationBarItems(trailing: Button("Done") { dismiss() })
+            .navigationBarItems(trailing: Button { dismiss() } label: { Text("Done").font(.body) })
         }
     }
 }

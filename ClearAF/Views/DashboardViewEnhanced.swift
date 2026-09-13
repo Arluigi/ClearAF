@@ -30,17 +30,16 @@ struct DashboardViewEnhanced: View {
                     HStack {
                         VStack(alignment: .leading, spacing: .spaceXS) {
                             Text(getTimeBasedGreeting())
-                                .font(.dynamicHeadline())
+                                .font(.headline)
                                 .foregroundColor(.textSecondary)
-                                .accessibilityLabel("Time-based greeting")
+                                .fixedSize(horizontal: false, vertical: true)
                             if let user = users.first {
                                 Text(user.name ?? "There")
                                     .font(.displayMedium)
                                     .foregroundColor(.textPrimary)
-                                    .accessibilityLabel("Welcome, \(user.name ?? "There")")
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                        }
-                        Spacer()
+                        }.frame(maxWidth: .infinity, alignment: .leading)
                         Button(action: {
                             HapticManager.light()
                             showingProfile = true
@@ -125,7 +124,7 @@ struct DailyTasksCardEnhanced: View {
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceLG) {
             Text("Assigned routines").font(.headlineLarge)
-            Text(repository.localDate).font(.caption).foregroundStyle(.secondary)
+            Text(repository.localDate).font(.caption).foregroundStyle(Color.textSecondary)
             ForEach(RoutineTimeOfDay.allCases, id: \.self) { slot in
                 Button { selectedTab = 2 } label: {
                     HStack(spacing: .spaceMD) {
@@ -150,7 +149,7 @@ struct DailyTasksCardEnhanced: View {
             }
             if repository.lastError != nil {
                 Text("Routines need attention. Open Routines to refresh or retry.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Color.textSecondary)
             }
         }
         .wellnessCard(style: .elevated)
