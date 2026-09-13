@@ -8,96 +8,123 @@
 import SwiftUI
 import CoreData
 import Combine
+import AVFoundation
+import PhotosUI
+import UniformTypeIdentifiers
 
 // MARK: - Photo Capture Manager
+
+enum PhotoCameraAccess {
+    enum State: Equatable { case ready, request, denied, restricted, unavailable }
+    static func state(available: Bool, authorization: AVAuthorizationStatus) -> State {
+        guard available else { return .unavailable }
+        switch authorization {
+        case .authorized: return .ready
+        case .notDetermined: return .request
+        case .denied: return .denied
+        case .restricted: return .restricted
+        @unknown default: return .restricted
+        }
+    }
+}
+
+enum PhotoPickerResult { case selected(Data), cancelled, failed }
+
+/// A provider can finish late or more than once; only its first terminal result is delivered.
+@MainActor final class PhotoPickerDelivery {
+    private var finished = false
+    func finish(_ result: PhotoPickerResult, deliver: (PhotoPickerResult) -> Void) {
+        guard !finished else { return }
+        finished = true
+        deliver(result)
+    }
+}
 
 struct PhotoCaptureView: View {
     let onPhotoTaken: (Data) -> Void
     let title: String
     let subtitle: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showingImagePicker = false
     @State private var showingPhotoLibrary = false
-    @State private var selectedImage: UIImage?
-    
+    @State private var cameraState: PhotoCameraAccess.State?
+    @State private var pickerError: String?
+    @State private var requestingAccess = false
+
     init(title: String = "Take Photo", subtitle: String = "Capture a photo", onPhotoTaken: @escaping (Data) -> Void) {
-        self.title = title
-        self.subtitle = subtitle
-        self.onPhotoTaken = onPhotoTaken
+        self.title = title; self.subtitle = subtitle; self.onPhotoTaken = onPhotoTaken
     }
-    
+
     var body: some View {
         NavigationView {
-            VStack {
-                Spacer()
-                
-                VStack(spacing: 20) {
-                    Text(title)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .multilineTextAlignment(.center)
-                    
-                    Text(subtitle)
-                        .font(.body)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                    
-                    VStack(spacing: 16) {
-                        Button(action: {
-                            if UIImagePickerController.isSourceTypeAvailable(.camera) { showingImagePicker = true } else { showingPhotoLibrary = true }
-                        }) {
-                            HStack {
-                                Image(systemName: "camera")
-                                Text("Take Photo")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color.primaryGradient)
-                            .cornerRadius(12)
-                        }
-                        
-                        Button(action: {
-                            showingPhotoLibrary = true
-                        }) {
-                            HStack {
-                                Image(systemName: "photo.on.rectangle")
-                                Text("Choose from Library")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.primaryPurple)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color.buttonSecondary)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.primaryPurple.opacity(0.3), lineWidth: 1)
-                            )
-                            .cornerRadius(12)
+            ScrollView {
+                VStack(spacing: 24) {
+                    Text(title).font(.largeTitle).bold().multilineTextAlignment(.center)
+                    Text(subtitle).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Button(action: requestCamera) {
+                        Label("Take Photo", systemImage: "camera").frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.primaryActionPurple)
+                    .disabled(requestingAccess)
+                    if let cameraState {
+                        switch cameraState {
+                        case .denied, .restricted:
+                            Text(cameraState == .denied
+                                 ? "Camera access is off. Allow camera access in Settings, or choose a photo from your library."
+                                 : "Camera access is restricted on this device. Check Settings, or choose a photo from your library.")
+                                .accessibilityIdentifier("cameraPermissionMessage")
+                            Button("Open Settings") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                            }.buttonStyle(.bordered)
+                        case .unavailable:
+                            Text("A camera is not available on this device. You can choose a photo from your library.")
+                                .accessibilityIdentifier("cameraUnavailableMessage")
+                        default: EmptyView()
                         }
                     }
-                    .padding(.horizontal, 40)
-                }
-                
-                Spacer()
+                    Button { pickerError = nil; showingPhotoLibrary = true } label: {
+                        Label("Choose from Library", systemImage: "photo.on.rectangle")
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }.buttonStyle(.bordered)
+                    if let pickerError { Text(pickerError).foregroundStyle(.secondary).accessibilityIdentifier("photoPickerError") }
+                }.padding(24)
             }
-            .navigationTitle("Camera")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(
-                leading: Button("Cancel") { dismiss() }
-            )
+            .navigationTitle("Camera").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
-        .sheet(isPresented: $showingImagePicker) {
-            CameraImagePicker(selectedImage: $selectedImage)
-        }
-        .sheet(isPresented: $showingPhotoLibrary) {
-            PhotoLibraryPicker(selectedImage: $selectedImage)
-        }
-        .onChange(of: selectedImage) { _, image in
-            if let image = image, let imageData = image.jpegData(compressionQuality: 0.8) {
-                onPhotoTaken(imageData)
+        .sheet(isPresented: $showingImagePicker) { CameraImagePicker(onResult: receive) }
+        .sheet(isPresented: $showingPhotoLibrary) { PhotoLibraryPicker(onResult: receive) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active && cameraState != nil {
+                cameraState = PhotoCameraAccess.state(available: UIImagePickerController.isSourceTypeAvailable(.camera),
+                                                      authorization: AVCaptureDevice.authorizationStatus(for: .video))
             }
+        }
+    }
+
+    private func requestCamera() {
+        pickerError = nil
+        let state = PhotoCameraAccess.state(available: UIImagePickerController.isSourceTypeAvailable(.camera),
+                                            authorization: AVCaptureDevice.authorizationStatus(for: .video))
+        cameraState = state
+        if state == .ready { showingImagePicker = true }
+        if state == .request {
+            requestingAccess = true
+            Task { @MainActor in
+                let allowed = await AVCaptureDevice.requestAccess(for: .video)
+                requestingAccess = false
+                cameraState = allowed ? .ready : .denied
+                if allowed { showingImagePicker = true }
+            }
+        }
+    }
+
+    private func receive(_ result: PhotoPickerResult) {
+        switch result {
+        case .selected(let bytes): pickerError = nil; onPhotoTaken(bytes)
+        case .cancelled: break
+        case .failed: pickerError = "This photo could not be opened. Please choose another photo."
         }
     }
 }
@@ -144,81 +171,67 @@ struct DailyPhotoCaptureView: View {
     var body: some View { DurablePhotoCaptureView() }
 }
 
-// MARK: - Reusable Camera Image Picker
-
+// The camera picker is presented only after availability and authorization checks.
 struct CameraImagePicker: UIViewControllerRepresentable {
-    @Binding var selectedImage: UIImage?
+    let onResult: (PhotoPickerResult) -> Void
     @Environment(\.dismiss) private var dismiss
-    
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .camera
-        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator; picker.sourceType = .camera; picker.cameraCaptureMode = .photo
         return picker
     }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
+    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
     class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let parent: CameraImagePicker
-        
-        init(_ parent: CameraImagePicker) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.selectedImage = image
-            }
+        let delivery = PhotoPickerDelivery()
+        init(_ parent: CameraImagePicker) { self.parent = parent }
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            let bytes = (info[.originalImage] as? UIImage)?.jpegData(compressionQuality: 0.8)
+            delivery.finish(bytes.map(PhotoPickerResult.selected) ?? .failed, deliver: parent.onResult)
             parent.dismiss()
         }
-        
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
+            delivery.finish(.cancelled, deliver: parent.onResult); parent.dismiss()
         }
     }
 }
 
-// MARK: - Photo Library Picker
-
+/// PHPicker grants access to one selected image, without library-wide authorization.
 struct PhotoLibraryPicker: UIViewControllerRepresentable {
-    @Binding var selectedImage: UIImage?
+    let onResult: (PhotoPickerResult) -> Void
     @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images; configuration.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: configuration)
         picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
         return picker
     }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+    func updateUIViewController(_ controller: PHPickerViewController, context: Context) {}
+    static func dismantleUIViewController(_ controller: PHPickerViewController, coordinator: Coordinator) {
+        // Interactive dismissal also invalidates a provider that is still decoding.
+        coordinator.delivery.finish(.cancelled, deliver: coordinator.parent.onResult)
     }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
         let parent: PhotoLibraryPicker
-        
-        init(_ parent: PhotoLibraryPicker) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.selectedImage = image
+        let delivery = PhotoPickerDelivery()
+        private var started = false
+        init(_ parent: PhotoLibraryPicker) { self.parent = parent }
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            guard let provider = results.first?.itemProvider else {
+                delivery.finish(.cancelled, deliver: parent.onResult); parent.dismiss(); return
             }
-            parent.dismiss()
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
+            guard !started else { return }; started = true
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { [self] bytes, error in
+                // Decode and JPEG encode off the main thread. Upload representation stays unchanged.
+                let jpeg = error == nil ? bytes.flatMap { UIImage(data: $0)?.jpegData(compressionQuality: 0.8) } : nil
+                Task { @MainActor in
+                    delivery.finish(jpeg.map(PhotoPickerResult.selected) ?? .failed, deliver: parent.onResult)
+                    parent.dismiss()
+                }
+            }
         }
     }
 }

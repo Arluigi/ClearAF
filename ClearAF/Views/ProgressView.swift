@@ -4,64 +4,62 @@ import CoreData
 
 struct ProgressView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @FetchRequest(
-        entity: SkinPhoto.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \SkinPhoto.captureDate, ascending: false)],
-        animation: .default)
-    private var photos: FetchedResults<SkinPhoto>
-    
+    @StateObject private var store = PhotoPageStore()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedViewMode = 0
     @State private var showingCamera = false
-    @State private var showingPhotoTakenMessage = false
-    
+
     var body: some View {
         NavigationView {
-            ZStack {
-                // Dark background
-                Color.backgroundSecondary.ignoresSafeArea()
-                
-                VStack(spacing: .spaceXL) {
-                    // Enhanced header with photo count
-                    HStack {
-                        Text("Photos")
-                            .font(.displayMedium)
-                            .foregroundColor(.textPrimary)
-                        Spacer()
-                        Text("\(photos.count) photos")
-                            .font(.captionLarge)
-                            .foregroundColor(.textSecondary)
-                            .padding(.horizontal, .spaceMD)
-                            .padding(.vertical, .spaceXS)
-                            .background(Color.cardBackground)
-                            .clipShape(Capsule())
-                    }
-                    .padding(.horizontal, .spaceXL)
-                    
-                    // Enhanced segmented control
-                    EnhancedSegmentedControl(
-                        selection: $selectedViewMode,
-                        options: ["Grid", "List"]
-                    )
-                    .padding(.horizontal, .spaceXL)
-                    
-                    if photos.isEmpty {
+            ScrollView {
+                VStack(spacing: .spaceLG) {
+                    Text("\(store.total) photos").font(.captionLarge)
+                        .accessibilityIdentifier("photoCount")
+                    EnhancedSegmentedControl(selection: $selectedViewMode, options: ["Grid", "List"])
+                    if store.loading { SwiftUI.ProgressView("Loading photos") }
+                    if let error = store.error {
+                        Text(error)
+                        Button("Try again") { store.refresh() }
+                    } else if store.photos.isEmpty {
                         EnhancedEmptyProgressView()
+                    } else if selectedViewMode == 0 {
+                        EnhancedPhotoGridView(photos: store.photos, images: store.images)
                     } else {
-                        if selectedViewMode == 0 {
-                            EnhancedPhotoGridView(photos: Array(photos))
-                        } else {
-                            EnhancedPhotoListView(photos: Array(photos))
-                        }
+                        EnhancedPhotoListView(photos: store.photos, images: store.images)
                     }
-                }
-                .navigationBarHidden(true)
-                .padding(.top, .spaceXL)
-                
-                // Enhanced Floating Action Button
-                EnhancedFloatingActionButton(showingCamera: $showingCamera)
+                    pagination
+                }.padding()
             }
-            .sheet(isPresented: $showingCamera) { DurablePhotoCaptureView() }
+            .background(Color.backgroundSecondary.ignoresSafeArea())
+            .navigationTitle("Photos")
+            .safeAreaInset(edge: .bottom) {
+                Button { showingCamera = true } label: {
+                    Label("Add photo", systemImage: "camera.fill")
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent).tint(.primaryActionPurple)
+                .accessibilityLabel("Capture photo")
+                .padding().background(Color.backgroundSecondary)
+            }
+            .refreshable { store.refresh() }
+            .sheet(isPresented: $showingCamera, onDismiss: { store.refresh() }) { DurablePhotoCaptureView() }
+            .onAppear { store.bind(context: viewContext) }
+            .onDisappear { store.dispose() }
         }
+    }
+    private var pagination: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: .spaceMD))
+            : AnyLayout(HStackLayout(spacing: .spaceMD))
+        return layout {
+            Button("Previous") { store.previous() }
+                .frame(maxWidth: .infinity).disabled(!store.hasPrevious)
+            Text("Page \(store.page + 1)").font(.caption)
+            Button("Next") { store.next() }
+                .frame(maxWidth: .infinity).disabled(!store.hasNext)
+        }
+        .buttonStyle(.bordered)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
 }
@@ -189,66 +187,73 @@ struct ProgressPhotoTip: View {
 
 struct EnhancedPhotoGridView: View {
     let photos: [SkinPhoto]
+    let images: PhotoImageLoader
     
-    let columns = [
-        GridItem(.flexible(), spacing: .spaceSM),
-        GridItem(.flexible(), spacing: .spaceSM),
-        GridItem(.flexible(), spacing: .spaceSM)
-    ]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.adaptive(minimum: 108), spacing: .spaceSM)]
+    }
     
     var body: some View {
-        ScrollView {
+        Group {
             LazyVGrid(columns: columns, spacing: .spaceMD) {
                 ForEach(photos, id: \.id) { photo in
-                    EnhancedPhotoGridItem(photo: photo)
+                    EnhancedPhotoGridItem(photo: photo, images: images)
                 }
             }
-            .padding(.horizontal, .spaceXL)
-            .padding(.bottom, 100)
+
         }
     }
 }
 
 struct EnhancedPhotoGridItem: View {
     @ObservedObject var photo: SkinPhoto
+    let images: PhotoImageLoader
     @State private var showingPhotoDetail = false
     var body: some View {
         VStack(spacing: .spaceXS) {
             Button { showingPhotoDetail = true } label: {
                 VStack {
-                    ProgressPhotoThumbnail(photo: photo, size: 100)
+                    ProgressPhotoThumbnail(photo: photo, images: images, size: 100)
                     if let date = photo.captureDate { Text(date, style: .date).font(.caption) }
                 }
             }.buttonStyle(.plain)
             PhotoSharingStatusView(photo: photo, compact: true)
         }
         .padding(.spaceXS)
-        .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo) }
+        .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo, images: images) }
     }
 }
 
 struct EnhancedPhotoListView: View {
     let photos: [SkinPhoto]
+    let images: PhotoImageLoader
     
     var body: some View {
-        ScrollView {
+        Group {
             LazyVStack(spacing: .spaceLG) {
                 ForEach(photos, id: \.id) { photo in
-                    EnhancedPhotoListItem(photo: photo)
+                    EnhancedPhotoListItem(photo: photo, images: images)
                 }
             }
-            .padding(.horizontal, .spaceXL)
-            .padding(.bottom, 100)
+
         }
     }
 }
 
 struct EnhancedPhotoListItem: View {
     @ObservedObject var photo: SkinPhoto
+    let images: PhotoImageLoader
     @State private var showingPhotoDetail = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
-        HStack(spacing: .spaceLG) {
-            Button { showingPhotoDetail = true } label: { ProgressPhotoThumbnail(photo: photo, size: 80) }
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: .spaceLG))
+            : AnyLayout(HStackLayout(spacing: .spaceLG))
+        layout {
+            Button { showingPhotoDetail = true } label: { ProgressPhotoThumbnail(photo: photo, images: images, size: 80) }
                 .buttonStyle(.plain).accessibilityLabel("View photo details")
             VStack(alignment: .leading, spacing: .spaceXS) {
                 if let date = photo.captureDate { Text(date, style: .date).font(.headlineSmall) }
@@ -258,16 +263,17 @@ struct EnhancedPhotoListItem: View {
             Spacer()
         }
         .wellnessCard(style: .elevated)
-        .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo) }
+        .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo, images: images) }
     }
 }
 
 private struct ProgressPhotoThumbnail: View {
     @ObservedObject var photo: SkinPhoto
+    let images: PhotoImageLoader
     let size: CGFloat
     var body: some View {
         Group {
-            if let bytes = photo.photoData, let image = UIImage(data: bytes) {
+            if let bytes = photo.photoData, let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 400) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else { Image(systemName: "photo") }
         }
@@ -346,12 +352,13 @@ struct PhotoSharingStatusView: View {
 
 struct PhotoDetailView: View {
     @ObservedObject var photo: SkinPhoto
+    let images: PhotoImageLoader
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if let bytes = photo.photoData, let image = UIImage(data: bytes) {
+                    if let bytes = photo.photoData, let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 1600) {
                         Image(uiImage: image).resizable().scaledToFit().accessibilityLabel("Full photo")
                     }
                     if let date = photo.captureDate { Text(date.formatted(date: .complete, time: .shortened)) }

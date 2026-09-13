@@ -1,4 +1,5 @@
-// Local endpoints are compile-time constants in SupabaseConfig.swift.
+// Debug endpoints use a validated optional Bonjour host; empty preserves loopback.
 // Only the public local anon JWT is supplied by the local stack setup.
+CLEARAF_LOCAL_DEVICE_HOST =
 #include? "Local.generated.xcconfig"
 INFOPLIST_FILE = ClearAF/Config/Debug-Info.plist

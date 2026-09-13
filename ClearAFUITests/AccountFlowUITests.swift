@@ -149,7 +149,7 @@ final class AccountFlowUITests: XCTestCase {
         _ = try await register(app, name: "Synthetic Photo Patient")
         try await finishOnboarding(app)
         app.tabBars.buttons["Photos"].tap()
-        let capture = app.buttons["Capture progress photo"]
+        let capture = app.buttons["Capture photo"]
         XCTAssertTrue(capture.waitForExistence(timeout: 5))
         capture.tap()
         app.buttons["Choose from Library"].tap()
@@ -211,6 +211,72 @@ final class AccountFlowUITests: XCTestCase {
         attachment.lifetime = .keepAlways; add(attachment)
         app.tabBars.buttons["Today"].tap()
         signOut(app)
+    }
+
+    /// Uses the actual system permission prompt where Simulator exposes a camera.
+    /// Hardware acceptance is recorded separately; this also supports camera-unavailable simulators.
+    @MainActor func testPhotosCameraRecoveryAndLibraryCancelAtAccessibilitySize() async throws {
+        continueAfterFailure = false
+        addUIInterruptionMonitor(withDescription: "Deny camera for recovery verification") { alert in
+            guard alert.label.localizedCaseInsensitiveContains("camera") else { return false }
+            let deny = alert.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Allow' AND label != 'Allow'")).firstMatch
+            guard deny.exists else { return false }
+            deny.tap(); return true
+        }
+        let environment = ProcessInfo.processInfo.environment
+        let email = try XCTUnwrap(environment["CLEARAF_ROUTINE_UI_EMAIL"])
+        let password = try XCTUnwrap(environment["CLEARAF_ROUTINE_UI_PASSWORD"])
+        let app = XCUIApplication()
+        app.launch()
+        if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
+        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        login(app, email: email, password: password)
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+        dismissPasswordPrompt(app)
+        app.terminate()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Photos"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Photos"].tap()
+        let count = app.staticTexts["photoCount"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        let originalCount = count.label
+        XCTAssertTrue(app.buttons["Capture photo"].isHittable)
+        app.buttons["Capture photo"].tap()
+        XCTAssertTrue(app.buttons["Take Photo"].waitForExistence(timeout: 5))
+        app.buttons["Take Photo"].tap()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let deny = springboard.alerts.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Allow' AND label != 'Allow'")).firstMatch
+        if deny.waitForExistence(timeout: 3) { deny.tap() }
+        let deniedMessage = app.staticTexts["cameraPermissionMessage"]
+        if deniedMessage.waitForExistence(timeout: 3) {
+            let settings = app.buttons["Open Settings"]
+            for _ in 0..<3 where !settings.isHittable { app.swipeUp() }
+            XCTAssertTrue(settings.isHittable)
+        } else {
+            XCTAssertTrue(app.staticTexts["cameraUnavailableMessage"].exists)
+        }
+        let library = app.buttons["Choose from Library"]
+        for _ in 0..<4 where !library.isHittable { app.swipeUp() }
+        XCTAssertTrue(library.isHittable)
+        library.tap()
+        let pickerClose = app.navigationBars.matching(identifier: "Photos").buttons["Cancel"]
+        if !pickerClose.waitForExistence(timeout: 10) { print(app.debugDescription) }
+        XCTAssertTrue(pickerClose.exists)
+        pickerClose.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: pickerClose)], timeout: 5)
+        XCTAssertTrue(app.buttons["Choose from Library"].waitForExistence(timeout: 5))
+        app.navigationBars["Camera"].buttons["Cancel"].tap()
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        XCTAssertEqual(count.label, originalCount)
+        for _ in 0..<8 where app.buttons["Next"].frame.maxY > app.buttons["Capture photo"].frame.minY { app.swipeUp() }
+        XCTAssertLessThanOrEqual(app.buttons["Next"].frame.maxY, app.buttons["Capture photo"].frame.minY)
+        XCTAssertTrue(app.buttons["Previous"].isHittable)
+        XCTAssertTrue(app.buttons["Next"].isHittable)
+        XCTAssertTrue(app.buttons["Capture photo"].isHittable)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.lifetime = .keepAlways; add(attachment)
+        app.terminate()
     }
 
     @MainActor private func register(_ app: XCUIApplication, name: String) async throws -> (email: String, password: String) {

@@ -15,6 +15,10 @@
 	</array>
 	<key>ClearAFLocalSupabaseAnonKey</key>
 	<string>$(CLEARAF_LOCAL_SUPABASE_ANON_KEY)</string>
+	<key>ClearAFLocalDeviceHost</key>
+	<string>$(CLEARAF_LOCAL_DEVICE_HOST)</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the development server on your Mac for local testing.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

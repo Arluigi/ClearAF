@@ -91,10 +91,17 @@ struct DashboardViewEnhanced: View {
 
 struct DailyPhotoCardEnhanced: View {
     @Binding var selectedTab: Int
-    @FetchRequest(entity: SkinPhoto.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \SkinPhoto.captureDate, ascending: false)], animation: .default)
+    @FetchRequest(fetchRequest: Self.latestPhotoRequest(), animation: .default)
     private var photos: FetchedResults<SkinPhoto>
     @State private var showingCamera = false
+    @State private var images = PhotoImageLoader()
+
+    private static func latestPhotoRequest() -> NSFetchRequest<SkinPhoto> {
+        let request = SkinPhoto.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(key: "captureDate", ascending: false), NSSortDescriptor(key: "id", ascending: false)]
+        request.fetchLimit = 1
+        return request
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceLG) {
@@ -103,11 +110,12 @@ struct DailyPhotoCardEnhanced: View {
                 Spacer()
                 Button("View all") { selectedTab = 1 }
             }
-            PhotoDisplaySection(todayPhoto: photos.first, showingCamera: $showingCamera)
+            PhotoDisplaySection(todayPhoto: photos.first, images: images, showingCamera: $showingCamera)
         }
         .wellnessCard(style: .elevated)
         .padding(.horizontal, .spaceXL)
         .sheet(isPresented: $showingCamera) { DurablePhotoCaptureView() }
+        .onDisappear { images.clear() }
     }
 }
 
@@ -283,11 +291,12 @@ struct ProgressInsight: View {
 // Photo Display Section Component
 struct PhotoDisplaySection: View {
     let todayPhoto: SkinPhoto?
+    let images: PhotoImageLoader
     @Binding var showingCamera: Bool
     var body: some View {
         VStack(spacing: .spaceMD) {
             if let photo = todayPhoto {
-                DashboardPhotoPreview(photo: photo)
+                DashboardPhotoPreview(photo: photo, images: images)
             } else {
                 Image(systemName: "camera.fill").font(.largeTitle).foregroundColor(.primaryPurple)
                 Text("Start your photo history").foregroundColor(.textSecondary)
@@ -304,9 +313,10 @@ struct PhotoDisplaySection: View {
 
 private struct DashboardPhotoPreview: View {
     @ObservedObject var photo: SkinPhoto
+    let images: PhotoImageLoader
     var body: some View {
         VStack(spacing: .spaceSM) {
-            if let bytes = photo.photoData, let image = UIImage(data: bytes) {
+            if let bytes = photo.photoData, let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 800) {
                 Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 200)
                     .clipShape(RoundedRectangle(cornerRadius: .radiusMedium))
                     .accessibilityLabel("Latest progress photo")
