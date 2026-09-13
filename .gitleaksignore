@@ -1,0 +1,6 @@
+# Public Vercel deployment identifiers in the September 13 release record.
+# Exact commit/file/rule/line fingerprints only; no credential or path-wide exclusions.
+35aa2f28cabd09ac4b59ac10628d007b2fdd3168:docs/mvp/release-2026-09-13.md:generic-api-key:11
+35aa2f28cabd09ac4b59ac10628d007b2fdd3168:docs/mvp/release-2026-09-13.md:generic-api-key:7
+aecbb046576cbafbee393d43d17802b984d7eb0a:docs/mvp/release-2026-09-13.md:generic-api-key:11
+aecbb046576cbafbee393d43d17802b984d7eb0a:docs/mvp/release-2026-09-13.md:generic-api-key:7

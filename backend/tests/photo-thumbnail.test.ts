@@ -50,12 +50,19 @@ test('malformed and oversized pixel images fail then generation retries', async 
   await assert.rejects(f.service.get('photo', actor), { status: 422 });
   f.deps.fetch = async () => new Response(await jpeg()); assert.ok((await f.service.get('photo', actor)).length > 0);
 });
-test('stalled upstream aborts on timeout and releases capacity', async () => {
+test('stalled upstream aborts on timeout and releases capacity', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let started!: () => void;
+  const fetching = new Promise<void>(resolve => { started = resolve; });
   let aborted = false;
   const f = fixture({ timeoutMs: 20 }, { fetch: async (_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
     options.signal!.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); });
+    started();
   }) });
-  await assert.rejects(f.service.get('photo', actor), { status: 504 }); assert.equal(aborted, true);
+  const timedOut = assert.rejects(f.service.get('photo', actor), { status: 504 });
+  await fetching;
+  t.mock.timers.tick(20);
+  await timedOut; assert.equal(aborted, true);
   const recoveredImage = await jpeg();
   f.deps.fetch = async () => new Response(recoveredImage); assert.ok((await f.service.get('photo', actor)).length > 0);
 });
