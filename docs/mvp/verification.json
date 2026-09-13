@@ -65,8 +65,7 @@
       "user manual sign-out and cold reopen to sign-in"
     ],
     "pending": [
-      "physical second-account login not executed",
-      "user-created Camera library image removal unverified"
+      "physical second-account login not executed"
     ],
     "privateEvidence": [
       ".local/t4-physical-capture-manifest.json",
@@ -80,7 +79,8 @@
     "verifiedOwnerPhotoRows": 2,
     "cleanup": {
       "server": "exact two rows/two objects removed; all1000 unrelated volume photo IDs preserved",
-      "device": "entire Debug data container reset unexpectedly by devicectl cleanup; not narrow path-only removal; preinventory only routine fixture account"
+      "device": "entire Debug data container reset unexpectedly by devicectl cleanup; not narrow path-only removal; preinventory only routine fixture account",
+      "photosLibrary": "user confirmed deletion of blue-wall test image on 2026-09-13"
     }
   },
   "finalRegression": {
