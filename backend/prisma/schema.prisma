@@ -32,6 +32,7 @@ model User {
   subscriptions         Subscription[]
   assignedDermatologist Dermatologist? @relation(fields: [dermatologistId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  photoCleanups PhotoCleanup[]
   routines Routine[]
   careRoutineRevisions CareRoutineRevision[]
   careRoutineCompletions CareRoutineCompletion[]
@@ -56,6 +57,7 @@ model Dermatologist {
   prescriptions   Prescription[]
   patients        User[]
   careRoutineRevisions CareRoutineRevision[]
+  photoReviews PhotoReview[]
 
   @@map("dermatologists")
 }
@@ -176,6 +178,8 @@ model SkinPhoto {
   relatedAppointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   user               User         @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  review PhotoReview?
+
   @@index([userId], map: "idx_skin_photos_user")
   @@map("skin_photos")
 }
@@ -248,4 +252,23 @@ model CareRoutineCompletion {
   @@index([userId, receivedAt, id])
   @@index([revisionId, userId])
   @@map("care_routine_completions")
+}
+
+model PhotoReview {
+  photoId String @id @db.Uuid
+  reviewerId String @db.Uuid
+  reviewedAt DateTime @default(now()) @db.Timestamp(3)
+  photo SkinPhoto @relation(fields: [photoId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  reviewer Dermatologist @relation(fields: [reviewerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@index([reviewerId])
+  @@map("photo_reviews")
+}
+
+model PhotoCleanup {
+  photoId String @id @db.Uuid
+  userId String @db.Uuid
+  photoUrl String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@index([userId])
+  @@map("photo_cleanup")
 }

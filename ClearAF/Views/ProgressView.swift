@@ -294,7 +294,7 @@ struct PhotoDetailView: View {
                     }
                     if let date = photo.captureDate { Text(date.formatted(date: .complete, time: .shortened)) }
                     PhotoSharingStatusView(photo: photo)
-                    if photo.uploadState == "shared" { Text("Shared with your care team. This does not indicate clinician review.").font(.caption) }
+                    PhotoReviewStatusView(photo: photo)
                     if let notes = photo.notes, !notes.isEmpty { Text(notes) }
                     Text("Photo removal is not available yet.").font(.caption).foregroundColor(CareJournal.textSecondary)
                 }.padding()
@@ -309,4 +309,51 @@ struct PhotoDetailView: View {
     ProgressView()
         .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
         .preferredColorScheme(.dark)
+}
+
+
+private struct PhotoReviewStatusView: View {
+    @ObservedObject var photo: SkinPhoto
+    @ObservedObject private var reviews = APIService.shared.photoReviews
+    @ObservedObject private var api = APIService.shared
+    @State private var retry = 0
+
+    private var sharedID: UUID? {
+        guard photo.uploadState == "shared",
+              let account = api.access.snapshot()?.accountID,
+              photo.managedObjectContext?.userInfo["accountID"] as? UUID == account,
+              let id = photo.serverID else { return nil }
+        return UUID(uuidString: id)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Clinician review").font(.headline)
+            if photo.uploadState != "shared" {
+                Text("This photo has not been shared with your care team.")
+            } else {
+                switch reviews.state {
+                case .loading:
+                    SwiftUI.ProgressView("Loading review status")
+                case .unavailable:
+                    Text("Review status is unavailable.")
+                    Button("Retry review status") { retry += 1 }.buttonStyle(.bordered)
+                case .notReviewed:
+                    Text("Not yet marked reviewed.")
+                case .reviewed(let review):
+                    Text("Reviewed by \(review.reviewerName)")
+                    if let date = review.date { Text(date.formatted(date: .abbreviated, time: .shortened)) }
+                }
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(CareJournal.textSecondary)
+        .accessibilityIdentifier("photoReviewStatus")
+        .task(id: "\(sharedID?.uuidString ?? "none")-\(api.access.snapshot()?.generation.uuidString ?? "none")-\(retry)") {
+            reviews.cancel()
+            guard let id = sharedID, let ticket = api.access.snapshot() else { return }
+            await reviews.load(photoID: id, ticket: ticket)
+        }
+        .onDisappear { reviews.cancel() }
+    }
 }

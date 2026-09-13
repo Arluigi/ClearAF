@@ -217,6 +217,7 @@ class APIService: ObservableObject {
     private var profileTask: Task<Void, Never>?
     private var loadingTicket: AccountAccess.Ticket?
     @MainActor lazy var photos = PhotoRepository(access: access, transport: self)
+    @MainActor lazy var photoReviews = PhotoReviewRepository(access: access, transport: self)
     @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
     private init() {}
 
@@ -285,6 +286,7 @@ class APIService: ObservableObject {
     @MainActor func clearAccount() {
         photos.cancel()
         routines.cancel()
+        photoReviews.cancel()
         access.invalidate()
         profileTask?.cancel()
         profileTask = nil
@@ -576,3 +578,15 @@ private struct RoutineCompletionBody: Encodable {
     let timeZone: String
 }
 private struct RoutineCompletionResponse: Decodable { let completion: CareRoutineCompletion }
+
+
+extension APIService: PhotoReviewTransport {
+    @MainActor func fetchPhotoReviews(photoIDs: [UUID], ticket: AccountAccess.Ticket) async throws -> PhotoReviewResponse {
+        try access.require(ticket)
+        let ids = photoIDs.map { $0.uuidString.lowercased() }.joined(separator: ",")
+        let response: PhotoReviewResponse = try await request(endpoint: "/photo-reviews/status?photoIds=\(ids)",
+            method: "GET", body: Optional<String>.none, ticket: ticket)
+        try access.require(ticket)
+        return response
+    }
+}

@@ -13,6 +13,7 @@ import messageRoutes from './routes/messages';
 import prescriptionRoutes from './routes/prescriptions';
 import productRoutes from './routes/products';
 import photoRoutes from './routes/photos';
+import photoReviewRoutes from './routes/photo-reviews';
 import routineRoutes from './routes/routines';
 import dashboardRoutes from './routes/dashboard';
 
@@ -62,6 +63,7 @@ app.use('/api/messages', authenticateToken, messageRoutes);
 app.use('/api/prescriptions', authenticateToken, prescriptionRoutes);
 app.use('/api/products', authenticateToken, productRoutes);
 app.use('/api/photos', authenticateToken, photoRoutes);
+app.use('/api/photo-reviews', authenticateToken, photoReviewRoutes);
 app.use('/api/routines', authenticateToken, routineRoutes);
 app.use('/api/dashboard', authenticateToken, dashboardRoutes);
 

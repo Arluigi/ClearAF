@@ -124,3 +124,5 @@ T4 integrated MVP evidence, commands and remaining gates: [MVP verification](../
 Verification pacing and scope after T4: [working agreement](verification-workflow.md).
 
 Care Journal portal scope and focused verification: [portal design pass](../design/portal-care-journal.md).
+
+Feature expansion is tracked in [approved scope](../features/expansion.md). First slice: [photo comparison/review verification](../features/photo-review-verification.md); templates, calendars, reminders, check-ins and assigned messaging follow under the same active goal.

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import PhotoReviewQueue from '@/components/patients/PhotoReviewQueue';
 import { Search } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -28,6 +29,7 @@ export default function PatientsPage() {
   }, [state.status, state.page, state.search]);
   return <DashboardLayout><div className="portal-page">
     <div className="space-y-2"><h1 className="text-2xl font-semibold">Assigned patients</h1><p className="max-w-prose text-muted-foreground">Review shared photos, assign routines, and follow patient-reported completions.</p></div>
+    <PhotoReviewQueue context={patientListQuery(state.page, state.search)} />
     <section aria-label="Patient list" className="space-y-5">
       <div className="max-w-xl space-y-2"><Label htmlFor="patient-search">Search patients</Label><div className="relative"><Search aria-hidden className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input id="patient-search" aria-label="Search assigned patients by name" placeholder="Patient name" value={state.search} onChange={event => void controller.search(event.target.value)} className="bg-card pl-9" /></div></div>
       {state.status === 'loading' && <p role="status">Loading assigned patients…</p>}
