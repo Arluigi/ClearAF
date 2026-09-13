@@ -37,4 +37,4 @@ No default clinical questions/content, no scores/streaks. Exact API/DTO contract
 
 ### Integration and release
 - [x] One review/fix wave, real local synthetic integration, focused portal/Simulator walkthrough; preserve existing photo and routine behaviors.
-- [ ] Sanitize verification/deployment record and handoff. Commit/push PR, wait checks, merge, deploy schema/API and confirm portal exact source. Retain demo, clean owned fixtures/temporary branch. Continue messaging goal autonomously.
+- [x] Sanitize verification/deployment record and handoff. Commit/push PR, wait checks, merge, deploy schema/API and confirm portal exact source. Retain demo, clean owned fixtures/temporary branch. Continue messaging goal autonomously.
