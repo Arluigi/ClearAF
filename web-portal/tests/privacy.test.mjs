@@ -24,4 +24,8 @@ test('deferred portal routes redirect without rendering fake activity', async ()
     assert.doesNotMatch(source, /mock|appointment request|unreadCount|currentSkinScore/i, route);
   }
   assert.match(await readFile('src/app/settings/page.tsx', 'utf8'), /redirect\(['"]\/account['"]\)/);
+  assert.match(await readFile('src/app/profile/page.tsx', 'utf8'), /redirect\(['"]\/account['"]\)/);
+  const root = await readFile('src/app/page.tsx', 'utf8');
+  assert.match(root, /redirect\(['"]\/patients['"]\)/);
+  assert.doesNotMatch(root, /View Demo|Total Patients|Avg Improvement|Sign In/i);
 });
