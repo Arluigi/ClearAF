@@ -1,5 +1,7 @@
 'use client';
 
+import TemplatePicker from '@/components/care-support/TemplatePicker';
+import CompletionCalendar from '@/components/care-support/CompletionCalendar';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { ArrowDown, ArrowUp, ClipboardCheck, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +56,7 @@ function RoutineEditor({
       <CardDescription>Saving creates a new version for this patient.</CardDescription>
     </CardHeader>
     <CardContent className="space-y-5">
+      <TemplatePicker disabled={locked} onCopy={template => controller.copyTemplate(slot, template)} />
       <div className="space-y-2">
         <Label htmlFor={`${slot}-routine-name`}>Routine name</Label>
         <Input
@@ -203,7 +206,7 @@ export default function PatientRoutineCare({ patientId, onDirtyChange }: { patie
         <h2 className="flex items-center gap-2 font-medium"><ClipboardCheck className="h-4 w-4" /> Assigned routines</h2>
         <p className="mt-1 text-sm text-muted-foreground">Edit clinician-assigned morning and evening routines.</p>
       </div>
-      <Button type="button" variant="outline" size="sm" disabled={reloadBlocked || state.loadStatus === 'loading'} onClick={reloadAssignments}>
+      <Button type="button" variant="outline" size="sm" disabled={reloadBlocked || Object.values(state.slots).some(editor => editor.dirty) || state.loadStatus === 'loading'} onClick={reloadAssignments}>
         <RefreshCw className="mr-2 h-4 w-4" /> Refresh assignments
       </Button>
     </div>
@@ -218,6 +221,7 @@ export default function PatientRoutineCare({ patientId, onDirtyChange }: { patie
       <RoutineEditor slot="evening" editor={state.slots.evening} controller={controller} reload={() => reloadConflict('evening')} />
     </div>}
 
+    <CompletionCalendar patientId={patientId} />
     <div className="space-y-4 border-t pt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>

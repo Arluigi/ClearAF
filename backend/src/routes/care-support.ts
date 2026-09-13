@@ -1,0 +1,22 @@
+import express from 'express';
+import {z,ZodError} from 'zod';
+import {requirePatient,requireDermatologist} from '../middleware/auth';
+import {careError,revisionInput,uuid} from '../services/routineCare';
+import {dayInput,monthInput,formInput,responseInput} from '../services/careSupportValidation';
+import * as care from '../services/careSupport';
+const router=express.Router();
+const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{await handler(req,res,next)}catch(error){next(error instanceof ZodError||(error as {statusCode?:number}).statusCode?error:careError(500,'Care support operation failed'))}};
+const pagination=z.object({page:z.coerce.number().int().min(1).max(1000000).default(1),limit:z.coerce.number().int().min(1).max(50).default(20)}).strict();
+const dayQuery=pagination.extend({localDate:dayInput});
+const monthQuery=z.object({month:monthInput}).strict();
+router.get('/templates',requireDermatologist,route(async(req,res)=>{const {page,limit}=pagination.parse(req.query);res.json(await care.templates(req.user!.id,page,limit))}));
+router.put('/templates/:templateId/revisions/:revisionId',requireDermatologist,route(async(req,res)=>{const r=await care.saveTemplate(req.user!.id,uuid.parse(req.params.templateId),uuid.parse(req.params.revisionId),revisionInput.parse(req.body));res.status(r.created?201:200).json({template:r.template})}));
+router.put('/patients/:patientId/forms/:revisionId',requireDermatologist,route(async(req,res)=>{const r=await care.saveForm(uuid.parse(req.params.patientId),req.user!.id,uuid.parse(req.params.revisionId),formInput.parse(req.body));res.status(r.created?201:200).json({form:r.form})}));
+router.put('/responses/:responseId',requirePatient,route(async(req,res)=>{const r=await care.saveResponse(req.user!.id,uuid.parse(req.params.responseId),responseInput.parse(req.body));res.status(r.created?201:200).json({response:r.response})}));
+for(const clinician of [false,true]){const prefix=clinician?'/patients/:patientId':'';const auth=clinician?requireDermatologist:requirePatient;const identity=(req:express.Request)=>({patient:clinician?uuid.parse(req.params.patientId):req.user!.id,clinician:clinician?req.user!.id:undefined});
+ router.get(prefix+'/form',auth,route(async(req,res)=>{z.object({}).strict().parse(req.query);const i=identity(req);res.json(await care.currentForm(i.patient,i.clinician))}));
+ router.get(prefix+'/responses',auth,route(async(req,res)=>{const i=identity(req),{page,limit}=pagination.parse(req.query);res.json(await care.responses(i.patient,page,limit,i.clinician))}));
+ router.get(prefix+'/calendar',auth,route(async(req,res)=>{const i=identity(req),{month}=monthQuery.parse(req.query);res.json(await care.calendar(i.patient,month,i.clinician))}));
+ router.get(prefix+'/calendar/events',auth,route(async(req,res)=>{const i=identity(req),{localDate,page,limit}=dayQuery.parse(req.query);res.json(await care.calendarEvents(i.patient,localDate,page,limit,i.clinician))}));
+}
+export default router;

@@ -36,6 +36,8 @@ model User {
   routines Routine[]
   careRoutineRevisions CareRoutineRevision[]
   careRoutineCompletions CareRoutineCompletion[]
+  careForms CareFormRevision[]
+  careResponses CareFormResponse[]
 
   @@index([dermatologistId], map: "idx_user_profiles_dermatologist")
   @@map("user_profiles")
@@ -58,6 +60,8 @@ model Dermatologist {
   patients        User[]
   careRoutineRevisions CareRoutineRevision[]
   photoReviews PhotoReview[]
+  careTemplates CareTemplateRevision[]
+  careForms CareFormRevision[]
 
   @@map("dermatologists")
 }
@@ -271,4 +275,49 @@ model PhotoCleanup {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   @@index([userId])
   @@map("photo_cleanup")
+}
+
+model CareTemplateRevision {
+  id String @id @db.Uuid
+  templateId String @db.Uuid
+  ownerId String @db.Uuid
+  version Int
+  name String
+  steps Json
+  isActive Boolean
+  updatedAt DateTime @default(now()) @db.Timestamp(3)
+  owner Dermatologist @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@unique([templateId, version])
+  @@index([ownerId, updatedAt, id])
+  @@map("care_template_revisions")
+}
+model CareFormRevision {
+  id String @id @db.Uuid
+  userId String @db.Uuid
+  version Int
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+  title String
+  isActive Boolean
+  questions Json
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  author Dermatologist @relation(fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  responses CareFormResponse[]
+  @@unique([userId, version])
+  @@unique([id, userId])
+  @@index([createdBy])
+  @@map("care_form_revisions")
+}
+model CareFormResponse {
+  id String @id @db.Uuid
+  userId String @db.Uuid
+  formId String @db.Uuid
+  submittedAt DateTime @db.Timestamp(3)
+  receivedAt DateTime @default(now()) @db.Timestamp(3)
+  answers Json
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  form CareFormRevision @relation(fields: [formId, userId], references: [id, userId], onDelete: Restrict, onUpdate: NoAction)
+  @@index([userId, receivedAt, id])
+  @@index([formId, userId])
+  @@map("care_form_responses")
 }

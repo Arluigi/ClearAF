@@ -26,6 +26,7 @@ struct DashboardViewEnhanced: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: .spaceXL) {
+                    NavigationLink("Check-in") { CheckInView() }
                     // Header with improved accessibility and styling
                     HStack {
                         VStack(alignment: .leading, spacing: .spaceXS) {

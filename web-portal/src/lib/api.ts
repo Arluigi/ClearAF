@@ -1,3 +1,4 @@
+import type { Template, TemplateDraft, Form, FormDraft, CheckInResponse, Month } from './care-support';
 import type { PhotoReview, ReviewQueueItem } from './photo-review';
 // API Service for Clear AF Web Portal
 // Connects to the configured ClearAF API.
@@ -269,6 +270,14 @@ class APIService {
       `/routines/patients/${encodeURIComponent(patientId)}/completions?${params}`,
     );
   }
+
+  async getTemplates(page=1):Promise<PaginatedResponse<Template>> { return this.request(`/care-support/templates?page=${page}&limit=20`); }
+  async saveTemplate(templateId:string, revisionId:string, body:TemplateDraft&{expectedRevisionId:string|null}):Promise<Template> { const result=await this.request<{template:Template}>(`/care-support/templates/${encodeURIComponent(templateId)}/revisions/${encodeURIComponent(revisionId)}`,{method:'PUT',body:JSON.stringify(body)});return result.template; }
+  async getPatientCalendar(patientId:string,month:string):Promise<Month>{return this.request(`/care-support/patients/${encodeURIComponent(patientId)}/calendar?${new URLSearchParams({month})}`);}
+  async getPatientCalendarEvents(patientId:string,localDate:string,page=1):Promise<PaginatedResponse<RoutineCompletionRecord>>{return this.request(`/care-support/patients/${encodeURIComponent(patientId)}/calendar/events?${new URLSearchParams({localDate,page:String(page),limit:'20'})}`);}
+  async getPatientForm(patientId:string):Promise<{form:Form|null}>{return this.request(`/care-support/patients/${encodeURIComponent(patientId)}/form`);}
+  async savePatientForm(patientId:string,revisionId:string,body:FormDraft&{expectedRevisionId:string|null}):Promise<Form>{const result=await this.request<{form:Form}>(`/care-support/patients/${encodeURIComponent(patientId)}/forms/${encodeURIComponent(revisionId)}`,{method:'PUT',body:JSON.stringify(body)});return result.form;}
+  async getPatientResponses(patientId:string,page=1):Promise<PaginatedResponse<CheckInResponse>>{return this.request(`/care-support/patients/${encodeURIComponent(patientId)}/responses?page=${page}&limit=20`);}
 
   // Appointment Management
   async getAppointments(

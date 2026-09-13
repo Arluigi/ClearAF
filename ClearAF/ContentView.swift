@@ -76,6 +76,10 @@ struct ContentView: View {
     }
     private func resumeRepositories() {
         guard scenePhase == .active, (apiService.phase == .ready || apiService.phase == .onboarding), let ticket = apiService.access.snapshot() else { return }
+        Task { @MainActor in
+            await apiService.reminders.resume(ticket: ticket)
+            await apiService.reminders.refreshPermission()
+        }
         apiService.photos.resume(context: apiService.persistence.container.viewContext, ticket: ticket)
         apiService.routines.resume(accountID: ticket.accountID, ticket: ticket)
     }

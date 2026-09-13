@@ -126,3 +126,5 @@ Verification pacing and scope after T4: [working agreement](verification-workflo
 Care Journal portal scope and focused verification: [portal design pass](../design/portal-care-journal.md).
 
 Feature expansion is tracked in [approved scope](../features/expansion.md). First slice: [photo comparison/review verification](../features/photo-review-verification.md); templates, calendars, reminders, check-ins and assigned messaging follow under the same active goal.
+
+Routine templates, calendars, local reminders and clinician-configured check-ins: [care support verification](../features/care-support-verification.md). Assigned-clinician messaging and linked feedback are next.

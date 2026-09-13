@@ -160,6 +160,11 @@ export class RoutineCareController {
     }
   }
 
+  copyTemplate(slot: RoutineTimeOfDay, template: {name:string;steps:RoutineStep[];isActive:boolean}) {
+    if (!template.isActive) return;
+    this.editDraft(slot, () => ({ name: template.name, steps: cloneSteps(template.steps), isActive: true }));
+  }
+
   setName(slot: RoutineTimeOfDay, name: string) {
     this.editDraft(slot, draft => ({ ...draft, name }));
   }

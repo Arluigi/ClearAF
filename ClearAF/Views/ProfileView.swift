@@ -44,6 +44,7 @@ struct ProfileView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("profileEmail")
                     }
+                    NavigationLink("Reminders") { ReminderSettingsView() }
                     Button("Account removal") { showingRemovalInfo = true }
                         .accessibilityHint("Explains the current account removal process")
                     Button(role: .destructive) { APIService.shared.logout() } label: {
