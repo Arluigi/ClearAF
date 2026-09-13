@@ -90,7 +90,7 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
   return (
     <section ref={historySection} tabIndex={-1} aria-label="Patient photo history" className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-2">
-        <p className="text-sm text-muted-foreground">Shared photos · Capture times shown in your local timezone</p>
+        <div><h2 className="text-lg font-semibold">Shared photos</h2><p className="text-sm text-muted-foreground">Capture times shown in your local timezone</p></div>
         <Button variant="outline" size="sm" onClick={refresh} disabled={state.status === 'loading'}>Refresh images</Button>
       </div>
       {state.status === 'loading' && <p role="status">Loading photos…</p>}
@@ -101,10 +101,10 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
       )}
       {state.status === 'ready' && <>
         {state.photos.length === 0 ? <p>No shared photos on this page.</p> : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {state.photos.map(photo => (
               <button key={photo.id} type="button"
-                className="rounded-lg border p-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                className="rounded-xl bg-card p-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 aria-label={`Open photo from ${captureDate(photo)}`} onClick={event => { photoTrigger.current = event.currentTarget; setSelected(photo.id); }}>
                 <Thumbnail photo={photo} state={previews[photo.id]} />
                 <p className="mt-2 text-sm font-medium">{captureDate(photo)}</p>

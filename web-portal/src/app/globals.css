@@ -2,75 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
-
-
 @layer base {
   :root {
-    /* Clear AF Dark Theme - Default */
-    --background: 0 0% 0%;                    /* #000000 - Pure black */
-    --foreground: 0 0% 100%;                  /* #FFFFFF - White text */
-    --card: 0 0% 12%;                         /* #1F1F1F - Card background */
-    --card-foreground: 0 0% 100%;             /* #FFFFFF - Card text */
-    --popover: 0 0% 18%;                      /* #2D2D2D - Popover background */
-    --popover-foreground: 0 0% 100%;          /* #FFFFFF - Popover text */
-    --primary: 258 90% 66%;                   /* #8B5CF6 - Clear AF Purple */
-    --primary-foreground: 0 0% 100%;          /* #FFFFFF - White on purple */
-    --secondary: 0 0% 18%;                    /* #2D2D2D - Secondary background */
-    --secondary-foreground: 0 0% 100%;        /* #FFFFFF - Secondary text */
-    --muted: 0 0% 12%;                        /* #1F1F1F - Muted background */
-    --muted-foreground: 240 5% 65%;           /* #A1A1AA - Muted text */
-    --accent: 172 77% 40%;                    /* #14B8A6 - Clear AF Teal */
-    --accent-foreground: 0 0% 100%;           /* #FFFFFF - White on teal */
-    --destructive: 0 84% 60%;                 /* #EF4444 - Red for errors */
-    --destructive-foreground: 0 0% 100%;      /* #FFFFFF - White on red */
-    --border: 240 4% 46%;                     /* #71717A - Border color */
-    --input: 0 0% 18%;                        /* #2D2D2D - Input background */
-    --ring: 258 90% 66%;                      /* #8B5CF6 - Focus ring (purple) */
-    --chart-1: 258 90% 66%;                   /* #8B5CF6 - Purple */
-    --chart-2: 172 77% 40%;                   /* #14B8A6 - Teal */
-    --chart-3: 221 91% 60%;                   /* #3B82F6 - Blue */
-    --chart-4: 142 76% 36%;                   /* #10B981 - Green */
-    --chart-5: 38 92% 50%;                    /* #F59E0B - Orange */
+    color-scheme: light;
+    --canvas: 210.00 22.22% 96.47%;
+    --surface: 0.00 0.00% 100.00%;
+    --text-primary: 206.81 41.59% 22.16%;
+    --text-secondary: 208.42 18.63% 40.00%;
+    --action-primary: 206.02 52.20% 31.18%;
+    --action-on-primary: 0.00 0.00% 100.00%;
+    --accent-subtle: 206.67 47.37% 92.55%;
+    --separator: 208.70 26.44% 82.94%;
+    --error: 0.00 65.83% 39.02%;
+    --on-error: 0.00 0.00% 100.00%;
+    --background: var(--canvas);
+    --foreground: var(--text-primary);
+    --card: var(--surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--surface);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--action-primary);
+    --primary-foreground: var(--action-on-primary);
+    --secondary: var(--accent-subtle);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--canvas);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--accent-subtle);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--error);
+    --destructive-foreground: var(--on-error);
+    --border: var(--separator);
+    --input: var(--text-secondary);
+    --ring: var(--action-primary);
     --radius: 0.75rem;
   }
-
-  /* Light theme (unused but kept for compatibility) */
-  .light {
-    --background: 0 0% 100%;
-    --foreground: 20 14.3% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 20 14.3% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 20 14.3% 4.1%;
-    --primary: 258 90% 66%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 60 4.8% 95.9%;
-    --secondary-foreground: 24 9.8% 10%;
-    --muted: 60 4.8% 95.9%;
-    --muted-foreground: 25 5.3% 44.7%;
-    --accent: 172 77% 40%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 60 9.1% 97.8%;
-    --border: 20 5.9% 90%;
-    --input: 20 5.9% 90%;
-    --ring: 258 90% 66%;
-    --chart-1: 258 90% 66%;
-    --chart-2: 172 77% 40%;
-    --chart-3: 221 91% 60%;
-    --chart-4: 142 76% 36%;
-    --chart-5: 38 92% 50%;
-    --radius: 0.75rem;
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --canvas: 208.57 30.43% 13.53%;
+      --surface: 208.80 28.09% 17.45%;
+      --text-primary: 208.00 45.45% 93.53%;
+      --text-secondary: 207.27 25.58% 74.71%;
+      --action-primary: 206.36 71.74% 81.96%;
+      --action-on-primary: 206.84 45.24% 16.47%;
+      --accent-subtle: 206.51 33.33% 25.29%;
+      --separator: 207.27 19.76% 32.75%;
+      --error: 6.43 100.00% 83.53%;
+      --on-error: 0.00 62.62% 20.98%;
+    }
   }
-}
-
-
-
-@layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.5;
   }
+  :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+}
+@layer components {
+  .editorial-title { font-family: Georgia, serif; font-weight: 400; line-height: 1.2; }
+  .portal-page { @apply mx-auto w-full max-w-7xl space-y-8 p-5 md:p-8; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }

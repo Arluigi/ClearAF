@@ -67,10 +67,10 @@ function RoutineEditor({
         />
       </div>
 
-      <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+      <div className="flex items-center justify-between gap-4 border-t pt-4">
         <div className="space-y-1">
           <Label htmlFor={`${slot}-active`}>Active assignment</Label>
-          <p className="text-xs text-muted-foreground">Turn this off and save to archive the routine.</p>
+          <p className="text-sm text-muted-foreground">Turn this off and save to archive the routine.</p>
         </div>
         <Switch
           id={`${slot}-active`}
@@ -83,7 +83,7 @@ function RoutineEditor({
 
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h5 className="font-medium">Ordered steps</h5>
+          <h3 className="font-medium">Ordered steps</h3>
           <Button
             type="button"
             variant="outline"
@@ -96,7 +96,7 @@ function RoutineEditor({
         </div>
         {editor.draft.steps.length === 0 ? <p className="text-sm text-muted-foreground">
           No steps. Add at least one step before activating this routine.
-        </p> : editor.draft.steps.map((step, index) => <div key={index} className="space-y-3 rounded-md border p-3">
+        </p> : editor.draft.steps.map((step, index) => <div key={index} className="space-y-3 border-t pt-4">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-medium">Step {index + 1}</p>
             <div className="flex gap-1">
@@ -160,6 +160,7 @@ function RoutineEditor({
         </Button> : null}
       </div>}
 
+      <p role="status" className="text-sm text-muted-foreground">{editor.dirty ? 'Unsaved changes' : 'No unsaved changes'}</p>
       <Button
         type="button"
         className="w-full"
@@ -172,7 +173,7 @@ function RoutineEditor({
   </Card>;
 }
 
-export default function PatientRoutineCare({ patientId }: { patientId: string }) {
+export default function PatientRoutineCare({ patientId, onDirtyChange }: { patientId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const api = useClinicalAPI();
   const controller = useMemo(() => new RoutineCareController({
     fetchSnapshot: () => api.getPatientRoutines(patientId, localDateToday()),
@@ -187,6 +188,10 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
     return () => controller.cancel();
   }, [controller]);
 
+  useEffect(() => {
+    onDirtyChange?.(Object.values(state.slots).some(editor => editor.dirty || editor.hasPendingSave));
+  }, [state.slots, onDirtyChange]);
+
   const reloadAssignments = () => { void controller.load(); };
   const reloadConflict = (slot: RoutineTimeOfDay) => { void controller.reloadConflict(slot); };
   const saving = state.slots.morning.status === 'saving' || state.slots.evening.status === 'saving';
@@ -195,7 +200,7 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
   return <section aria-label="Patient routine care" className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h4 className="flex items-center gap-2 font-medium"><ClipboardCheck className="h-4 w-4" /> Assigned routines</h4>
+        <h2 className="flex items-center gap-2 font-medium"><ClipboardCheck className="h-4 w-4" /> Assigned routines</h2>
         <p className="mt-1 text-sm text-muted-foreground">Edit clinician-assigned morning and evening routines.</p>
       </div>
       <Button type="button" variant="outline" size="sm" disabled={reloadBlocked || state.loadStatus === 'loading'} onClick={reloadAssignments}>
@@ -208,7 +213,7 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
       <p>{state.loadError}</p>
       <Button type="button" variant="outline" onClick={reloadAssignments}>Retry assignments</Button>
     </div>}
-    {state.loadStatus === 'ready' && <div className="grid gap-4 lg:grid-cols-2">
+    {state.loadStatus === 'ready' && <div className="grid items-start gap-6 lg:grid-cols-2">
       <RoutineEditor slot="morning" editor={state.slots.morning} controller={controller} reload={() => reloadConflict('morning')} />
       <RoutineEditor slot="evening" editor={state.slots.evening} controller={controller} reload={() => reloadConflict('evening')} />
     </div>}
@@ -216,7 +221,7 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
     <div className="space-y-4 border-t pt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h4 className="font-medium">Recent completion events</h4>
+          <h2 className="font-medium">Recent completion events</h2>
           <p className="text-sm text-muted-foreground">Patient-reported completions retain the routine revision viewed at that time.</p>
         </div>
         <Button type="button" variant="outline" size="sm" disabled={state.history.status === 'loading'} onClick={() => void controller.loadHistory(state.history.page)}>
@@ -230,14 +235,14 @@ export default function PatientRoutineCare({ patientId }: { patientId: string })
       </div>}
       {state.history.status === 'ready' && <>
         {state.history.entries.length === 0 ? <p className="text-sm text-muted-foreground">No completion events on this page.</p> : <div className="space-y-3">
-          {state.history.entries.map(entry => <article key={entry.id} className="rounded-md border p-3">
+          {state.history.entries.map(entry => <article key={entry.id} className="border-t pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-medium">{entry.routine.name}</p>
               <Badge variant="outline">{entry.routine.timeOfDay === 'morning' ? 'Morning' : 'Evening'} · Version {entry.routine.version}</Badge>
             </div>
             <p className="mt-2 text-sm">Completed {displayTime(entry.completedAt)}</p>
             <p className="text-sm text-muted-foreground">Reported local date {entry.localDate} · {entry.timeZone}</p>
-            <p className="text-xs text-muted-foreground">Received {displayTime(entry.receivedAt)}</p>
+            <p className="text-sm text-muted-foreground">Received {displayTime(entry.receivedAt)}</p>
           </article>)}
         </div>}
         <nav aria-label="Completion history pages" className="flex flex-wrap items-center justify-between gap-2">

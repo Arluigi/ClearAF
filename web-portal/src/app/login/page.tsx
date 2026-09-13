@@ -52,7 +52,7 @@ export default function LoginPage() {
   const isFormValid = email.trim() !== '' && password.length >= 6;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-gray-custom-900 to-gray-custom-800">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-md space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
@@ -62,13 +62,13 @@ export default function LoginPage() {
             </div>
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Clear AF</h1>
-            <p className="text-muted-foreground">Dermatologist Portal</p>
+            <h1 className="editorial-title text-4xl">Clear AF</h1>
+            <p className="text-muted-foreground">Clinician portal</p>
           </div>
         </div>
 
         {/* Login Form */}
-        <Card className="border-border/50 shadow-2xl">
+        <Card className="">
           <CardHeader className="space-y-2 text-center">
             <CardTitle className="text-2xl">Welcome back</CardTitle>
             <CardDescription>
@@ -85,7 +85,7 @@ export default function LoginPage() {
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="email">Email address</Label>
                   <Input
                     id="email"
                     type="email"

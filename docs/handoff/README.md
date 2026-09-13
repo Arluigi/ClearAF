@@ -122,3 +122,5 @@ Use an installed device name on the new machine. The UI suite requires the local
 T4 integrated MVP evidence, commands and remaining gates: [MVP verification](../mvp/README.md).
 
 Verification pacing and scope after T4: [working agreement](verification-workflow.md).
+
+Care Journal portal scope and focused verification: [portal design pass](../design/portal-care-journal.md).

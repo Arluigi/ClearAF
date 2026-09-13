@@ -20,6 +20,7 @@ export class PatientListController {
       this.publish({ ...this.state, status: 'error', error: 'Unable to load assigned patients. Please try again.' });
     }
   }
+  restore(page: number, search: string) { this.publish({ ...this.state, page, search }); return this.load(page); }
   search(search: string) { this.publish({ ...this.state, search, page: 1 }); return this.load(1); }
   goToPage(page: number) { return this.load(page); }
   retry() { return this.load(); }
