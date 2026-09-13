@@ -216,8 +216,10 @@ class APIService: ObservableObject {
     private var started = false
     private var profileTask: Task<Void, Never>?
     private var loadingTicket: AccountAccess.Ticket?
+    @MainActor lazy var reminders = ReminderRepository(access: access, scheduler: SystemReminderScheduler())
     @MainActor lazy var photos = PhotoRepository(access: access, transport: self)
     @MainActor lazy var photoReviews = PhotoReviewRepository(access: access, transport: self)
+    @MainActor lazy var checkIns = CheckInRepository(access: access, transport: self)
     @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
     private init() {}
 
@@ -284,8 +286,10 @@ class APIService: ObservableObject {
     }
 
     @MainActor func clearAccount() {
+        reminders.cancel()
         photos.cancel()
         routines.cancel()
+        checkIns.cancel()
         photoReviews.cancel()
         access.invalidate()
         profileTask?.cancel()
@@ -590,3 +594,37 @@ extension APIService: PhotoReviewTransport {
         return response
     }
 }
+
+
+extension APIService: CheckInTransport {
+    @MainActor func fetchCheckInForm(ticket: AccountAccess.Ticket) async throws -> CheckInForm? {
+        let result: CheckInFormEnvelope = try await request(endpoint: "/care-support/form", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard result.form == nil || result.form.map { CheckInValidation.form($0, owner: ticket.accountID) } == true else { throw AccountFailure.accountChanged }
+        return result.form
+    }
+    @MainActor func sendCheckIn(_ draft: CheckInDraft, ticket: AccountAccess.Ticket) async throws -> CheckInResponse {
+        guard draft.form.userId == ticket.accountID, let submittedAt = draft.submittedAt else { throw AccountFailure.accountChanged }
+        let result: CheckInResponseEnvelope = try await request(endpoint: "/care-support/responses/\(draft.id.uuidString.lowercased())", method: "PUT", body: CheckInBody(formId: draft.form.id, submittedAt: submittedAt, answers: draft.answers), ticket: ticket)
+        return result.response
+    }
+    @MainActor func fetchCheckInResponses(page: Int, ticket: AccountAccess.Ticket) async throws -> SupportPage<CheckInResponse> {
+        let result: SupportPage<CheckInResponse> = try await request(endpoint: "/care-support/responses?page=\(page)&limit=20", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard result.data.allSatisfy({ $0.userId == ticket.accountID && CheckInValidation.form($0.form, owner: ticket.accountID) && $0.form.id == $0.formId && CheckInValidation.answers($0.answers, questions: $0.form.questions) && RoutineDates.instant($0.submittedAt) != nil && RoutineDates.instant($0.receivedAt) != nil }) else { throw AccountFailure.accountChanged }
+        return result
+    }
+    @MainActor func fetchCompletionCalendar(month: String, ticket: AccountAccess.Ticket) async throws -> CompletionCalendar {
+        guard !SupportDates.days(month).isEmpty else { throw RoutineFailure.invalidData }
+        let result: CompletionCalendar = try await request(endpoint: "/care-support/calendar?month=\(month)", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard result.month == month, result.days.allSatisfy({ SupportDates.days(month).contains($0.localDate) && $0.morning >= 0 && $0.evening >= 0 }) else { throw RoutineFailure.invalidData }
+        return result
+    }
+    @MainActor func fetchCompletionDay(date: String, page: Int, ticket: AccountAccess.Ticket) async throws -> SupportPage<CompletionCalendarEvent> {
+        guard SupportDates.days(String(date.prefix(7))).contains(date) else { throw RoutineFailure.invalidData }
+        let result: SupportPage<CompletionCalendarEvent> = try await request(endpoint: "/care-support/calendar/events?localDate=\(date)&page=\(page)&limit=20", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard result.data.allSatisfy({ $0.completion.userId == ticket.accountID && $0.routine.userId == ticket.accountID && $0.completion.localDate == date && $0.completion.revisionId == $0.routine.id }) else { throw RoutineFailure.invalidData }
+        return result
+    }
+}
+private struct CheckInFormEnvelope: Decodable { let form: CheckInForm? }
+private struct CheckInResponseEnvelope: Decodable { let response: CheckInResponse }
+private struct CheckInBody: Encodable { let formId: UUID; let submittedAt: String; let answers: [CheckInAnswer] }

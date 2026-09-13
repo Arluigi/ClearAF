@@ -15,6 +15,7 @@ struct RoutineView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    NavigationLink("Completion history") { CompletionCalendarView() }
                     Text("Your clinician assigns and updates these routines.")
                         .foregroundStyle(CareJournal.textSecondary)
                     CareJournalPicker(title: "Time of day", selection: $selectedSlot) {
