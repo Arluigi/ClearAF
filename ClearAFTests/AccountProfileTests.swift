@@ -5,6 +5,20 @@ import SwiftUI
 @testable import ClearAF
 
 struct AccountProfileTests {
+    @Test func onboardingRetryUsesTheSameSubmissionGateAsContinue() {
+        #expect(!AccountName.canSubmit(" ", isSaving: false))
+        #expect(!AccountName.canSubmit("Valid Patient", isSaving: true))
+        #expect(AccountName.canSubmit("  Valid Patient  ", isSaving: false))
+    }
+
+    @Test func actualRoutineRecordActionMeetsWhiteTextContrastInBothAppearances() {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            let fill = UIColor(RoutineActionAppearance.tint).resolvedColor(with: traits)
+            #expect(contrast(.white, fill) >= 4.5)
+        }
+    }
+
     @MainActor @Test func failedSaveKeepsFormVisibleWithoutPublishingSuccess() async {
         let state = AccountSaveState()
         await state.perform { throw URLError(.notConnectedToInternet) }

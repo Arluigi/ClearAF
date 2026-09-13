@@ -47,12 +47,13 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("onboardingContinue")
-                .disabled(!isNameValid || saveState.isSaving)
+                .disabled(!canSubmit)
                 if let saveError = saveState.errorMessage {
                     VStack(alignment: .leading, spacing: .spaceSM) {
                         Text(saveError).foregroundStyle(.red).accessibilityIdentifier("onboardingError")
                         Button("Try again", action: completeOnboarding)
                             .accessibilityIdentifier("onboardingRetry")
+                            .disabled(!canSubmit)
                     }
                 }
             }
@@ -65,14 +66,13 @@ struct OnboardingView: View {
         }
     }
 
-    private var isNameValid: Bool {
-        let count = userName.trimmingCharacters(in: .whitespacesAndNewlines).count
-        return (2...100).contains(count)
+    private var canSubmit: Bool {
+        AccountName.canSubmit(userName, isSaving: saveState.isSaving)
     }
 
     private func completeOnboarding() {
         let name = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (2...100).contains(name.count), !saveState.isSaving else { return }
+        guard AccountName.canSubmit(name, isSaving: saveState.isSaving) else { return }
         Task { @MainActor in
             await saveState.perform(success: nil,
                 failure: "Your profile could not be saved. Check your connection and try again.") {

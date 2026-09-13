@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum RoutineActionAppearance {
+    static let tint = Color.primaryActionPurple
+}
+
 struct RoutineView: View {
     @ObservedObject private var repository = APIService.shared.routines
     @State private var selectedSlot: RoutineTimeOfDay = .morning
@@ -73,7 +77,7 @@ struct RoutineView: View {
                 guard APIService.shared.access.snapshot() == ticket else { return }
                 await repository.refresh()
             }
-            .onChange(of: selectedSlot) { actionError = nil }
+            .onChange(of: selectedSlot) { _, _ in actionError = nil }
         }
     }
 
@@ -108,7 +112,7 @@ struct RoutineView: View {
                 } catch { actionError = error.localizedDescription }
             }
             .buttonStyle(.borderedProminent)
-            .tint(.primaryPurple)
+            .tint(RoutineActionAppearance.tint)
             .disabled(status != .unrecorded)
             .accessibilityIdentifier("routine-\(routine.timeOfDay.rawValue)-record")
             Text("Record after you have completed the steps. This reports completion of version \(routine.version) for today.")

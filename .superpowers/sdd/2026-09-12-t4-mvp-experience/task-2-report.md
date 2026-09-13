@@ -153,3 +153,28 @@ Two further exact synthetic accounts were created while verifying this correctio
 | --- | --- |
 | `60949fbc-0f78-434b-8624-24b89d4f79b9` | `clearaf-ui-dacdaf20-aee1-49d6-bc8a-25a5e1a0e72e@example.invalid` |
 | `63b76af8-4cef-4f20-8883-d984de63ea0b` | `clearaf-ui-f65af42e-2280-468b-b907-7f8554c9d800@example.invalid` |
+
+## Independent review fix round 1
+
+The review found that the retained Routine “Record completion” button still used the adaptive foreground accent as its prominent fill. In dark appearance that resolved to `#B69CFF`, which does not provide 4.5:1 contrast with the button’s white text. The actual Routine action now uses `RoutineActionAppearance.tint`, backed by the fixed `primaryActionPurple` fill. Its focused test resolves that exact Routine styling value under both light and dark traits and verifies white-text contrast of 6.42:1 in each appearance.
+
+The review also found that onboarding Retry looked enabled after the name became invalid even though submission would be rejected. Continue, Retry, and the submission guard now share `AccountName.canSubmit`, covering trimmed 2–100 character validation and active-save state.
+
+RED command:
+
+```sh
+PATH=/Users/aryansachdev/.local/share/clearaf/node-v24.4.0-darwin-arm64/bin:/Users/aryansachdev/.local/share/clearaf/bin:/opt/homebrew/bin:$PATH \
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+xcodebuild test -quiet -project ClearAF.xcodeproj -scheme ClearAF \
+  -destination 'platform=iOS Simulator,id=A292A962-7363-48A2-8A85-AEBBBA9A3B92' \
+  -derivedDataPath /private/tmp/clearaf-t3-build \
+  -clonedSourcePackagesDirPath /private/tmp/clearaf-source-packages \
+  -parallel-testing-enabled NO \
+  -only-testing:ClearAFTests/AccountProfileTests
+```
+
+Expected RED result: **TEST FAILED** because `AccountName` and `RoutineActionAppearance` did not exist, proving the tests required the shared submission gate and the Routine control’s concrete styling value.
+
+GREEN used the identical command. Result: **8/8 passed**, zero failures. Evidence: `/private/tmp/clearaf-t3-build/Logs/Test/Test-ClearAF-2026.09.12_21-51-18--0500.xcresult`.
+
+No account UI or full unit rerun was needed: the changes affect the Retry disabled affordance after a displayed error and the Routine button’s tint, while the focused tests exercise both corrected contracts. Existing unrelated compile warnings remained the same.

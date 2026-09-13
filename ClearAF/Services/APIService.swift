@@ -3,6 +3,13 @@ import Combine
 import CoreData
 import Auth
 
+enum AccountName {
+    static func canSubmit(_ value: String, isSaving: Bool) -> Bool {
+        let count = value.trimmingCharacters(in: .whitespacesAndNewlines).count
+        return (2...100).contains(count) && !isSaving
+    }
+}
+
 @MainActor
 final class AccountSaveState: ObservableObject {
     @Published private(set) var isSaving = false
