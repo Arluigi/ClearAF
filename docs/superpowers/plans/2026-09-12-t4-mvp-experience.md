@@ -93,7 +93,7 @@ assert.equal(response.headers.get('cache-control'), 'private, no-store');
 
 ### Task 5: Bounded iOS photo display and recoverable capture
 
-**Files:** create ClearAF/Services/PhotoPageStore.swift and PhotoImageLoader.swift, ClearAFTests/PhotoDisplayTests.swift; modify ClearAF/Views/ProgressView.swift, DashboardViewEnhanced.swift, PhotoCaptureManager.swift and project file as needed; add ClearAFUITests photo/permission coverage.
+**Files:** create ClearAF/Services/PhotoPageStore.swift and PhotoImageLoader.swift, ClearAFTests/PhotoDisplayTests.swift; modify ClearAF/Views/ProgressView.swift, DashboardViewEnhanced.swift, PhotoCaptureManager.swift, ClearAF/Config/SupabaseConfig.swift, ClearAF/Config/Debug-Info.plist, ClearAF/Config/Local.generated.xcconfig.example, ClearAFTests/EnvironmentConfigurationTests.swift and project file as needed; create scripts/device-local.cjs with guarded local startup; add ClearAFUITests photo/permission coverage.
 
 **Interfaces:** PhotoPageStore exposes current page records (24 maximum), total, hasPrevious/hasNext, loading/error and refresh/previous/next; uses active account CoreData context and clears on disposal/account replacement. PhotoImageLoader uses CGImageSourceCreateThumbnailAtIndex with transform and maximum pixel size; bounded decoded-cost cache. Original photo/upload data remains unchanged.
 
@@ -105,6 +105,7 @@ XCTAssertLessThanOrEqual(thumbnail.cgImage!.height, 400)
 ```
 - [ ] Run focused tests for RED.
 - [ ] Replace unbounded FetchRequest and Array conversions with page store, explicit Previous/Next and count. Today fetch limit is one. Downsample thumbnails and screen images without decoding original full resolution; cache with byte/count bounds and clear at account change. Preserve photo notes, stable capture identities and durable retries. Use AVFoundation authorization on camera tap; denied/restricted explanatory state and Settings recovery, unavailable camera explanatory state. Replace broad library UIImagePicker with PHPicker limited selection, async decode/error/cancel handling. Do not request library-wide access. Prevent duplicate picker callbacks/saves through existing PhotoCaptureSession. Ensure controls remain reachable at accessibility sizes.
+- [ ] Add Debug-only `CLEARAF_LOCAL_DEVICE_HOST` via Info.plist; empty uses existing loopback, otherwise validate a single Bonjour `.local` hostname with a strict label grammar and use API port 3002/Supabase 54321. Reject arbitrary URLs, ports, public domains and malformed labels. Release ignores it. Add NSLocalNetworkUsageDescription only to Debug. The device-local startup script reads existing loopback-only backend configuration, verifies the host resolves to this Mac, overrides only PORT=3002 and SUPABASE_URL for its child API process, and forwards termination; never writes credentials or changes baseline .env. Unit tests cover allowed/rejected host and Release isolation. Document command/build setting in local setup.
 - [ ] Run iOS unit/account/photo/routine tests and Simulator UI checks, Debug and Release builds. Commit as `feat(photos): bound local history and recover capture permissions`.
 
 ### Task 6: Integrated experience evidence and final review
