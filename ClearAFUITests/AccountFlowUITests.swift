@@ -31,7 +31,7 @@ final class AccountFlowUITests: XCTestCase {
         }
         XCTAssertTrue(confirmed)
         guard confirmed else { return }
-        XCTAssertFalse(app.tabBars.buttons["Home"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
         let link = try await confirmationLink(email)
         let session = URLSession(configuration: .ephemeral, delegate: NoRedirect(), delegateQueue: nil)
         let (_, response) = try await session.data(from: link)
@@ -39,18 +39,15 @@ final class AccountFlowUITests: XCTestCase {
         app.secureTextFields["Enter your password"].tap()
         app.secureTextFields["Enter your password"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
-        for page in 0...4 {
-            let button = app.buttons["onboardingNext\(page)"]
-            guard button.waitForExistence(timeout: 15) else { XCTFail("Onboarding did not reach page \(page)"); return }
-            if page == 0 { dismissPasswordPrompt(app) }
-            let reachable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)
-            await fulfillment(of: [reachable], timeout: 5)
-            button.tap()
-        }
-        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        try await finishOnboarding(app)
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["Photos"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Routines"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Care"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Shop"].exists)
         XCTAssertTrue(app.staticTexts["Welcome, Synthetic UI Patient"].exists)
         app.terminate(); app.launch()
-        let restored = app.tabBars.buttons["Home"].waitForExistence(timeout: 15)
+        let restored = app.tabBars.buttons["Today"].waitForExistence(timeout: 15)
         if !restored {
             print("Cold launch state: \(app.debugDescription)")
             let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -59,7 +56,7 @@ final class AccountFlowUITests: XCTestCase {
         }
         XCTAssertTrue(restored)
         guard restored else { return }
-        XCTAssertFalse(app.buttons["Get Started"].exists)
+        XCTAssertFalse(app.buttons["onboardingContinue"].exists)
         XCTAssertTrue(app.staticTexts["Welcome, Synthetic UI Patient"].exists)
         app.terminate()
         app.launchEnvironment["CLEARAF_TEST_OFFLINE"] = "1"
@@ -73,7 +70,7 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 5))
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.tabBars.buttons["Home"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
         app.terminate()
         app.launchEnvironment.removeValue(forKey: "CLEARAF_TEST_OFFLINE")
         app.launch()
@@ -96,11 +93,20 @@ final class AccountFlowUITests: XCTestCase {
         try await finishOnboarding(app)
         XCTAssertTrue(app.staticTexts["Welcome, Synthetic Beta"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["Welcome, Synthetic Alpha"].exists)
+        app.buttons["Profile"].tap()
+        XCTAssertTrue(app.staticTexts["profileEmail"].waitForExistence(timeout: 5))
+        let nameField = app.textFields["profileName"]
+        nameField.tap()
+        nameField.clearAndEnterText("Synthetic Beta Updated")
+        app.buttons["profileSaveName"].tap()
+        XCTAssertTrue(app.staticTexts["Name saved"].waitForExistence(timeout: 10))
+        app.buttons["Close profile"].tap()
+        XCTAssertTrue(app.staticTexts["Welcome, Synthetic Beta Updated"].waitForExistence(timeout: 5))
         signOut(app)
         login(app, email: a.email, password: a.password)
         XCTAssertTrue(app.staticTexts["Welcome, Synthetic Alpha"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.staticTexts["Welcome, Synthetic Beta"].exists)
-        XCTAssertFalse(app.buttons["onboardingNext0"].exists)
+        XCTAssertFalse(app.buttons["onboardingContinue"].exists)
         signOut(app)
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
         app.textFields["Enter your email"].tap()
@@ -118,7 +124,7 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertEqual(callback.scheme, "clearaf")
         app.open(callback)
         XCTAssertTrue(app.staticTexts["Choose a new password"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.tabBars.buttons["Home"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
         let replacement = "Updated-\(UUID().uuidString)-A!"
         app.secureTextFields["New password (at least 8 characters)"].tap()
         app.secureTextFields["New password (at least 8 characters)"].typeText(replacement)
@@ -141,7 +147,7 @@ final class AccountFlowUITests: XCTestCase {
         if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
         _ = try await register(app, name: "Synthetic Photo Patient")
         try await finishOnboarding(app)
-        app.tabBars.buttons["Progress"].tap()
+        app.tabBars.buttons["Photos"].tap()
         let capture = app.buttons["Capture progress photo"]
         XCTAssertTrue(capture.waitForExistence(timeout: 5))
         capture.tap()
@@ -154,13 +160,13 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Shared"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.staticTexts["1 photos"].exists)
         app.terminate(); app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
-        app.tabBars.buttons["Progress"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Photos"].tap()
         XCTAssertTrue(app.staticTexts["Shared"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["1 photos"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.lifetime = .keepAlways; add(attachment)
-        app.tabBars.buttons["Home"].tap()
+        app.tabBars.buttons["Today"].tap()
         signOut(app)
     }
 
@@ -175,7 +181,7 @@ final class AccountFlowUITests: XCTestCase {
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
         if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
         login(app, email: email, password: password)
-        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
         let routinesTab = app.tabBars.buttons["Routines"]
         await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: routinesTab)], timeout: 10)
@@ -192,7 +198,7 @@ final class AccountFlowUITests: XCTestCase {
         let status = app.staticTexts["routine-morning-status"]
         await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Recorded today'"), object: status)], timeout: 20)
         app.terminate(); app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
         app.tabBars.buttons["Routines"].tap()
         XCTAssertTrue(app.staticTexts["Synthetic Morning Routine"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.staticTexts["routine-morning-status"].label, "Recorded today")
@@ -202,7 +208,7 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["routine-evening-record"].isEnabled)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.lifetime = .keepAlways; add(attachment)
-        app.tabBars.buttons["Home"].tap()
+        app.tabBars.buttons["Today"].tap()
         signOut(app)
     }
 
@@ -221,7 +227,7 @@ final class AccountFlowUITests: XCTestCase {
         app.secureTextFields["Enter your password"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         XCTAssertTrue(app.staticTexts["authInformation"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.tabBars.buttons["Home"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
         let link = try await confirmationLink(email)
         let session = URLSession(configuration: .ephemeral, delegate: NoRedirect(), delegateQueue: nil)
         let (_, response) = try await session.data(from: link)
@@ -233,14 +239,12 @@ final class AccountFlowUITests: XCTestCase {
     }
 
     @MainActor private func finishOnboarding(_ app: XCUIApplication) async throws {
-        for page in 0...4 {
-            let button = app.buttons["onboardingNext\(page)"]
-            XCTAssertTrue(button.waitForExistence(timeout: 15))
-            if page == 0 { dismissPasswordPrompt(app) }
-            await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)], timeout: 5)
-            button.tap()
-        }
-        XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 15))
+        let button = app.buttons["onboardingContinue"]
+        XCTAssertTrue(button.waitForExistence(timeout: 15))
+        dismissPasswordPrompt(app)
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)], timeout: 5)
+        button.tap()
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
     }
 
     @MainActor private func login(_ app: XCUIApplication, email: String, password: String) {
@@ -283,6 +287,14 @@ final class AccountFlowUITests: XCTestCase {
             try await Task.sleep(for: .milliseconds(200))
         }
         throw NSError(domain: "ClearAFUITests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local confirmation email not found"])
+    }
+}
+private extension XCUIElement {
+    func clearAndEnterText(_ text: String) {
+        tap()
+        press(forDuration: 1)
+        XCUIApplication().menuItems["Select All"].tap()
+        typeText(text)
     }
 }
 private final class NoRedirect: NSObject, URLSessionTaskDelegate {

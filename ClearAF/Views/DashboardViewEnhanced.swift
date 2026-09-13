@@ -60,12 +60,6 @@ struct DashboardViewEnhanced: View {
                     
                     DailyTasksCardEnhanced(selectedTab: $selectedTab)
 
-                    // Prescription Refill Reminders
-                    PrescriptionRemindersCard()
-                    
-                    // Your Dermatologist Section
-                    YourDermatologistCard(selectedTab: $selectedTab)
-                    
                     Spacer(minLength: .spaceHuge)
                 }
                 .padding(.top, .spaceXL)
@@ -322,124 +316,6 @@ private struct DashboardPhotoPreview: View {
         }
     }
 }
-
-struct YourDermatologistCard: View {
-    @Binding var selectedTab: Int
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: .spaceLG) {
-            Text("Your Dermatologist")
-                .font(.headlineLarge)
-                .foregroundColor(.textPrimary)
-            
-            HStack(spacing: .spaceLG) {
-                // Dermatologist Photo Placeholder
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.primaryPurple)
-                    .background(Color.skinPeach)
-                    .clipShape(Circle())
-                
-                VStack(alignment: .leading, spacing: .spaceXS) {
-                    Text("Dr. Amit Om")
-                        .font(.headlineMedium)
-                        .foregroundColor(.textPrimary)
-                    
-                    Text("Dermatologist • 8 years exp.")
-                        .font(.bodySmall)
-                        .foregroundColor(.textSecondary)
-                    
-                    HStack(spacing: .spaceMD) {
-                        Button(action: {
-                            HapticManager.light()
-                            selectedTab = 3 // Navigate to Care tab
-                        }) {
-                            HStack(spacing: .spaceXS) {
-                                Image(systemName: "message.fill")
-                                    .font(.caption)
-                                Text("Message")
-                                    .font(.captionLarge)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, .spaceMD)
-                            .padding(.vertical, .spaceXS)
-                            .background(Color.primaryPurple)
-                            .clipShape(RoundedRectangle(cornerRadius: .radiusSmall))
-                        }
-                        
-                        Button(action: {
-                            HapticManager.light()
-                            selectedTab = 3 // Navigate to Care tab
-                        }) {
-                            HStack(spacing: .spaceXS) {
-                                Image(systemName: "calendar.badge.plus")
-                                    .font(.caption)
-                                Text("Book")
-                                    .font(.captionLarge)
-                            }
-                            .foregroundColor(.primaryPurple)
-                            .padding(.horizontal, .spaceMD)
-                            .padding(.vertical, .spaceXS)
-                            .background(Color.buttonSecondary)
-                            .clipShape(RoundedRectangle(cornerRadius: .radiusSmall))
-                        }
-                    }
-                }
-                
-                Spacer()
-            }
-        }
-        .wellnessCard()
-        .padding(.horizontal, .spaceXL)
-    }
-}
-
-// Prescription Refill Reminders Card Component
-struct PrescriptionRemindersCard: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: .spaceLG) {
-            HStack {
-                Text("Prescription Refills")
-                    .font(.headlineLarge)
-                    .foregroundColor(.textPrimary)
-                
-                Spacer()
-                
-                Button(action: {
-                    HapticManager.light()
-                    // TODO: Navigate to Shop tab
-                }) {
-                    Text("View All")
-                        .font(.captionLarge)
-                        .foregroundColor(.primaryPurple)
-                }
-            }
-            
-            VStack(spacing: .spaceMD) {
-                HStack {
-                    Image(systemName: "pills.circle")
-                        .font(.title2)
-                        .foregroundColor(.primaryTeal)
-                    
-                    VStack(alignment: .leading, spacing: .spaceXS) {
-                        Text("No prescriptions yet")
-                            .font(.headlineMedium)
-                            .foregroundColor(.textPrimary)
-                        
-                        Text("Prescribed medications will appear here")
-                            .font(.bodySmall)
-                            .foregroundColor(.textSecondary)
-                    }
-                    
-                    Spacer()
-                }
-            }
-        }
-        .wellnessCard()
-        .padding(.horizontal, .spaceXL)
-    }
-}
-
 
 #Preview {
     DashboardViewEnhanced(selectedTab: .constant(0))

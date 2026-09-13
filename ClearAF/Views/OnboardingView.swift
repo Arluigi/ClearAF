@@ -5,168 +5,83 @@ import CoreData
 import Combine
 
 struct OnboardingView: View {
-    @Environment(\.managedObjectContext) private var viewContext
-    @State private var saving = false
-    @State private var saveError = ""
-    @State private var currentPage = 0
+    @StateObject private var saveState = AccountSaveState()
     @State private var userName = ""
-    @State private var selectedSkinType = "Normal"
-    @State private var showingImagePicker = false
-    @State private var cameraPermissionGranted = false
-    
     let onboardingComplete: () -> Void
-    
-    let skinTypes = ["Normal", "Dry", "Oily", "Combination", "Sensitive"]
-    
+
     var body: some View {
-        ZStack {
-            Color.backgroundPrimary.ignoresSafeArea()
-            
-            TabView(selection: $currentPage) {
-                // Welcome Screen
-                WelcomeScreen()
-                    .tag(0)
-                
-                // App Explanation
-                AppExplanationScreen()
-                    .tag(1)
-                
-                // Profile Setup
-                ProfileSetupScreen(userName: $userName, selectedSkinType: $selectedSkinType)
-                    .tag(2)
-                
-                // Camera Permissions
-                CameraPermissionsScreen(cameraPermissionGranted: $cameraPermissionGranted)
-                    .tag(3)
-                
-                // First Photo Guidance
-                FirstPhotoScreen(showingImagePicker: $showingImagePicker)
-                    .tag(4)
-            }
-            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-            .animation(.easeInOut, value: currentPage)
-            
-            // Navigation Controls
-            VStack {
-                Spacer()
-                
-                HStack {
-                    // Back Button
-                    if currentPage > 0 {
-                        Button(action: {
-                            HapticManager.light()
-                            withAnimation {
-                                currentPage -= 1
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "chevron.left")
-                                Text("Back")
-                            }
-                            .font(.headlineMedium)
-                            .foregroundColor(.primaryPurple)
-                            .padding(.horizontal, .spaceXL)
-                            .padding(.vertical, .spaceLG)
-                            .background(Color.backgroundSecondary)
-                            .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                        }
-                    } else {
-                        Spacer()
-                    }
-                    
-                    Spacer()
-                    
-                    // Page Indicator
-                    HStack(spacing: .spaceXS) {
-                        ForEach(0..<5, id: \.self) { index in
-                            Circle()
-                                .fill(index == currentPage ? Color.primaryPurple : Color.backgroundSecondary)
-                                .frame(width: 8, height: 8)
-                                .animation(.easeInOut, value: currentPage)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    // Next/Complete Button
-                    Button(action: nextAction) {
-                        Text(nextButtonText)
-                            .font(.headlineMedium)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, .spaceXL)
-                            .padding(.vertical, .spaceLG)
-                            .background(
-                                isNextButtonEnabled ? 
-                                AnyView(Color.primaryGradient) : 
-                                AnyView(Color.buttonDisabled)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                    }
-                    .accessibilityIdentifier("onboardingNext\(currentPage)")
-                    .disabled(!isNextButtonEnabled || saving)
+        ScrollView {
+            VStack(alignment: .leading, spacing: .spaceXXL) {
+                Image(systemName: "sparkles")
+                    .font(.largeTitle)
+                    .foregroundStyle(Color.primaryPurple)
+                    .accessibilityHidden(true)
+                Text("Welcome to Clear AF")
+                    .font(.largeTitle.bold())
+                Text("Keep a dated photo history and follow the morning or evening routines assigned by your clinician.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: .spaceLG) {
+                    Label("Photos stay dated so you and your care team can review changes over time.", systemImage: "camera")
+                    Label("Routines show only assignments from your clinician and let you record completion.", systemImage: "checklist")
                 }
-                .padding(.horizontal, .spaceXXL)
-                .padding(.bottom, .spaceHuge)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: .spaceSM) {
+                    Text("Your name").font(.headline)
+                    TextField("Your name", text: $userName)
+                        .textContentType(.name)
+                        .standardTextField()
+                        .accessibilityIdentifier("onboardingName")
+                    Text("Use between 2 and 100 characters.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Button(action: completeOnboarding) {
+                    HStack {
+                        if saveState.isSaving { SwiftUI.ProgressView().tint(.white) }
+                        Text(saveState.isSaving ? "Saving…" : "Continue")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .accessibilityIdentifier("onboardingContinue")
+                .disabled(!isNameValid || saveState.isSaving)
+                if let saveError = saveState.errorMessage {
+                    VStack(alignment: .leading, spacing: .spaceSM) {
+                        Text(saveError).foregroundStyle(.red).accessibilityIdentifier("onboardingError")
+                        Button("Try again", action: completeOnboarding)
+                            .accessibilityIdentifier("onboardingRetry")
+                    }
+                }
             }
+            .padding(.spaceXXL)
+            .frame(maxWidth: 600, alignment: .leading)
         }
+        .background(Color.backgroundPrimary.ignoresSafeArea())
         .onAppear {
             if userName.isEmpty { userName = APIService.shared.currentUser?.name ?? "" }
-            selectedSkinType = APIService.shared.currentUser?.skinType ?? "Normal"
-        }
-        .alert("Profile not saved", isPresented: Binding(get: { !saveError.isEmpty }, set: { if !$0 { saveError = "" } })) {
-            Button("OK") { saveError = "" }
-        } message: { Text(saveError) }
-        .sheet(isPresented: $showingImagePicker) {
-            CameraView()
-        }
-    }
-    
-    private var nextButtonText: String {
-        switch currentPage {
-        case 4: return "Get Started"
-        default: return "Next"
-        }
-    }
-    
-    private var isNextButtonEnabled: Bool {
-        switch currentPage {
-        case 2: 
-            let trimmedName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmedName.count >= 2 && !selectedSkinType.isEmpty
-        case 3: return true
-        default: return true
-        }
-    }
-    
-    private func nextAction() {
-        HapticManager.medium()
-        
-        if currentPage == 4 {
-            // Complete onboarding
-            completeOnboarding()
-        } else {
-            withAnimation {
-                currentPage += 1
-            }
-        }
-    }
-    
-    private func completeOnboarding() {
-        let name = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard name.count >= 2, !saving else { return }
-        saving = true
-        Task { @MainActor in
-            defer { saving = false }
-            do {
-                try await APIService.shared.finishOnboarding(name: name, skinType: selectedSkinType)
-                onboardingComplete()
-            } catch { saveError = "Your profile could not be saved. Check your connection and try again." }
         }
     }
 
-    private func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    private var isNameValid: Bool {
+        let count = userName.trimmingCharacters(in: .whitespacesAndNewlines).count
+        return (2...100).contains(count)
+    }
+
+    private func completeOnboarding() {
+        let name = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (2...100).contains(name.count), !saveState.isSaving else { return }
+        Task { @MainActor in
+            await saveState.perform(success: nil,
+                failure: "Your profile could not be saved. Check your connection and try again.") {
+                try await APIService.shared.finishOnboarding(name: name)
+            }
+            if saveState.errorMessage == nil {
+                onboardingComplete()
+            }
+        }
     }
 }
 

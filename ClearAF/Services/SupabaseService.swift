@@ -97,11 +97,16 @@ final class SupabaseService: ObservableObject {
         client = Self.makeClient(replacement)
         startListening()
     }
-    @MainActor func signUp(email: String, password: String, name: String, skinType: String) async throws -> Bool {
+    static func registrationMetadata(name: String, skinType: String? = nil) -> [String: AnyJSON] {
+        var metadata: [String: AnyJSON] = ["name": .string(name)]
+        if let skinType, !skinType.isEmpty { metadata["skinType"] = .string(skinType) }
+        return metadata
+    }
+    @MainActor func signUp(email: String, password: String, name: String, skinType: String? = nil) async throws -> Bool {
         try await prepareSignIn()
         recoveryPending = false
         let response = try await client.auth.signUp(email: email, password: password,
-            data: ["name": .string(name), "skinType": .string(skinType)], redirectTo: Self.callbackURL)
+            data: Self.registrationMetadata(name: name, skinType: skinType), redirectTo: Self.callbackURL)
         return response.session != nil
     }
     @MainActor func signIn(email: String, password: String) async throws {

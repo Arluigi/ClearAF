@@ -29,14 +29,14 @@ struct ContentView: View {
                     DashboardViewEnhanced(selectedTab: $selectedTab)
                         .tabItem {
                             Image(systemName: "house.fill")
-                            Text("Home")
+                            Text("Today")
                         }
                         .tag(0)
                     
                     ProgressView()
                         .tabItem {
                             Image(systemName: "chart.line.uptrend.xyaxis")
-                            Text("Progress")
+                            Text("Photos")
                         }
                         .tag(1)
                     
@@ -46,20 +46,6 @@ struct ContentView: View {
                             Text("Routines")
                         }
                         .tag(2)
-                    
-                    CareView()
-                        .tabItem {
-                            Image(systemName: "stethoscope")
-                            Text("Care")
-                        }
-                        .tag(3)
-                    
-                    ShopView()
-                        .tabItem {
-                            Image(systemName: "bag.fill")
-                            Text("Shop")
-                        }
-                        .tag(4)
                 }
                 .tint(.primaryPurple)
             }
@@ -67,8 +53,8 @@ struct ContentView: View {
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)
         .id(apiService.access.snapshot()?.generation)
         .task { apiService.start(); resumeRepositories() }
-        .onChange(of: apiService.phase) { _ in resumeRepositories() }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: apiService.phase) { _, _ in resumeRepositories() }
+        .onChange(of: scenePhase) { _, phase in
             if phase == .active { resumeRepositories() }
             else { apiService.photos.cancel(); apiService.routines.cancel() }
         }

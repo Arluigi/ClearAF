@@ -8,7 +8,7 @@ struct AuthenticationView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var name = ""
-    @State private var selectedSkinType = "Normal"
+    @State private var selectedSkinType = ""
     @State private var isLoading = false
     @State private var errorMessage = ""
     @State private var showError = false
@@ -71,6 +71,7 @@ struct AuthenticationView: View {
                                     .foregroundColor(.primary)
 
                                 Picker("Skin Type", selection: $selectedSkinType) {
+                                    Text("Not specified").tag("")
                                     ForEach(skinTypes, id: \.self) { type in
                                         Text(type).tag(type)
                                     }
@@ -164,7 +165,8 @@ struct AuthenticationView: View {
             defer { isLoading = false }
             do {
                 let hasSession = try await supabaseService.signUp(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                    password: password, name: name.trimmingCharacters(in: .whitespacesAndNewlines), skinType: selectedSkinType)
+                    password: password, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    skinType: selectedSkinType.isEmpty ? nil : selectedSkinType)
                 if !hasSession {
                     information = "Check your email to confirm your account, then sign in."
                     isRegistering = false
@@ -201,7 +203,7 @@ struct AuthenticationView: View {
         email = ""
         password = ""
         name = ""
-        selectedSkinType = "Normal"
+        selectedSkinType = ""
         errorMessage = ""
     }
 }

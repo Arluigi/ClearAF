@@ -3,242 +3,84 @@ import UIKit
 import CoreData
 
 struct ProfileView: View {
-    @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.dismiss) private var dismiss
     @State private var showingRemovalInfo = false
-    @State private var showingEditProfile = false
-    @State private var showingSkinType = false
-    @State private var showingNotifications = false
-    @State private var showingExportData = false
-    @State private var showingHelp = false
-    @State private var showingPrivacy = false
-    @FetchRequest(
-        entity: User.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \User.joinDate, ascending: false)],
-        animation: .default)
-    private var users: FetchedResults<User>
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                Color.backgroundSecondary.ignoresSafeArea()
-                
-                VStack(spacing: .spaceXL) {
-                    // Enhanced header
-                    HStack {
-                        Text("Profile")
-                            .font(.displayMedium)
-                            .foregroundColor(.textPrimary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, .spaceXL)
-                    
-                    ScrollView {
-                        VStack(spacing: .spaceXXL) {
-                            // Profile Header
-                            VStack(spacing: .spaceLG) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.primaryGradient)
-                                        .frame(width: 100, height: 100)
-                                    
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(.white)
-                                }
-                                .glowShadow()
-                                
-                                VStack(spacing: .spaceXS) {
-                                    Text(users.first?.name ?? "User")
-                                        .font(.displayMedium)
-                                        .foregroundColor(.textPrimary)
-                                    
-                                    Text("Member since \(formatJoinDate())")
-                                        .font(.captionLarge)
-                                        .foregroundColor(.textSecondary)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .wellnessCard(style: .elevated)
-                            .padding(.horizontal, .spaceXL)
-                        
-                            // Enhanced Stats Cards
-                            HStack(spacing: .spaceLG) {
-                                EnhancedStatCard(
-                                    title: "Current Score",
-                                    value: "\(users.first?.currentSkinScore ?? 0)",
-                                    icon: "chart.line.uptrend.xyaxis",
-                                    color: scoreColor(for: Int(users.first?.currentSkinScore ?? 0))
-                                )
-                                
-                                EnhancedStatCard(
-                                    title: "Streak",
-                                    value: "\(users.first?.streakCount ?? 0) days",
-                                    icon: "flame.fill",
-                                    color: .orange
-                                )
-                            }
-                            .padding(.horizontal, .spaceXL)
-                            
-                            // Settings List
-                            VStack(spacing: 0) {
-                                SettingsRow(
-                                    title: "Edit Profile",
-                                    icon: "person.fill",
-                                    action: {
-                                        showingEditProfile = true
-                                    }
-                                )
-                            
-                                SettingsRow(
-                                    title: "Skin Type & Concerns",
-                                    icon: "face.smiling",
-                                    action: {
-                                        showingSkinType = true
-                                    }
-                                )
-                            
-                                SettingsRow(
-                                    title: "Notifications",
-                                    icon: "bell.fill",
-                                    action: {
-                                        showingNotifications = true
-                                    }
-                                )
-                            
-                                SettingsRow(
-                                    title: "Export Data",
-                                    icon: "square.and.arrow.up",
-                                    action: {
-                                        showingExportData = true
-                                    }
-                                )
-                            
-                                SettingsRow(
-                                    title: "Help & Support",
-                                    icon: "questionmark.circle.fill",
-                                    action: {
-                                        showingHelp = true
-                                    }
-                                )
-                            
-                                SettingsRow(title: "Sign out", icon: "rectangle.portrait.and.arrow.right") {
-                                    APIService.shared.logout()
-                                }
-                                SettingsRow(title: "Account removal", icon: "person.crop.circle.badge.minus") {
-                                    showingRemovalInfo = true
-                                }
-                                SettingsRow(
-                                    title: "Privacy Policy",
-                                    icon: "hand.raised.fill",
-                                    action: {
-                                        showingPrivacy = true
-                                    }
-                                )
-                            }
-                            .wellnessCard(style: .elevated)
-                            .padding(.horizontal, .spaceXL)
-                        
-                            
-                            // Footer
-                            VStack(spacing: .spaceMD) {
-                                Divider()
-                                    .padding(.horizontal, .spaceXL)
-                                
-                                VStack(spacing: .spaceSM) {
-                                    HStack(spacing: .spaceXS) {
-                                        Image(systemName: "sparkles")
-                                            .font(.caption)
-                                            .foregroundColor(.primaryPurple)
-                                        Text("ClearAF")
-                                            .font(.captionLarge)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.textPrimary)
-                                        Text("v1.0")
-                                            .font(.caption)
-                                            .foregroundColor(.textSecondary)
-                                    }
-                                    
-                                    Text("Your journey to clearer skin")
-                                        .font(.caption)
-                                        .foregroundColor(.textSecondary)
-                                }
-                                
-                                VStack(spacing: .spaceXS) {
-                                    Text("Created with ❤️ by")
-                                        .font(.caption)
-                                        .foregroundColor(.textSecondary)
-                                    
-                                    Button(action: {
-                                        HapticManager.light()
-                                        if let url = URL(string: "https://www.linkedin.com/in/aryansachdev/") {
-                                            UIApplication.shared.open(url)
-                                        }
-                                    }) {
-                                        HStack(spacing: .spaceXS) {
-                                            Image(systemName: "person.circle.fill")
-                                                .font(.caption)
-                                                .foregroundColor(.primaryPurple)
-                                            Text("Aryan Sachdev")
-                                                .font(.captionLarge)
-                                                .fontWeight(.medium)
-                                                .foregroundColor(.primaryPurple)
-                                            Image(systemName: "arrow.up.right")
-                                                .font(.caption2)
-                                                .foregroundColor(.primaryPurple)
-                                        }
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                            .padding(.top, .spaceXL)
-                            .padding(.bottom, .spaceXXL)
-                            
-                            // TEMPORARY: Reset button for testing new user flow
+    @State private var name = ""
+    @StateObject private var saveState = AccountSaveState()
 
-                            
-                            Spacer()
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: .spaceXXL) {
+                    VStack(alignment: .leading, spacing: .spaceSM) {
+                        Text("Name").font(.headline)
+                        TextField("Your name", text: $name)
+                            .textContentType(.name)
+                            .standardTextField()
+                            .accessibilityIdentifier("profileName")
+                        Button(action: saveName) {
+                            HStack {
+                                if saveState.isSaving { SwiftUI.ProgressView().tint(.white) }
+                                Text(saveState.isSaving ? "Saving…" : "Save name")
+                            }.frame(maxWidth: .infinity)
                         }
-                        .padding(.top)
+                        .buttonStyle(PrimaryButtonStyle())
+                        .accessibilityIdentifier("profileSaveName")
+                        .disabled(!validName || saveState.isSaving)
+                        if let saveError = saveState.errorMessage {
+                            Text(saveError).foregroundStyle(.red).accessibilityIdentifier("profileSaveError")
+                        }
+                        if let saveConfirmation = saveState.successMessage {
+                            Text(saveConfirmation).foregroundStyle(.secondary).accessibilityIdentifier("profileSaveConfirmation")
+                        }
                     }
+                    VStack(alignment: .leading, spacing: .spaceSM) {
+                        Text("Email").font(.headline)
+                        Text(APIService.shared.currentUser?.email ?? "Unavailable")
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .accessibilityIdentifier("profileEmail")
+                    }
+                    Button("Account removal") { showingRemovalInfo = true }
+                        .accessibilityHint("Explains the current account removal process")
+                    Button("Sign out", role: .destructive) { APIService.shared.logout() }
+                        .accessibilityIdentifier("profileSignOut")
                 }
-                .padding(.top, .spaceXL)
+                .padding(.spaceXXL)
+                .frame(maxWidth: 600, alignment: .leading)
             }
-            .navigationBarHidden(true)
+            .navigationTitle("Profile")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", action: { dismiss() }).accessibilityLabel("Close profile")
+                }
+            }
             .alert("Account removal is not available yet", isPresented: $showingRemovalInfo) {
                 Button("OK") {}
             } message: {
                 Text("The practice must finalize its record-retention and deletion process before account removal is enabled. Signing out ends access on this device; it does not delete your account or clinical records.")
             }
-            .sheet(isPresented: $showingEditProfile) {
-                EditProfileView()
+            .onAppear { name = APIService.shared.currentUser?.name ?? "" }
+        }
+    }
+
+    private var validName: Bool {
+        (2...100).contains(name.trimmingCharacters(in: .whitespacesAndNewlines).count)
+    }
+
+    private func saveName() {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (2...100).contains(trimmed.count), !saveState.isSaving else { return }
+        Task { @MainActor in
+            await saveState.perform(success: "Name saved",
+                failure: "Your name could not be saved. Check your connection and try again.") {
+                try await APIService.shared.updateName(trimmed)
             }
-            .sheet(isPresented: $showingSkinType) {
-                SkinTypeView()
-            }
-            .sheet(isPresented: $showingNotifications) {
-                NotificationSettingsView()
-            }
-            .sheet(isPresented: $showingExportData) {
-                ExportDataView()
-            }
-            .sheet(isPresented: $showingHelp) {
-                HelpSupportView()
-            }
-            .sheet(isPresented: $showingPrivacy) {
-                PrivacyPolicyView()
+            if saveState.errorMessage == nil {
+                name = trimmed
             }
         }
     }
-    
-    private func formatJoinDate() -> String {
-        guard let joinDate = users.first?.joinDate else { return "Recently" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM yyyy"
-        return formatter.string(from: joinDate)
-    }
-    
-
-    
 }
 
 struct StatCard: View {

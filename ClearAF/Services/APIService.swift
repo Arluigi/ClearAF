@@ -3,6 +3,28 @@ import Combine
 import CoreData
 import Auth
 
+@MainActor
+final class AccountSaveState: ObservableObject {
+    @Published private(set) var isSaving = false
+    @Published private(set) var errorMessage: String?
+    @Published private(set) var successMessage: String?
+
+    func perform(success: String? = "Saved", failure: String = "Changes could not be saved. Try again.",
+                 operation: () async throws -> Void) async {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = nil
+        successMessage = nil
+        defer { isSaving = false }
+        do {
+            try await operation()
+            successMessage = success
+        } catch {
+            errorMessage = failure
+        }
+    }
+}
+
 // MARK: - API Models
 struct APIUser: Codable {
     let id: String
@@ -26,6 +48,16 @@ struct UpdateProfileRequest: Codable {
     let allergies: String?
     let currentMedications: String?
     let skinConcerns: String?
+
+    static func onboarding(name: String) -> Self {
+        Self(name: name, onboardingCompleted: true, skinType: nil, allergies: nil,
+             currentMedications: nil, skinConcerns: nil)
+    }
+
+    static func nameEdit(_ name: String) -> Self {
+        Self(name: name, onboardingCompleted: nil, skinType: nil, allergies: nil,
+             currentMedications: nil, skinConcerns: nil)
+    }
 }
 
 struct UserProfileResponse: Codable {
@@ -258,16 +290,27 @@ class APIService: ObservableObject {
         SupabaseService.shared.signOut()
     }
 
-    @MainActor func finishOnboarding(name: String, skinType: String) async throws {
+    @MainActor func finishOnboarding(name: String) async throws {
         let ticket = access.snapshot()
-        let body = UpdateProfileRequest(name: name, onboardingCompleted: true, skinType: skinType,
-            allergies: nil, currentMedications: nil, skinConcerns: nil)
+        let body = UpdateProfileRequest.onboarding(name: name)
         let response: UpdateProfileResponse = try await request(endpoint: "/users/profile", method: "PATCH", body: body, ticket: ticket)
         try access.require(ticket)
         guard UUID(uuidString: response.user.id) == ticket?.accountID else { throw AccountFailure.accountChanged }
         try hydrate(response.user, in: persistence.container.viewContext)
         currentUser = response.user
         phase = .ready
+    }
+
+    @MainActor func updateName(_ name: String) async throws {
+        let ticket = access.snapshot()
+        let response: UpdateProfileResponse = try await request(
+            endpoint: "/users/profile", method: "PATCH",
+            body: UpdateProfileRequest.nameEdit(name), ticket: ticket
+        )
+        try access.require(ticket)
+        guard UUID(uuidString: response.user.id) == ticket?.accountID else { throw AccountFailure.accountChanged }
+        try hydrate(response.user, in: persistence.container.viewContext)
+        currentUser = response.user
     }
 
     @MainActor func updateRecoveredPassword(_ password: String) async throws {

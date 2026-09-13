@@ -94,7 +94,7 @@ struct PhotoCaptureView: View {
         .sheet(isPresented: $showingPhotoLibrary) {
             PhotoLibraryPicker(selectedImage: $selectedImage)
         }
-        .onChange(of: selectedImage) { image in
+        .onChange(of: selectedImage) { _, image in
             if let image = image, let imageData = image.jpegData(compressionQuality: 0.8) {
                 onPhotoTaken(imageData)
             }
@@ -111,7 +111,7 @@ struct DurablePhotoCaptureView: View {
     @State private var session = PhotoCaptureSession()
     @State private var captureTicket = APIService.shared.access.snapshot()
     var body: some View {
-        PhotoCaptureView(title: "Track Your Progress", subtitle: "Your photo is saved on this device, then shared with your care team.") { bytes in
+        PhotoCaptureView(title: "Add a dated photo", subtitle: "Your photo is saved on this device, then shared with your care team.") { bytes in
             do {
                 let completion = try session.capture(bytes, repository: APIService.shared.photos,
                     ticket: captureTicket, onSaved: onSaved)
@@ -120,7 +120,7 @@ struct DurablePhotoCaptureView: View {
                     dismiss()
                 } else {
                     attachmentFailed = true
-                    errorMessage = "Your photo is saved in Progress, but could not be attached here."
+                    errorMessage = "Your photo is saved in Photos, but could not be attached here."
                 }
             } catch {
                 attachmentFailed = false

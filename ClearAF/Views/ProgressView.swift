@@ -23,7 +23,7 @@ struct ProgressView: View {
                 VStack(spacing: .spaceXL) {
                     // Enhanced header with photo count
                     HStack {
-                        Text("Progress")
+                        Text("Photos")
                             .font(.displayMedium)
                             .foregroundColor(.textPrimary)
                         Spacer()
@@ -273,7 +273,7 @@ private struct ProgressPhotoThumbnail: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: .radiusMedium))
-        .accessibilityLabel("Progress photo")
+        .accessibilityLabel("Dated photo")
     }
 }
 
@@ -298,7 +298,7 @@ struct EnhancedFloatingActionButton: View {
                         .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
                         .glowShadow()
                 }
-                .accessibilityLabel("Capture progress photo")
+                .accessibilityLabel("Capture photo")
                 .scaleEffect(isPressed ? 0.9 : 1.0)
                 .animation(.bouncy, value: isPressed)
                 .onLongPressGesture(minimumDuration: 0.1) {
@@ -352,7 +352,7 @@ struct PhotoDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if let bytes = photo.photoData, let image = UIImage(data: bytes) {
-                        Image(uiImage: image).resizable().scaledToFit().accessibilityLabel("Full progress photo")
+                        Image(uiImage: image).resizable().scaledToFit().accessibilityLabel("Full photo")
                     }
                     if let date = photo.captureDate { Text(date.formatted(date: .complete, time: .shortened)) }
                     PhotoSharingStatusView(photo: photo)
