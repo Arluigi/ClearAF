@@ -31,12 +31,12 @@ struct DashboardViewEnhanced: View {
                         VStack(alignment: .leading, spacing: .spaceXS) {
                             Text(getTimeBasedGreeting())
                                 .font(.headline)
-                                .foregroundColor(.textSecondary)
+                                .foregroundColor(CareJournal.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             if let user = users.first {
                                 Text(user.name ?? "There")
-                                    .font(.displayMedium)
-                                    .foregroundColor(.textPrimary)
+                                    .font(CareJournal.display)
+                                    .foregroundColor(CareJournal.textPrimary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -46,13 +46,13 @@ struct DashboardViewEnhanced: View {
                         }) {
                             Image(systemName: "person.circle.fill")
                                 .font(.system(size: 32))
-                                .foregroundColor(.primaryPurple)
+                                .foregroundColor(CareJournal.actionPrimary)
                                 .frame(width: .touchTarget, height: .touchTarget)
                                 .contentShape(Circle())
                         }
                         .accessibleButton(label: "Profile", hint: "Open your profile settings")
                     }
-                    .padding(.horizontal, .spaceXL)
+                    .padding(.horizontal, 20)
                     
                     // Daily Photo & Skin Score Card
                     DailyPhotoCardEnhanced(selectedTab: $selectedTab)
@@ -63,7 +63,9 @@ struct DashboardViewEnhanced: View {
                 }
                 .padding(.top, .spaceXL)
             }
-            .background(Color.backgroundSecondary.ignoresSafeArea())
+            .foregroundStyle(CareJournal.textPrimary)
+            .tint(CareJournal.actionPrimary)
+            .background(CareJournal.canvas.ignoresSafeArea())
             .navigationBarBackButtonHidden(true)
             .sheet(isPresented: $showingProfile) {
                 ProfileView()
@@ -111,8 +113,8 @@ struct DailyPhotoCardEnhanced: View {
             }
             PhotoDisplaySection(todayPhoto: photos.first, images: images, showingCamera: $showingCamera)
         }
-        .wellnessCard(style: .elevated)
-        .padding(.horizontal, .spaceXL)
+        .careJournalSurface()
+        .padding(.horizontal, 20)
         .sheet(isPresented: $showingCamera) { DurablePhotoCaptureView() }
         .onDisappear { images.clear() }
     }
@@ -124,7 +126,7 @@ struct DailyTasksCardEnhanced: View {
     var body: some View {
         VStack(alignment: .leading, spacing: .spaceLG) {
             Text("Assigned routines").font(.headlineLarge)
-            Text(repository.localDate).font(.caption).foregroundStyle(Color.textSecondary)
+            Text(Date.now, format: .dateTime.weekday().month().day()).font(.caption).foregroundStyle(CareJournal.textSecondary)
             ForEach(RoutineTimeOfDay.allCases, id: \.self) { slot in
                 Button { selectedTab = 2 } label: {
                     HStack(spacing: .spaceMD) {
@@ -142,18 +144,19 @@ struct DailyTasksCardEnhanced: View {
                         Spacer()
                         Image(systemName: "chevron.right")
                     }
-                    .foregroundStyle(Color.textPrimary)
+                    .foregroundStyle(CareJournal.textPrimary)
+                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .accessibilityHint("Open your clinician-assigned routines")
             }
             if repository.lastError != nil {
                 Text("Routines need attention. Open Routines to refresh or retry.")
-                    .font(.caption).foregroundStyle(Color.textSecondary)
+                    .font(.caption).foregroundStyle(CareJournal.textSecondary)
             }
         }
-        .wellnessCard(style: .elevated)
-        .padding(.horizontal, .spaceXL)
+        .careJournalSurface()
+        .padding(.horizontal, 20)
     }
 }
 
@@ -166,7 +169,7 @@ struct TaskProgressIndicator: View {
         HStack(spacing: .spaceXS) {
             Text("\(completed)/\(total)")
                 .font(.captionLarge)
-                .foregroundColor(.textSecondary)
+                .foregroundColor(CareJournal.textSecondary)
             
             Circle()
                 .fill(completed == total ? Color.scoreExcellent : Color.textTertiary)
@@ -288,7 +291,10 @@ struct ProgressInsight: View {
 }
 
 // The prominent Today action uses the same white-on-action pairing as Photos and Capture.
-enum TodayPhotoActionAppearance { static let tint: Color = .primaryActionPurple }
+enum TodayPhotoActionAppearance {
+    static let tint = CareJournal.actionPrimary
+    static let foreground = CareJournal.onPrimary
+}
 
 // Photo Display Section Component
 struct PhotoDisplaySection: View {
@@ -300,12 +306,12 @@ struct PhotoDisplaySection: View {
             if let photo = todayPhoto {
                 DashboardPhotoPreview(photo: photo, images: images)
             } else {
-                Image(systemName: "camera.fill").font(.largeTitle).foregroundColor(.primaryPurple)
-                Text("Start your photo history").foregroundColor(.textSecondary)
+                Image(systemName: "camera.fill").font(.largeTitle).foregroundColor(CareJournal.actionPrimary)
+                Text("Start your photo history").foregroundColor(CareJournal.textSecondary)
             }
             Button { showingCamera = true } label: {
                 Label(todayPhoto == nil ? "Take a photo" : "Take another photo", systemImage: "camera")
-                    .foregroundStyle(.white)
+                    .foregroundStyle(TodayPhotoActionAppearance.foreground)
             }
             .accessibilityLabel("Take daily progress photo")
             .buttonStyle(.borderedProminent)
