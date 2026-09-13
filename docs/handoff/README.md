@@ -1,6 +1,6 @@
 # New-laptop handoff
 
-September 12 update: PRs #1–4 are merged. Use latest `main`; stacked-branch references below describe the old transfer snapshot. See [new-Mac verification](2026-09-12-new-mac.md), [photo release](../photos/release-2026-09-12.md), and the active [routine goal plan](../superpowers/plans/2026-09-12-routine-loop.md).
+September 13 update: PRs #1–5 are merged; T0–T4 are complete with the documented T4 limitations. The hosted routine migration and API are deployed, and the physical Release app passed the synthetic phone/portal demo. See [demo release and reinstall instructions](../mvp/release-2026-09-13.md), [MVP verification](../mvp/README.md), and [new-Mac verification](2026-09-12-new-mac.md). T5 pilot readiness remains separate; distribution is on hold. Historical stacked-branch and no-deployment statements below describe the September 11 transfer snapshot.
 
 Prepared September 11, 2026. T2 implementation and verification are recorded in the [account reliability report](../accounts/README.md). No T2 production deployment occurred. See the [T2 plan](../superpowers/plans/2026-09-10-account-reliability.md), [baseline and recovery procedure](../baseline/README.md), and [security notes](../security/README.md).
 

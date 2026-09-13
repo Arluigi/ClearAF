@@ -2,6 +2,8 @@
 
 T4 implementation and verification are **complete with the documented accessibility and cleanup limitations below**. Independent whole-branch review approved the final fixes. T5 pilot/release readiness is a separate phase; clinical guidance, review coverage, retention/removal policy, support ownership and pilot decisions remain unresolved.
 
+September 13 hosted update: the routine migration and API are deployed, and the Release app is installed on the test iPhone. The synthetic photo → portal, portal routine → phone, and completion → portal walkthrough passed. See the [release record](release-2026-09-13.md) for deployment, signing expiry and reinstall details. This establishes demo readiness, not clinical pilot approval.
+
 ## Retained scope and decisions
 
 Patients use Today, Photos and Routines, with Profile opened separately. Registration collects name/email/password; onboarding requires a name and factual photo/routine usage. Omitted legacy fields are preserved. No default classification, clinical plan, scores, streaks, prescription/refill/shop, appointments or messaging is added to the retained flow.
