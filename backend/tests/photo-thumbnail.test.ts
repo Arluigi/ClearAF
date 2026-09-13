@@ -76,15 +76,20 @@ test('TTL and LRU byte budget evict cached bytes', async () => {
   await f.service.get('c', actor); await f.service.get('b', actor); assert.equal(f.downloads(), 4);
   now = 61; await f.service.get('b', actor); assert.equal(f.downloads(), 5);
 });
-test('timed-out signing retains capacity until the real upstream HTTP operations settle', async () => {
+test('timed-out signing retains capacity until the real upstream HTTP operations settle', async (t) => {
+  // Advance only the deadline under test; HTTP arrival and recovery decoding have no wall-clock race.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const { createServer } = await import('node:http');
   const responses: import('node:http').ServerResponse[] = [];
   let outstanding = 0;
   let maximum = 0;
+  let resolveStarted!: () => void;
+  const signersStarted = new Promise<void>(resolve => { resolveStarted = resolve; });
   const server = createServer((_req, res) => {
     outstanding++;
     maximum = Math.max(maximum, outstanding);
     responses.push(res);
+    if (responses.length === 2) resolveStarted();
     res.on('finish', () => { outstanding--; });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -99,7 +104,10 @@ test('timed-out signing retains capacity until the real upstream HTTP operations
     return 'https://security-test.supabase.co/trusted';
   } });
   try {
-    await Promise.all([1, 2].map(id => assert.rejects(f.service.get(String(id), actor), { status: 504 })));
+    const timedOut = Promise.all([1, 2].map(id => assert.rejects(f.service.get(String(id), actor), { status: 504 })));
+    await signersStarted;
+    t.mock.timers.tick(30);
+    await timedOut;
     assert.equal(outstanding, 2);
     await Promise.all([3, 4].map(id => assert.rejects(f.service.get(String(id), actor), { status: 503 })));
     assert.equal(maximum, 2);
