@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,6 +9,15 @@ import { sessionBoundary } from '@/lib/api';
 import { PhotoHistoryController, photoDetailState, type PhotoOriginalState } from '@/lib/photo-history';
 import { PrivateThumbnailController, type ThumbnailState } from '@/lib/private-thumbnail';
 import type { PhotoSummary } from '@/types/api';
+
+type PhotoFocusTarget = Pick<HTMLElement, 'isConnected' | 'focus'>;
+
+// Radix calls this for every close path, including Escape and its Close button.
+export function restorePhotoFocus(event: Event, origin: PhotoFocusTarget | null, fallback: PhotoFocusTarget | null) {
+  event.preventDefault();
+  const target = origin?.isConnected ? origin : fallback?.isConnected ? fallback : null;
+  target?.focus();
+}
 
 function captureDate(photo: PhotoSummary) {
   return new Date(photo.captureDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -34,6 +43,8 @@ function Thumbnail({ photo, state }: { photo: PhotoSummary; state?: ThumbnailSta
 
 export default function PatientPhotoHistory({ patientId }: { patientId: string }) {
   const api = useClinicalAPI();
+  const photoTrigger = useRef<HTMLButtonElement>(null);
+  const historySection = useRef<HTMLElement>(null);
   const controller = useMemo(() => new PhotoHistoryController(page => api.getPatientPhotoSummaries(patientId, page, 12)), [api, patientId]);
   const thumbnails = useMemo(() => new PrivateThumbnailController((id, signal) => api.getPhotoThumbnail(id, signal)), [api]);
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
@@ -77,7 +88,7 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
     void controller.load(state.page);
   };
   return (
-    <section aria-label="Patient photo history" className="space-y-4">
+    <section ref={historySection} tabIndex={-1} aria-label="Patient photo history" className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-2">
         <p className="text-sm text-muted-foreground">Shared photos · Capture times shown in your local timezone</p>
         <Button variant="outline" size="sm" onClick={refresh} disabled={state.status === 'loading'}>Refresh images</Button>
@@ -94,7 +105,7 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
             {state.photos.map(photo => (
               <button key={photo.id} type="button"
                 className="rounded-lg border p-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                aria-label={`Open photo from ${captureDate(photo)}`} onClick={() => setSelected(photo.id)}>
+                aria-label={`Open photo from ${captureDate(photo)}`} onClick={event => { photoTrigger.current = event.currentTarget; setSelected(photo.id); }}>
                 <Thumbnail photo={photo} state={previews[photo.id]} />
                 <p className="mt-2 text-sm font-medium">{captureDate(photo)}</p>
                 {photo.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">{photo.notes}</p>}
@@ -109,7 +120,11 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
         </nav>
       </>}
       <Dialog open={selected !== null} onOpenChange={open => { if (!open) { setSelected(null); setDetail(null); } }}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto"
+          onCloseAutoFocus={event => {
+            restorePhotoFocus(event, photoTrigger.current, historySection.current);
+            photoTrigger.current = null;
+          }}>
           <DialogHeader>
             <DialogTitle>Patient photo</DialogTitle>
             <DialogDescription>{selectedPhoto ? captureDate(selectedPhoto) : 'Reloading private photo access'}</DialogDescription>

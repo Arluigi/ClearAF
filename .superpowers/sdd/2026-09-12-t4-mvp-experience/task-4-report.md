@@ -99,3 +99,20 @@ GREEN commands/results:
 Self-review checked that slot decrement is attached only to actual work settlement, the timeout race does not release that slot, abort is checked before image fetch and cache publication, cache hits still reauthorize, and the dialog's terminal states precede its loading fallback. Test cleanup closes only its loopback server/connections. Root-owned `.local/t4-portal-photos.json`, its thirteen photos and the original private routine fixture were untouched.
 
 Root confirmed listener78989/root session97900 stopped before the build. API3001, physicalAPI3002, Xcode and Simulator were untouched. Portal3003 remains stopped for root's restart/CUA. New production artifact remains `web-portal/.next`, BUILD_ID `Q5W0gs5RLu2_-2N-SU71F`. Independent review and rendered verification remain controller-owned.
+
+
+## Parent CUA fix round 2 — base 790a247
+
+Addressed the parent-observed keyboard focus defect: closing the nested Patient photo dialog left `document.activeElement` at BODY. Changes are scoped to `PatientPhotoHistory.tsx` and a focused `photo-focus.test.ts`.
+
+The photo button's actual DOM element is captured when opening detail. `DialogContent.onCloseAutoFocus` prevents Radix's default restoration (there is no Radix DialogTrigger for this controlled grid) and focuses that originating button if it remains connected. The same close-autofocus lifecycle covers Escape and the built-in Close button. If refresh removed the button, focus goes to the stable, labelled Patient photo history section, which has `tabIndex=-1`. This section remains available even while Refresh images is disabled. If the outer patient review itself has unmounted, disconnected elements are not focused. No data/API/thumbnail lifecycle changes.
+
+RED: portal cwd `node --import tsx --test tests/photo-focus.test.ts` → 0 pass/3 fail because the restoration function was absent (`restorePhotoFocus is not a function`); artifact `task-4-fix2-red.log`.
+
+GREEN: portal cwd `node --import tsx --test tests/photo-focus.test.ts tests/photo-history.test.ts tests/private-thumbnail.test.ts` → 13/13 passed, 0 failures; artifact `task-4-fix2-green.log`. The three new helper tests verify prevention of default restoration, originating-button focus, removed-button fallback and no focus of disconnected review elements. These tests exercise the callback with Event objects and minimal focus targets; actual Escape/Close browser focus behavior remains for parent CUA verification.
+
+Build: portal cwd `npm run build` → exit0, no lint warnings; artifact `task-4-fix2-build.log`. `git diff --check` passed. No backend or full-suite repeats were necessary for this component-only fix.
+
+Self-review confirmed the handler lives on close-autofocus rather than a click handler, its origin is the real invoking button, and the fallback remains stable during loading/error/empty histories. The labelled fallback does not enter normal Tab order. Parent confirmed exact listener79861/session86684 stopped before the final build. Portal3003 remains stopped for parent restart; API3001/3002 and the mode0600 routine/thirteen-photo manifests were untouched. No CUA/browser workaround was used by this subagent.
+
+Production artifact: `web-portal/.next`, BUILD_ID `Oyrw_5vWme6d6mGvT4aQs`. Parent rendered verification and independent re-review follow.
