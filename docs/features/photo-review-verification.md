@@ -15,3 +15,11 @@ Detailed final test totals and hosted deployment state are recorded at release b
 Final local results: 143 backend tests passed; the three migration-chain tests also pass after adding a regression check that every Prisma application table is included in the recovery archive. The real API fixture passed seven groups including deletion/cleanup retry, then removed its exact actors and rows. Retained browser fixtures were signed out and removed with their exact storage objects. Portal 69 and iOS 11 results above remain valid; those client sources did not change during the deletion fix.
 
 Known operational limit: pending object cleanup is retried through the existing DELETE endpoint; no background cleanup worker is included. New review/cleanup tables are included in recovery snapshots and dumps. The canonical recovery fixture requires these new tables to be empty, so this release does not claim a populated-review restore drill. Upload completion now checks cleanup and rechecks object existence under the same patient lock.
+
+## Hosted release — September 13, 2026
+
+PR #10 merged as `9fb3ef5e0b271c530cef9ce70ad94c1d8aacb165` after all GitHub checks passed, including recovery. API source is `68c13a70cd5ceae9235c572440a2fa43ceec5693`, built from a clean Git archive without local configuration; deployment `dpl_2mWhXKuvdsXV5YCcKqbEBN3mSRJi` (`clearaf-dvebs5ul2-arluigis-projects.vercel.app`) was promoted after checks passed. Prior rollback target is `clearaf-qktmt83ob-arluigis-projects.vercel.app`.
+
+Both additive migrations are applied to the existing demo project: `20260913220545_photo_reviews` and `20260913221220_photo_cleanup`. MCP-generated ledger versions were normalized to the exact repository versions after successful application. RLS is enabled and anon/authenticated table privileges remain denied on both tables. Existing data was preserved; the owner had already identified hosted data as disposable.
+
+Portal deployment `dpl_7Q67CECbM19chnnV2Wm89B5zGRfK` (`clearaf-portal-e2plb15ij-arluigis-projects.vercel.app`) is READY at merge commit `9fb3ef5`. Hosted API health/readiness pass. The retained synthetic clinician sees the existing demo upload in the new review queue. No new photo/review was added to the hosted demo by this verification. iOS source is merged and Simulator-verified; the physical iPhone is not reinstalled in this slice.
