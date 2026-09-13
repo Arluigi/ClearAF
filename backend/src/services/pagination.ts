@@ -3,8 +3,9 @@ import { z } from 'zod';
 const decimalInteger = z.string().regex(/^\d+$/).transform(value => Number(value));
 
 function boundedInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {
-  if (value === undefined) return fallback;
-  return decimalInteger.pipe(z.number().safe().int().min(minimum).max(maximum)).parse(value);
+  const boundedNumber = z.number().safe().int().min(minimum).max(maximum);
+  if (value === undefined) return boundedNumber.parse(fallback);
+  return decimalInteger.pipe(boundedNumber).parse(value);
 }
 
 export function parsePagination(query: Record<string, unknown>, defaultLimit: number): { page: number; limit: number; skip: number } {

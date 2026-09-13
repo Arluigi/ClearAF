@@ -6,6 +6,12 @@ test('pagination defaults to the caller limit', () => {
   assert.deepEqual(parsePagination({}, 20), { page: 1, limit: 20, skip: 0 });
 });
 
+test('pagination rejects unsafe or out-of-range caller defaults', () => {
+  for (const defaultLimit of [0, 1.5, 51, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => parsePagination({}, defaultLimit));
+  }
+});
+
 test('pagination accepts bounded decimal integers', () => {
   assert.deepEqual(parsePagination({ page: '2', limit: '50' }, 20), { page: 2, limit: 50, skip: 50 });
 });
