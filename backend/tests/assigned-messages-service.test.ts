@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import Module from 'node:module';
 import express from 'express';
+// Role middleware initializes its Supabase client; service tests use synthetic identity and DB stubs.
+process.env.SUPABASE_URL='https://assigned-messages-test.supabase.co';
+process.env.SUPABASE_ANON_KEY='synthetic';
+process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic';
 const A=randomUUID(),B=randomUUID(),C=randomUUID(),D=randomUUID();
 let rows:any[]=[],photos:any[]=[],routines:any[]=[],assigned=C,afterLock:(()=>void)|undefined,queue=Promise.resolve();
 function matches(row:any,where:any={}):boolean{return Object.entries(where).every(([key,value]:any)=>{if(key==='OR')return value.some((v:any)=>matches(row,v));if(value&&typeof value==='object'&&!(value instanceof Date)){if('in' in value)return value.in.includes(row[key]);if('lt' in value)return row[key]<value.lt;}return value instanceof Date?row[key]?.getTime()===value.getTime():row[key]===value})}

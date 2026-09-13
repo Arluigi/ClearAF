@@ -8,10 +8,10 @@ Exact contract: docs/superpowers/specs/2026-09-13-assigned-messaging.md. Assigne
 
 ## Tasks
 
-- [ ] API: validation/service/routes, additive assigned_messages migration and recovery inventory; retire legacy routes; focused tests and loopback-only synthetic integration with retained UI fixture/cleanup. Cover wrong role/assignment/reference, cursor ties/pair binding, all-or-none recipient ack, exact retry/body conflict and legacy retirement. No schema backfill because hosted legacy count is zero; verify again after retirement.
-- [ ] Portal: typed API and generation-aware conversation controller; assigned inbox, chronological paginated messages/manual refresh, exact visible acknowledgements, guarded retry composer, linked photo/routine reference detail and feedback entry points; focused tests and build/lint/typecheck.
-- [ ] iOS: native Messages tab, account-protected pair-bound draft repository, current conversation/manual refresh/older, exact visible acknowledgements, native composer with frozen retry; linked reference detail; focused tests and signed build.
-- [ ] One independent review and scoped fix wave. Actual local patient/clinician exchange plus reference/unread verification using synthetic clients. Exact cleanup; no repeated camera/notification matrix.
+- [x] API: validation/service/routes, additive assigned_messages migration and recovery inventory; retire legacy routes; focused tests and loopback-only synthetic integration with retained UI fixture/cleanup. Cover wrong role/assignment/reference, cursor ties/pair binding, all-or-none recipient ack, exact retry/body conflict and legacy retirement. No schema backfill because hosted legacy count is zero; verify again after retirement.
+- [x] Portal: typed API and generation-aware conversation controller; assigned inbox, chronological paginated messages/manual refresh, exact visible acknowledgements, guarded retry composer, linked photo/routine reference detail and feedback entry points; focused tests and build/lint/typecheck.
+- [x] iOS: native Messages tab, account-protected pair-bound draft repository, current conversation/manual refresh/older, exact visible acknowledgements, native composer with frozen retry; linked reference detail; focused tests and signed build.
+- [x] One independent review and scoped fix wave. Actual local patient/clinician exchange plus reference/unread verification using synthetic clients. Exact cleanup; no repeated camera/notification matrix.
 - [ ] Document evidence/limits, commit/push/green CI/merge, additive hosted migration and API/portal deployment, confirm aliases and legacy zero count, clean owned branches/services. Complete expansion goal only after all features delivered.
 
 ## Decisions

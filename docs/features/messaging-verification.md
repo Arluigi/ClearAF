@@ -15,4 +15,10 @@ Third release of the [approved expansion](expansion.md). One private text conver
 
 ## Limits
 
-No APNs, attachments, delivery/read receipt promise, retention policy or distribution work. Messaging fetches on explicit refresh; notifications are not implied. Tests use synthetic identities/text and a generated one-pixel image. The physical iPhone is currently disconnected and has not received this feature build. Final deployed sources and Simulator exchange evidence follow below.
+No APNs, attachments, delivery/read receipt promise, retention policy or distribution work. Messaging fetches on explicit refresh; notifications are not implied. Tests use synthetic identities/text and a generated one-pixel image. The physical iPhone is currently disconnected and has not received this feature build. Final deployed sources follow below.
+
+## Final local exchange
+
+The signed Simulator app was rebuilt with `CLEARAF_LOCAL_DEVICE_HOST=Aryans-MacBook-Pro.local` for this worktree's API3002; the first unit-test build used the default old local API3001 and therefore could not open the new endpoint. This was local configuration, not an app code change. Patient sign-in, native fourth Messages tab, clinician conversation/feedback, patient reply and sign-out passed. The exact Simulator reply appeared in the portal; its count changed from one unread to zero only when the reply was displayed. iOS opened the linked immutable routine revision. Both clients signed out and the loopback-only cleanup removed the exact accounts, sessions, messages, records and generated photo object.
+
+The full light/dark/large-text matrix and another physical-phone test were not repeated. Dark portal and native layouts were visually inspected; accessibility controls exposed message content and reference actions. Two initial CI failures exposed test-environment coupling and the legacy live-check status expectation; those are corrected before merge.
