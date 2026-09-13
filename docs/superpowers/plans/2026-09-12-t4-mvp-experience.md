@@ -61,7 +61,7 @@ XCTAssertFalse(app.tabBars.buttons["Shop"].exists)
 
 ### Task 3: Focused clinician portal
 
-**Files:** modify web-portal/src/components/layout/Sidebar.tsx, Header.tsx, web-portal/src/app/patients/page.tsx, dashboard/page.tsx, appointments/page.tsx, messages/page.tsx, prescriptions/page.tsx, settings/page.tsx; create web-portal/src/app/account/page.tsx, web-portal/src/lib/patient-list.ts and web-portal/tests/patient-list.test.ts; adjust API/types only for retained account/name search contracts.
+**Files:** modify web-portal/src/components/layout/Sidebar.tsx, Header.tsx, DashboardLayout.tsx, web-portal/src/app/patients/page.tsx, dashboard/page.tsx, appointments/page.tsx, messages/page.tsx, prescriptions/page.tsx, settings/page.tsx; create web-portal/src/app/account/page.tsx, web-portal/src/lib/patient-list.ts and web-portal/tests/patient-list.test.ts; adjust API/types only for retained account/name search contracts.
 
 **Interfaces:** consume bounded `/users/?page=&limit=&search=` with name-only search, preserve PatientPhotoHistory/PatientRoutineCare props. PatientListController owns page/search request sequencing and publishes only the latest active request, with dispose cancellation/guard. Account uses existing current profile and logout/recovery flows.
 
@@ -72,7 +72,7 @@ assert.equal(controller.snapshot().search, 'B');
 assert.deepEqual(controller.snapshot().patients.map(p => p.id), ['patient-b']);
 ```
 - [ ] Run `npm test` focused on new tests and capture expected failures.
-- [ ] Implement assigned Patients + Account navigation with working mobile menu labels, visible focus and sign-out. Remove fake notifications/search/badges and no-op profile buttons. Dashboard and deferred direct routes use `redirect('/patients')`; settings can redirect `/account`. Patients shows actual name/join date, total and labeled Open action; no scores/streak/derived medical status or unsupported assignment creation. Detail retains photo/routine panels with accessible scroll/dialog/focus behavior. Use controller to prevent stale search/page results. Account displays actual identity and truthful recovery/sign-out actions, no invented clinic policy.
+- [ ] Implement assigned Patients + Account navigation with working mobile menu labels, visible focus and sign-out. Replace the current raw mobile overlay with an accessible modal/dialog that traps focus, closes with Escape or a labeled Close button, restores menu-button focus, and closes after navigation. Remove fake notifications/search/badges and no-op profile buttons. Dashboard and deferred direct routes use `redirect('/patients')`; settings can redirect `/account`. Patients shows actual name/join date, total and labeled Open action; no scores/streak/derived medical status or unsupported assignment creation. Detail retains photo/routine panels with accessible scroll/dialog/focus behavior. Use controller to prevent stale search/page results. Account displays actual identity and truthful recovery/sign-out actions, no invented clinic policy.
 - [ ] Run portal tests, lint and build (stop the verified local portal process before building). Verify real synthetic assigned-patient navigation, search, pagination, detail and keyboard/Escape focus in CUA. Commit as `feat(mvp): focus portal on assigned patient review`.
 
 ### Task 4: Authorized private thumbnails
