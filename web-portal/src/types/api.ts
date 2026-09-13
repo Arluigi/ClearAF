@@ -241,3 +241,6 @@ export interface APIResponse<T> {
   error?: APIErrorPayload;
   message?: string;
 }
+
+// Summary grids never receive an original Storage URL.
+export type PhotoSummary = Omit<Photo, 'photoUrl'>;

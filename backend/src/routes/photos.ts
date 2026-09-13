@@ -1,4 +1,5 @@
 import express from 'express';
+import { photoThumbnails, photoOriginal, ThumbnailError } from '../services/photoThumbnail';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
@@ -402,6 +403,33 @@ router.get('/', requirePatient, async (req, res, next) => {
 });
 
 // Get specific photo
+// Authentication is applied to the photos router by the application.
+router.get('/:id/thumbnail', async (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const bytes = await photoThumbnails.get(req.params.id, req.user);
+    return res.type('image/jpeg').send(bytes);
+  } catch (error) {
+    if (error instanceof ThumbnailError) {
+      if (error.status === 503) res.set('Retry-After', '1');
+      return res.status(error.status).json({ error: error.message, code: 'PHOTO_UNAVAILABLE' });
+    }
+    return next(error);
+  }
+});
+
+router.get('/:id/original', async (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    return res.json(await photoOriginal(req.params.id, req.user));
+  } catch (error) {
+    if (error instanceof ThumbnailError) return res.status(error.status).json({ error: error.message, code: 'PHOTO_UNAVAILABLE' });
+    return next(error);
+  }
+});
+
 router.get('/:id', requirePatient, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -612,6 +640,7 @@ router.get('/patient/:patientId', requireDermatologist, async (req, res, next) =
   try {
     const { patientId } = req.params;
     const { page, limit, skip } = parsePagination(req.query, 20);
+    const view = z.enum(['summary']).optional().parse(req.query.view);
 
     // Verify patient is assigned to this dermatologist
     const patient = await prisma.user.findUnique({
@@ -651,7 +680,9 @@ router.get('/patient/:patientId', requireDermatologist, async (req, res, next) =
     });
 
     res.json({
-      data: await privatePhotos(photos, patientId),
+      data: view === 'summary'
+        ? photos.map(({ photoUrl: _photoUrl, ...summary }) => summary)
+        : await privatePhotos(photos, patientId),
       pagination: {
         page,
         limit,

@@ -1,7 +1,7 @@
-import type { Photo, PaginatedResponse } from '../types/api';
+import type { PhotoSummary, PaginatedResponse } from '../types/api';
 
 export interface PhotoHistoryState {
-  photos: Photo[];
+  photos: PhotoSummary[];
   page: number;
   total: number;
   totalPages: number;
@@ -15,7 +15,7 @@ export class PhotoHistoryController {
   private request = 0;
   private listeners = new Set<() => void>();
 
-  constructor(private fetchPage: (page: number) => Promise<PaginatedResponse<Photo>>) {}
+  constructor(private fetchPage: (page: number) => Promise<PaginatedResponse<PhotoSummary>>) {}
   snapshot = () => this.state;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);

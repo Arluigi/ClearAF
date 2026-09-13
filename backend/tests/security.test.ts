@@ -114,3 +114,56 @@ test('legacy patient list is bounded without deferred relation graphs', async ()
  const r=await request('/users/patients?limit=50',D);assert.equal(r.status,200);const body:any=await r.json();assert.equal(body.patients.length,50);assert.equal(body.total,61);assert.deepEqual(body.pagination,{page:1,limit:50,total:61,totalPages:2});
  const query=queries.find(entry=>entry.take===50);assert.equal(query.select.skinPhotos,undefined);assert.equal(query.select.appointments,undefined);assert.equal(query.select.prescriptions,undefined);
 });
+
+test('summary photo view omits original URLs and never signs; legacy view is unchanged', async () => {
+  const response = await request('/photos/patient/' + A + '?view=summary', D);
+  assert.equal(response.status, 200);
+  const body: any = await response.json();
+  assert.equal('photoUrl' in body.data[0], false);
+  assert.equal(body.data[0].id, P);
+  assert.equal(signed.length, 0);
+  for (const view of ['invalid', 'summary&view=summary']) {
+    assert.equal((await request('/photos/patient/' + A + '?view=' + view, D)).status, 400);
+  }
+});
+test('original endpoint freshly authorizes owner/assignment and validates owned paths', async () => {
+  for (const identity of [A, D]) {
+    const response = await request('/photos/' + P + '/original', identity);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.match((await response.json() as any).photoUrl, /\/object\/sign\//);
+  }
+  for (const identity of [undefined, B, E]) assert.equal((await request('/photos/' + P + '/original', identity)).status, identity ? 404 : 401);
+  users[0].dermatologistId = E;
+  assert.equal((await request('/photos/' + P + '/original', D)).status, 404);
+  photos[0].photoUrl = B + '/foreign.jpg';
+  assert.equal((await request('/photos/' + P + '/original', A)).status, 422);
+  assert.equal(signed.length, 2);
+  assert.equal((await request('/photos/' + P, D)).status, 403);
+});
+test('warm thumbnail HTTP access rechecks authorization/path and uses no-store JPEG', async () => {
+  const originalFetch = globalThis.fetch;
+  let downloads = 0;
+  const sharp = require('sharp');
+  const bytes = await sharp({ create: { width: 800, height: 600, channels: 3, background: 'red' } }).jpeg().toBuffer();
+  globalThis.fetch = async (input, options) => {
+    if (String(input).startsWith('https://security-test.supabase.co/')) { downloads++; return new Response(bytes); }
+    return originalFetch(input, options);
+  };
+  try {
+    for (const identity of [A, D]) {
+      const response = await request('/photos/' + P + '/thumbnail', identity);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'private, no-store');
+      assert.match(response.headers.get('content-type')!, /^image\/jpeg/);
+      assert.ok((await response.arrayBuffer()).byteLength > 0);
+    }
+    assert.equal(downloads, 1);
+    for (const identity of [undefined, B, E]) assert.equal((await request('/photos/' + P + '/thumbnail', identity)).status, identity ? 404 : 401);
+    users[0].dermatologistId = E;
+    assert.equal((await request('/photos/' + P + '/thumbnail', D)).status, 404);
+    photos[0].photoUrl = B + '/foreign.jpg';
+    assert.equal((await request('/photos/' + P + '/thumbnail', A)).status, 422);
+    assert.equal(downloads, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});

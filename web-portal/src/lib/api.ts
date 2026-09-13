@@ -11,6 +11,7 @@ import {
   Message,
   Prescription,
   Photo,
+  PhotoSummary,
   LoginResponse,
   DashboardStats,
   PaginatedResponse,
@@ -78,9 +79,11 @@ class APIService {
   // Helper method to make HTTP requests
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    bodyType: 'json' | 'blob' = 'json',
   ): Promise<T> {
     if (authStorage.recoveryAccount()) throw new Error('Finish or cancel password recovery before accessing clinical data.');
+    options.signal?.throwIfAborted();
     const generation = sessionBoundary.snapshot();
     const url = `${this.baseURL}${endpoint}`;
 
@@ -92,6 +95,7 @@ class APIService {
     this.acceptSession(session);
     sessionBoundary.assert(generation);
     if (this.signingOut || authStorage.isLoggedOut()) throw new Error('Please sign in again.');
+    options.signal?.throwIfAborted();
     const token = session?.access_token;
 
     const config: RequestInit = {
@@ -127,8 +131,10 @@ class APIService {
         throw new APIError(response.status, message, typeof payload.code === 'string' ? payload.code : undefined);
       }
 
-      const body = await response.json();
+      options.signal?.throwIfAborted();
+      const body = bodyType === 'blob' ? await response.blob() : await response.json();
       sessionBoundary.assert(generation);
+      options.signal?.throwIfAborted();
       return body;
     } catch (error) {
 
@@ -385,6 +391,19 @@ class APIService {
   // Dashboard Statistics
   async getDashboardStats(): Promise<DashboardStats> {
     return this.request<DashboardStats>('/dashboard/stats');
+  }
+
+  async getPhotoThumbnail(id: string, signal?: AbortSignal): Promise<Blob> {
+    return this.request<Blob>(`/photos/${encodeURIComponent(id)}/thumbnail`, { signal }, 'blob');
+  }
+
+  async getPhotoOriginal(id: string, signal?: AbortSignal): Promise<{ photoUrl: string }> {
+    return this.request(`/photos/${encodeURIComponent(id)}/original`, { signal });
+  }
+
+  async getPatientPhotoSummaries(patientId: string, page = 1, limit = 12): Promise<PaginatedResponse<PhotoSummary>> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit), view: 'summary' });
+    return this.request(`/photos/patient/${encodeURIComponent(patientId)}?${params}`);
   }
 
   // Photo Management
