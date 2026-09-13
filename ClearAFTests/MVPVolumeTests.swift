@@ -4,6 +4,76 @@ import UIKit
 @testable import ClearAF
 
 @MainActor struct MVPVolumeTests {
+    /// Parent supplies exactly the two generated fixture accounts after UI sign-out/termination.
+    @Test func cleanupPhysicalIsolationFixture() async throws {
+        guard let input = ProcessInfo.processInfo.environment["CLEARAF_MVP_ISOLATION_CLEANUP"] else { return }
+        struct Fixture: Decodable { let run: UUID; let accountIDs: [UUID] }
+        let fixture = try JSONDecoder().decode(Fixture.self, from: Data(input.utf8))
+        try #require(fixture.accountIDs.count == 2 && Set(fixture.accountIDs).count == 2)
+        for _ in 0..<50 where APIService.shared.phase == .loading {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(APIService.shared.phase == .signedOut)
+        try #require(APIService.shared.currentUser == nil && APIService.shared.persistence.accountID == nil)
+        try #require(APIService.shared.access.snapshot() == nil)
+        try #require(SupabaseService.shared.client.auth.currentSession == nil)
+        let files = FileManager.default
+        let support = try files.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+        let accounts = support.appendingPathComponent("Accounts", isDirectory: true)
+        let owned = Set(fixture.accountIDs.map { $0.uuidString.lowercased() })
+        let before = Set(files.fileExists(atPath: accounts.path) ? try files.contentsOfDirectory(atPath: accounts.path) : [])
+        for id in owned {
+            let path = accounts.appendingPathComponent(id, isDirectory: true)
+            if files.fileExists(atPath: path.path) { try files.removeItem(at: path) }
+        }
+        let after = Set(files.fileExists(atPath: accounts.path) ? try files.contentsOfDirectory(atPath: accounts.path) : [])
+        #expect(after == before.subtracting(owned))
+        let documents = try files.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        let export = documents.appendingPathComponent("MVPIsolationExport/\(fixture.run.uuidString.lowercased())")
+        if files.fileExists(atPath: export.path) { try files.removeItem(at: export) }
+        let evidence: [String: Any] = ["accountIDs": owned.sorted(), "remainingOwnedDirectories": after.intersection(owned).count,
+            "unrelatedDirectoryCount": after.count, "unrelatedDirectoryNamesPreserved": after == before.subtracting(owned),
+            "exportAbsent": !files.fileExists(atPath: export.path), "signedOut": true]
+        try JSONSerialization.data(withJSONObject: evidence, options: [.prettyPrinted, .sortedKeys])
+            .write(to: documents.appendingPathComponent("MVPIsolationCleanup.json"), options: .atomic)
+        print("MVP exact two-account cleanup verified; unrelated directory names preserved; no container reset")
+    }
+
+    /// One generated local record for physical A→B evidence; no server upload or personal media.
+    @Test func exportPhysicalIsolationFixture() throws {
+        guard let input = ProcessInfo.processInfo.environment["CLEARAF_MVP_ISOLATION_INPUT"] else { return }
+        struct Fixture: Decodable { let run: UUID; let accountID: UUID; let photoID: UUID }
+        let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: URL(fileURLWithPath: input)))
+        let files = FileManager.default
+        let documents = try files.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        let root = documents.appendingPathComponent("MVPIsolationExport/\(fixture.run.uuidString.lowercased())")
+        try #require(!files.fileExists(atPath: root.path), "Never overwrite an existing export")
+        let persistence = try PersistenceController(accountID: fixture.accountID, directory: root)
+        let context = persistence.container.viewContext
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let bytes = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 480), format: format)
+            .jpegData(withCompressionQuality: 0.8) { UIColor.systemTeal.setFill(); $0.fill(CGRect(x: 0, y: 0, width: 640, height: 480)) }
+        let photo = SkinPhoto(context: context)
+        photo.id = fixture.photoID; photo.serverID = fixture.photoID.uuidString.lowercased()
+        // Terminal local fixture state prevents any synthetic upload to an API.
+        photo.uploadState = "shared"; photo.photoData = bytes
+        photo.captureDate = Date(timeIntervalSince1970: 1767225600)
+        photo.notes = "Generated account isolation fixture"
+        try context.save(); context.reset()
+        let request = SkinPhoto.fetchRequest()
+        #expect(try context.count(for: request) == 1)
+        for store in persistence.container.persistentStoreCoordinator.persistentStores {
+            try persistence.container.persistentStoreCoordinator.remove(store)
+        }
+        let manifest: [String: Any] = ["run": fixture.run.uuidString.lowercased(),
+            "accountID": fixture.accountID.uuidString.lowercased(), "photoIDs": [fixture.photoID.uuidString.lowercased()],
+            "photos": 1, "relativeStore": "Accounts/\(fixture.accountID.uuidString.lowercased())/ClearAF.sqlite",
+            "generatedJPEGBytes": bytes.count, "serverUpload": false]
+        try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
+            .write(to: root.appendingPathComponent("manifest.json"), options: .atomic)
+        print("MVP isolation fixture exported one generated local photo with coordinator closed")
+    }
+
     /// Read-only CoreData metadata export, without fetching photo bytes or modifying records.
     @Test func exportPhysicalCaptureMetadata() throws {
         guard let raw = ProcessInfo.processInfo.environment["CLEARAF_MVP_CAPTURE_ACCOUNT_ID"] else { return }

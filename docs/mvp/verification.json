@@ -62,11 +62,10 @@
       "assigned clinician authorized original and private object download200",
       "camera JPEG verified 3114970 bytes 4032x3024",
       "both originals foreign patient404 and anonymous401",
-      "user manual sign-out and cold reopen to sign-in"
+      "user manual sign-out and cold reopen to sign-in",
+      "focused generated local A photo visible; sign-out to B Today no A image/status andPhotos0; same after cold launch; final sign-out,57.175seconds"
     ],
-    "pending": [
-      "physical second-account login not executed"
-    ],
+    "pending": [],
     "privateEvidence": [
       ".local/t4-physical-capture-manifest.json",
       ".local/t4-physical-sharing-proof.json"
@@ -81,6 +80,14 @@
       "server": "exact two rows/two objects removed; all1000 unrelated volume photo IDs preserved",
       "device": "entire Debug data container reset unexpectedly by devicectl cleanup; not narrow path-only removal; preinventory only routine fixture account",
       "photosLibrary": "user confirmed deletion of blue-wall test image on 2026-09-13"
+    },
+    "accountIsolation": {
+      "status": "passed",
+      "method": "Actual iPhone prebuilt UI test, generated640x480local photo from test-only production CoreData export",
+      "durationSeconds": 57.175,
+      "log": "/private/tmp/clearaf-t4-device-isolation-test.log",
+      "noCameraOrLibraryInteraction": true,
+      "fixtureCleanup": "hosted exact cleanup pending"
     }
   },
   "finalRegression": {

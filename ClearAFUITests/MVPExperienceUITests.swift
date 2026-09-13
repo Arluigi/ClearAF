@@ -144,6 +144,45 @@ final class MVPExperienceUITests: XCTestCase {
         app.terminate()
     }
 
+    /// Parent transfers the exact test-target A store with both apps stopped; B starts absent.
+    @MainActor func testPhysicalGeneratedHistoryIsolatedAcrossAccountSwitch() throws {
+        let app = try signedIn(largestText: false)
+        guard app.images["Latest progress photo"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
+        try tapTab("Photos", in: app)
+        guard app.staticTexts["photoCount"].waitForExistence(timeout: 10),
+              app.staticTexts["photoCount"].label.filter(\.isNumber) == "1" else { throw fixtureFailure() }
+        let photos = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Dated photo'"))
+        guard photos.count == 1 else { throw fixtureFailure() }
+        let a = XCTAttachment(screenshot: app.screenshot())
+        a.name = "Physical A generated local history"; a.lifetime = .keepAlways; add(a)
+        try tapTab("Today", in: app); app.buttons["Profile"].tap()
+        app.buttons["Sign out"].tap()
+        guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
+        let env = ProcessInfo.processInfo.environment
+        let email = try XCTUnwrap(env["CLEARAF_MVP_OTHER_EMAIL"])
+        let password = try XCTUnwrap(env["CLEARAF_MVP_OTHER_PASSWORD"])
+        app.textFields["Enter your email"].tap(); app.textFields["Enter your email"].typeText(email)
+        app.secureTextFields["Enter your password"].tap(); app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.buttons["authSubmit"].tap()
+        guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
+        if app.staticTexts["Save Password?"].waitForExistence(timeout: 3), app.buttons["Not Now"].isHittable { app.buttons["Not Now"].tap() }
+        for coldLaunch in [false, true] {
+            if coldLaunch { app.terminate(); app.launch() }
+            try tapTab("Today", in: app)
+            guard !app.images["Latest progress photo"].exists,
+                  !app.staticTexts["Shared"].exists else { throw fixtureFailure() }
+            try tapTab("Photos", in: app)
+            guard app.staticTexts["photoCount"].waitForExistence(timeout: 10),
+                  app.staticTexts["photoCount"].label.filter(\.isNumber) == "0",
+                  photos.count == 0, !app.staticTexts["Shared"].exists else { throw fixtureFailure() }
+        }
+        let b = XCTAttachment(screenshot: app.screenshot())
+        b.name = "Physical B empty history after cold launch"; b.lifetime = .keepAlways; add(b)
+        try tapTab("Today", in: app); app.buttons["Profile"].tap(); app.buttons["Sign out"].tap()
+        guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
+        app.terminate()
+    }
+
     /// Parent restarts local API before this test. Existing account session/capture is retained.
     @MainActor func testPhysicalRetryCaptureAndAccountIsolation() throws {
         let app = XCUIApplication(); app.launch()
