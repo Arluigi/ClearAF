@@ -94,27 +94,6 @@ struct EnhancedEmptyProgressView: View {
     }
 }
 
-// Progress Photo Tip Component
-struct ProgressPhotoTip: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: .spaceMD) {
-            Image(systemName: icon)
-                .font(.captionLarge)
-                .foregroundColor(CareJournal.actionPrimary)
-                .frame(width: 20)
-            
-            Text(text)
-                .font(.bodyMedium)
-                .foregroundColor(CareJournal.textSecondary)
-            
-            Spacer()
-        }
-    }
-}
-
 struct EnhancedPhotoGridView: View {
     let photos: [SkinPhoto]
     let images: PhotoImageLoader
@@ -210,44 +189,6 @@ private struct ProgressPhotoThumbnail: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: .radiusMedium))
         .accessibilityLabel("Dated photo")
-    }
-}
-
-struct EnhancedFloatingActionButton: View {
-    @Binding var showingCamera: Bool
-    @State private var isPressed = false
-    
-    var body: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                Button(action: {
-                    HapticManager.medium()
-                    showingCamera = true
-                }) {
-                    Image(systemName: "camera.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .frame(width: 64, height: 64)
-                        .background(Color.primaryGradient)
-                        .clipShape(RoundedRectangle(cornerRadius: .radiusLarge))
-                        .glowShadow()
-                }
-                .accessibilityLabel("Capture photo")
-                .scaleEffect(isPressed ? 0.9 : 1.0)
-                .animation(.bouncy, value: isPressed)
-                .onLongPressGesture(minimumDuration: 0.1) {
-                    // Trigger on release
-                } onPressingChanged: { pressing in
-                    withAnimation(.quick) {
-                        isPressed = pressing
-                    }
-                }
-                .padding(.trailing, .spaceXL)
-                .padding(.bottom, .spaceXXL)
-            }
-        }
     }
 }
 

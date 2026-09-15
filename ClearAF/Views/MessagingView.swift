@@ -6,7 +6,6 @@ struct MessagingView: View {
     @State private var visible: Set<UUID> = []
     @State private var active = false
     @Environment(\.scenePhase) private var scenePhase
-    init(dermatologist: Dermatologist? = nil) {}
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {

@@ -4,7 +4,9 @@ September 13 update: PRs #1–5 are merged; T0–T4 are complete with the docume
 
 Prepared September 11, 2026. T2 implementation and verification are recorded in the [account reliability report](../accounts/README.md). No T2 production deployment occurred. See the [T2 plan](../superpowers/plans/2026-09-10-account-reliability.md), [baseline and recovery procedure](../baseline/README.md), and [security notes](../security/README.md).
 
-Design update: the first [Care Journal iPhone pass](../design/ios-care-journal.md) applies the [approved design language](../design/design-language.md) to Today, Photos and Routines. Portal migration and refreshing the physical demo installation are still separate follow-ups.
+Design update: the first [Care Journal iPhone pass](../design/ios-care-journal.md) applies the [approved design language](../design/design-language.md) to Today, Photos and Routines. Portal migration is a separate follow-up. The demo iPhone runs the current build (confirmed by the owner on September 15, 2026).
+
+Client expansion: see [client expansion](../features/client-expansion.md) for the September 2026 release plan (enrollment and safety, intake and orders, follow-up and renewal).
 
 ## Preserve the old laptop first
 

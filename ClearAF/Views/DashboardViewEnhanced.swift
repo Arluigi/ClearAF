@@ -26,7 +26,6 @@ struct DashboardViewEnhanced: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: .spaceXL) {
-                    NavigationLink("Check-in") { CheckInView() }
                     // Header with improved accessibility and styling
                     HStack {
                         VStack(alignment: .leading, spacing: .spaceXS) {
@@ -59,6 +58,8 @@ struct DashboardViewEnhanced: View {
                     DailyPhotoCardEnhanced(selectedTab: $selectedTab)
                     
                     DailyTasksCardEnhanced(selectedTab: $selectedTab)
+
+                    CareLinksCard()
 
                     Spacer(minLength: .spaceHuge)
                 }
@@ -161,133 +162,17 @@ struct DailyTasksCardEnhanced: View {
     }
 }
 
-// Task Progress Indicator Component
-struct TaskProgressIndicator: View {
-    let completed: Int
-    let total: Int
-    
+struct CareLinksCard: View {
     var body: some View {
-        HStack(spacing: .spaceXS) {
-            Text("\(completed)/\(total)")
-                .font(.captionLarge)
-                .foregroundColor(CareJournal.textSecondary)
-            
-            Circle()
-                .fill(completed == total ? Color.scoreExcellent : Color.textTertiary)
-                .frame(width: 8, height: 8)
-                .scaleEffect(completed == total ? 1.2 : 1.0)
-                .animation(.bouncy, value: completed)
-        }
-        .accessibilityLabel("\(completed) out of \(total) tasks completed")
-    }
-}
-
-// Animated Score Display Component
-struct AnimatedScoreDisplay: View {
-    let score: Int
-    @State private var animatedValue: Double = 0
-    
-    var body: some View {
-        Text("\(Int(animatedValue))")
-            .font(.displayLarge)
-            .foregroundColor(scoreColor(for: score))
-            .contentTransition(.numericText())
-            .onAppear {
-                withAnimation(.smooth.delay(0.2)) {
-                    animatedValue = Double(score)
-                }
-            }
-            .onChange(of: score) { _, newValue in
-                withAnimation(.smooth) {
-                    animatedValue = Double(newValue)
-                }
-            }
-            .scoreAccessibility(score: score)
-    }
-}
-
-// Streak Indicator Component
-struct StreakIndicator: View {
-    let count: Int
-    @State private var isAnimating = false
-    
-    var body: some View {
-        HStack(spacing: .spaceXS) {
-            Text("🔥")
-                .font(.body)
-                .scaleEffect(isAnimating ? 1.1 : 1.0)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isAnimating)
-            
-            Text("\(count) day streak!")
-                .font(.captionLarge)
-                .foregroundColor(.orange)
-                .fontWeight(.medium)
-        }
-        .onAppear {
-            isAnimating = true
-        }
-        .accessibilityLabel("Current streak: \(count) days")
-    }
-}
-
-// Enhanced Progress Bar Component
-struct EnhancedProgressBar: View {
-    let progress: Double
-    let score: Int
-    @State private var animatedProgress: Double = 0
-    
-    var body: some View {
-        VStack(spacing: .spaceXS) {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background track
-                    RoundedRectangle(cornerRadius: .radiusSmall)
-                        .fill(Color.borderSubtle)
-                        .frame(height: 12)
-                    
-                    // Progress fill with dynamic gradient
-                    RoundedRectangle(cornerRadius: .radiusSmall)
-                        .fill(scoreGradient(for: score))
-                        .frame(
-                            width: geometry.size.width * animatedProgress,
-                            height: 12
-                        )
-                        .animation(.smooth.delay(0.3), value: animatedProgress)
-                }
-            }
-            .frame(height: 12)
-            .onAppear {
-                withAnimation(.smooth.delay(0.3)) {
-                    animatedProgress = progress
-                }
-            }
-            .onChange(of: progress) { _, newValue in
-                withAnimation(.smooth) {
-                    animatedProgress = newValue
-                }
+        VStack(alignment: .leading, spacing: .spaceMD) {
+            Text("Care team").font(.headlineLarge)
+            NavigationLink { CheckInView() } label: {
+                Label("Check-in from your clinician", systemImage: "list.clipboard")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             }
         }
-        .accessibilityLabel("Skin score progress bar")
-        .accessibilityValue("\(Int(progress * 100)) percent")
-    }
-}
-
-// Progress Insight Component
-struct ProgressInsight: View {
-    let currentScore: Int
-    
-    var body: some View {
-        HStack(spacing: .spaceXS) {
-            Image(systemName: "arrow.up.circle.fill")
-                .foregroundColor(.scoreGood)
-                .font(.caption)
-            
-            Text("+3 from last week")
-                .font(.captionLarge)
-                .foregroundColor(.scoreGood)
-                .fontWeight(.medium)
-        }
-        .accessibilityLabel("Progress insight: 3 points improvement from last week")
+        .careJournalSurface()
+        .padding(.horizontal, 20)
     }
 }
 

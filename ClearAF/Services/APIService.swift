@@ -76,130 +76,6 @@ struct UpdateProfileResponse: Codable {
     let user: APIUser
 }
 
-struct LoginRequest: Codable {
-    let email: String
-    let password: String
-    let userType: String
-
-    init(email: String, password: String) {
-        self.email = email
-        self.password = password
-        self.userType = "patient"
-    }
-}
-
-struct RegisterRequest: Codable {
-    let name: String
-    let email: String
-    let password: String
-    let userType: String
-    let skinType: String?
-
-    init(name: String, email: String, password: String, skinType: String?) {
-        self.name = name
-        self.email = email
-        self.password = password
-        self.userType = "patient"
-        self.skinType = skinType
-    }
-}
-
-struct AuthResponse: Codable {
-    let message: String
-    let user: APIUser
-    let token: String
-    let userType: String
-}
-
-struct APIError: Codable {
-    let error: String
-    let code: String?
-    let details: [ValidationError]?
-}
-
-struct ValidationError: Codable {
-    let field: String
-    let message: String
-}
-
-// MARK: - Photo Models
-struct APIPhoto: Codable {
-    let id: String
-    let photoUrl: String
-    let skinScore: Int
-    let notes: String?
-    let userId: String
-    let captureDate: String
-    let appointmentId: String?
-    let fileSize: Int?
-    let mimeType: String?
-}
-
-struct PhotoUploadResponse: Codable {
-    let message: String
-    let photo: APIPhoto
-}
-
-struct SyncProfileResponse: Codable {
-    let success: Bool
-    let user: SyncedUser
-    let assignedDermatologist: AssignedDerm?
-
-    struct SyncedUser: Codable {
-        let id: String
-        let name: String?
-        let skinType: String?
-        let dermatologistId: String?
-    }
-
-    struct AssignedDerm: Codable {
-        let id: String
-        let name: String
-    }
-}
-
-// MARK: - Appointment Structures
-struct CreateAppointmentRequest: Codable {
-    let scheduledDate: String  // ISO8601 format
-    let type: String           // "consultation", "follow-up", "treatment", "emergency"
-    let concern: String
-    let duration: Int?         // minutes, defaults to 30
-    let dermatologistId: String?
-}
-
-struct CreateAppointmentResponse: Codable {
-    let message: String
-    let appointment: AppointmentResponse
-}
-
-struct AppointmentResponse: Codable {
-    let id: String
-    let scheduledDate: String
-    let type: String
-    let concern: String
-    let status: String
-    let duration: Int
-    let createdAt: String?
-    let patient: PatientInfo
-    let dermatologist: DermatologistInfo
-
-    struct PatientInfo: Codable {
-        let id: String
-        let name: String?
-    }
-
-    struct DermatologistInfo: Codable {
-        let id: String
-        let name: String
-        let title: String?
-    }
-}
-
-struct AppointmentListResponse: Codable {
-    let appointments: [AppointmentResponse]
-    let total: Int
-}
-
 // MARK: - API Service
 class APIService: ObservableObject {
     static let shared = APIService()
@@ -334,52 +210,7 @@ class APIService: ObservableObject {
         logout()
     }
 
-    // MARK: - User Profile
-    func syncProfile() -> AnyPublisher<SyncProfileResponse, Error> {
-        return performAuthenticatedRequest(
-            endpoint: "/auth/sync-profile",
-            method: "POST",
-            body: EmptyBody(),
-            responseType: SyncProfileResponse.self
-        )
-        .eraseToAnyPublisher()
-    }
-
     struct EmptyBody: Codable {}
-    func updateProfile(skinType: String?, allergies: String?, currentMedications: String?, skinConcerns: String?) -> AnyPublisher<APIUser, Error> {
-        let request = UpdateProfileRequest(
-            skinType: skinType,
-            allergies: allergies,
-            currentMedications: currentMedications,
-            skinConcerns: skinConcerns
-        )
-
-        return performAuthenticatedRequest(
-            endpoint: "/users/profile",
-            method: "PATCH",
-            body: request,
-            responseType: UpdateProfileResponse.self
-        )
-        .map(\.user)
-        .handleEvents(receiveOutput: { [weak self] user in
-            self?.currentUser = user
-        })
-        .eraseToAnyPublisher()
-    }
-
-    func getCurrentUser() -> AnyPublisher<APIUser, Error> {
-        return performAuthenticatedRequest(
-            endpoint: "/users/profile",
-            method: "GET",
-            body: Optional<String>.none,
-            responseType: UserProfileResponse.self
-        )
-        .map(\.user)
-        .handleEvents(receiveOutput: { [weak self] user in
-            self?.currentUser = user
-        })
-        .eraseToAnyPublisher()
-    }
 
     // Each request captures its login before work starts and checks it after every suspension.
     @MainActor private func request<T: Encodable, U: Decodable>(endpoint: String, method: String,
@@ -400,21 +231,6 @@ class APIService: ObservableObject {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(http.statusCode) else { throw AccountFailure.requestFailed(http.statusCode) }
         return try JSONDecoder().decode(U.self, from: data)
-    }
-
-    private func performAuthenticatedRequest<T: Codable, U: Codable>(endpoint: String, method: String,
-        body: T? = nil, responseType: U.Type, ticket expected: AccountAccess.Ticket? = nil) -> AnyPublisher<U, Error> {
-        let ticket = expected ?? access.snapshot()
-        return Deferred {
-            Future<U, Error> { promise in
-                Task { @MainActor in
-                    do { promise(.success(try await self.request(endpoint: endpoint, method: method, body: body, ticket: ticket))) }
-                    catch { promise(.failure(error)) }
-                }
-            }
-        }.receive(on: DispatchQueue.main)
-        .tryMap { value in try self.access.require(ticket); return value }
-        .eraseToAnyPublisher()
     }
 }
 
@@ -452,27 +268,6 @@ extension APIService {
     private static let photoStorageSession = URLSession(
         configuration: .ephemeral, delegate: PhotoUploadRedirectDelegate(), delegateQueue: nil
     )
-
-    // Placeholder methods for future API integrations
-    // MARK: - Appointment API Methods
-
-    func createAppointment(scheduledDate: Date, type: String, concern: String, notes: String? = nil) -> AnyPublisher<AppointmentResponse, Error> {
-        let body = CreateAppointmentRequest(scheduledDate: ISO8601DateFormatter().string(from: scheduledDate),
-            type: type, concern: concern, duration: 30, dermatologistId: nil)
-        return performAuthenticatedRequest(endpoint: "/appointments", method: "POST", body: body,
-            responseType: CreateAppointmentResponse.self).map(\.appointment).eraseToAnyPublisher()
-    }
-    func fetchAppointments() -> AnyPublisher<[AppointmentResponse], Error> {
-        performAuthenticatedRequest(endpoint: "/appointments", method: "GET", body: Optional<String>.none,
-            responseType: AppointmentListResponse.self).map(\.appointments).eraseToAnyPublisher()
-    }
-
-    func fetchProducts() -> AnyPublisher<[String], Error> {
-        // TODO: Implement when products API is ready
-        return Just([])
-            .setFailureType(to: Error.self)
-            .eraseToAnyPublisher()
-    }
 }
 private enum PhotoUploadError: LocalizedError {
     case tooLarge, invalidDestination, uploadFailed
