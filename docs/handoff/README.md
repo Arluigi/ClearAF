@@ -132,3 +132,5 @@ Feature expansion is tracked in [approved scope](../features/expansion.md). Firs
 Routine templates, calendars, local reminders and clinician-configured check-ins: [care support verification](../features/care-support-verification.md). Assigned-clinician messaging and linked feedback are next.
 
 Assigned-clinician text messaging and linked photo/routine feedback: [verification and compatibility](../features/messaging-verification.md).
+
+Eligibility/consent enrollment, refer-out/needs-in-person care decisions with refund status, and urgent reports (Release 1 of the [client expansion](../features/client-expansion.md)): [enrollment and safety verification](../features/enrollment-safety-verification.md).

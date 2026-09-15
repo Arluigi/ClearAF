@@ -8,7 +8,7 @@ The owner chose to go straight to working features and delegated implementation 
 
 | Release | Client priority | Scope | Spec | Status |
 |---|---|---|---|---|
-| 1. Enrollment and safety | P1 | Eligibility + consent, refer-out / needs-in-person with refund status, urgent flag; legacy cleanup | [spec](../superpowers/specs/2026-09-15-enrollment-and-safety.md) | In progress |
+| 1. Enrollment and safety | P1 | Eligibility + consent, refer-out / needs-in-person with refund status, urgent flag; legacy cleanup | [spec](../superpowers/specs/2026-09-15-enrollment-and-safety.md), [verification](enrollment-safety-verification.md) | Built and verified, awaiting release |
 | 2. Intake and orders | P2 | Structured intake with treatment history and provider rollup; manual order/shipment tracker | — | Planned |
 | 3. Follow-up and renewal | P3 | Clinician 3-month comparison with better/same/worse marker; renewal choice | — | Planned |
 
@@ -33,3 +33,5 @@ The owner chose to go straight to working features and delegated implementation 
 3. Consent wording, refund policy wording, and the monthly message limit (if any).
 4. Who watches urgent reports, and during which hours?
 5. Please send the "flow gap checklist" mentioned in the treatment-history spec.
+6. When a clinician changes a "refer out" decision to "needs in-person" (or back), is one refund owed or two? The app currently creates a separate pending refund per decision recorded, so changing the decision twice creates two pending refunds.
+7. Please confirm the licensed-state list. The demo default (`LICENSED_STATES`) is `CA, FL, IL, NY, TX`; TX is included only as a placeholder.

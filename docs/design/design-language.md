@@ -182,6 +182,7 @@ Do not imply that a photo was shared merely because it was captured. Do not impl
 | Error | Preserve recoverable work; describe the problem and a useful recovery action |
 | Offline/stale | Identify saved or outdated content when relevant; never falsely label it current |
 | Permission/access denied | Explain the available recovery without exposing another person’s data |
+| Urgent and ineligible states | Use the destructive/error semantic colour plus a warning symbol plus a text label together; never brand blue; never colour alone. The emergency guidance text is fixed: “If you have trouble breathing, swelling of your face, lips or throat, or feel seriously unwell, call 911 now.” On iOS 26+, toolbars can collapse a label to icon-only and override its tint, so an urgent entry point belongs in a content row, not a toolbar item. |
 
 Use everyday language. Prefer “Saved on this device. Waiting to upload.” over internal queue terminology. Avoid unearned reassurance, diagnosis, promised outcomes, and moral judgments about adherence. “No completion recorded” is different from “You missed your routine.”
 
