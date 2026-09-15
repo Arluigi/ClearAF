@@ -21,23 +21,23 @@ First release of the [client expansion](client-expansion.md): [enrollment and sa
 | Portal typecheck | `tsc --noEmit` clean |
 | Portal build | `next build` clean, 18 routes |
 | Portal `npm audit --audit-level=low` | 0 vulnerabilities |
-| iOS unit tests (full run after `d7043dd`) | 105 run, 104 pass, 1 skipped (`MVPConnectivityTests`, needs a physical-device host, environment-only), 0 failed |
+| iOS unit tests (full run after `d7043dd`) | 106 run, 105 pass, 1 skipped (`MVPConnectivityTests`, needs a physical-device host, environment-only), 0 failed |
 | iOS Debug build (signed, after `d7043dd`) | Clean, 0 warnings |
 | iOS UI test (`AccountFlowUITests`) | Last passed at `d941c96` (fix wave B); not rerun after `d7043dd` (iOS unit-level fix, no UI-affecting change) or the portal fix (portal-only) |
 | Live probe (`enrollment-safety-live.cjs`) | 11 PASS checks (8 original + 3 anonymous-401 checks added in the fix wave), `{"passed":true,"cleanup":true}` |
 | Recovery drill (`node scripts/recovery.cjs`) | Passed at `4ae3d51` (code state `3f99c69`); not rerun since — see "Final checks" below |
 | Source hygiene / diff-check / audits | See "Final checks" below |
 
-Backend counts above are from this task's own run against `5ad0b32` (the last backend-affecting commit). Portal counts are from this task's own run against `cf25f58` (`fix(portal): keep urgent errors until the attempted change is confirmed`, this task's fix and the final code commit on this branch). iOS unit-test and Debug-build counts are from the run made after `d7043dd` (the last iOS commit); the iOS UI test and Simulator were out of scope for this task (no xcodebuild/Simulator) and so were not rerun — see the UI test row above for what that means in practice.
+Backend counts are from a run against `5ad0b32` (the last backend-affecting commit). Portal counts are from a run against `cf25f58` (`fix(portal): keep urgent errors until the attempted change is confirmed`, the final code commit on this branch). iOS unit-test and Debug-build counts are from the run after `d7043dd` (the last iOS commit); the iOS UI test was not rerun after that commit — see the UI test row above.
 
 ### Final checks
 
 - Recovery drill (`node scripts/recovery.cjs`): `{"passed":true}`, ~41s, 28 live checks after restore, at commit `4ae3d51` (code state `3f99c69`). Pre-drill `auth.users` count: 0.
-- Not rerun since: `5ad0b32` (backend photo-delete/care-decision conflict), `d7043dd` (iOS-only) and `cf25f58` (this task's portal fix) came after the drill and don't touch anything it exercises — it backs up/restores synthetic application rows, auth users/identities and private storage bytes, and does not call the API's photo-delete route, run any iOS code, or drive the portal UI.
-- Backend `npm audit --audit-level=low`: 0 vulnerabilities (rerun this task, after `cf25f58`).
-- Portal `npm audit --audit-level=low`: 0 vulnerabilities (rerun this task, after `cf25f58`).
-- `node scripts/source-hygiene.cjs`: passed (rerun this task, after `cf25f58`).
-- `git diff --check 57455388..HEAD`: clean (rerun this task, after `cf25f58`).
+- Not rerun since: `5ad0b32` (backend photo-delete/care-decision conflict), `d7043dd` (iOS-only) and `cf25f58` (portal fix) came after the drill and don't touch anything it exercises — it backs up/restores synthetic application rows, auth users/identities and private storage bytes, and does not call the API's photo-delete route, run any iOS code, or drive the portal UI.
+- Backend `npm audit --audit-level=low`: 0 vulnerabilities (rerun after `cf25f58`).
+- Portal `npm audit --audit-level=low`: 0 vulnerabilities (rerun after `cf25f58`).
+- `node scripts/source-hygiene.cjs`: passed (rerun after `cf25f58`).
+- `git diff --check 57455388..HEAD`: clean (rerun after `cf25f58`).
 
 ### Portal walkthrough (`task-9-portal-walkthrough.md`), 11/11 items PASS
 
