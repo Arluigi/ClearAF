@@ -122,6 +122,12 @@ test('acknowledge and resolve are idempotent, forward-only and assignment-checke
  const mine=await call('/',A);assert.equal(mine.body.data.find((r:any)=>r.id===id).resolutionNote,'Please stop the cream and book an in-person visit.');
  afterLock=()=>{assignedA=D};assert.equal((await call(`/${open}/acknowledge`,C,'POST',{})).status,404);
 });
+test('an unassigned clinician cannot resolve a report',async()=>{
+ const id=randomUUID();await report(id);
+ const r=await call(`/${id}/resolve`,D,'POST',{resolutionNote:null});
+ assert.equal(r.status,404);assert.equal(r.body.report,undefined);
+ assert.equal(reports[0].status,'open');
+});
 test('patient history requires assignment; reads are paginated',async()=>{
  await report();assert.equal((await call(`/patients/${A}`,C)).body.pagination.total,1);
  assert.equal((await call(`/patients/${A}`,D)).status,404);

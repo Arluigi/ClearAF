@@ -1,7 +1,8 @@
 import {Request,Response,NextFunction} from 'express';
 import {isEnrolled} from '../services/enrollment';
+import {enforcementMode} from '../services/enrollmentRules';
 // Read at request time so production can start with ENROLLMENT_ENFORCEMENT=off while older iOS builds remain installed.
-export const enrollmentEnforced=()=>process.env.ENROLLMENT_ENFORCEMENT!=='off';
+export const enrollmentEnforced=()=>enforcementMode(process.env.ENROLLMENT_ENFORCEMENT).enforced;
 export async function requireEnrolledPatient(req:Request,res:Response,next:NextFunction){
  if(!enrollmentEnforced()||req.user?.userType!=='patient')return next();
  try{

@@ -12,10 +12,21 @@ export type EligibilityRules={licensedStates:ReadonlySet<string>;minimumAge:numb
 export type ScreeningAnswers={stateCode:string;dateOfBirth:string;pregnancyStatus:PregnancyStatus};
 export function rulesFromEnv(env:Record<string,string|undefined>=process.env):EligibilityRules{
  const states=(env.LICENSED_STATES??'CA,FL,IL,NY,TX').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
- if(!states.length||states.some(s=>!(US_STATES as readonly string[]).includes(s)))throw new Error('LICENSED_STATES must list USPS state codes');
+ if(!states.length||states.some(s=>!(US_STATES as readonly string[]).includes(s)))throw new Error('LICENSED_STATES must be a comma-separated list of USPS state codes (NON_US is never allowed)');
  const minimumAge=Number(env.MINIMUM_PATIENT_AGE??'18');
- if(!Number.isInteger(minimumAge)||minimumAge<0||minimumAge>120)throw new Error('MINIMUM_PATIENT_AGE must be a whole number');
+ if(!Number.isInteger(minimumAge)||minimumAge<13||minimumAge>120)throw new Error('MINIMUM_PATIENT_AGE must be a whole number from 13 to 120');
  return {licensedStates:new Set(states),minimumAge};
+}
+// Only exactly 'off' disables the gate; anything else (unset, 'on', a typo) enforces it.
+export function enforcementMode(value:string|undefined){return {enforced:value!=='off',recognized:value===undefined||value==='on'||value==='off'}}
+// Run once at server start so a bad value fails fast instead of as a 500 on the first screening.
+// Lines are metadata only: the raw configured value is never echoed.
+export function enrollmentStartupLog(env:Record<string,string|undefined>=process.env):{level:'info'|'warn';text:string}[]{
+ try{rulesFromEnv(env)}catch(error){throw new Error(`Invalid enrollment configuration: ${(error as Error).message}`)}
+ const mode=enforcementMode(env.ENROLLMENT_ENFORCEMENT);
+ const lines:{level:'info'|'warn';text:string}[]=[{level:'info',text:`enrollment enforcement: ${mode.enforced?'on':'off'}`}];
+ if(!mode.recognized)lines.push({level:'warn',text:'ENROLLMENT_ENFORCEMENT is unrecognized (expected exactly "on" or "off"); enrollment enforcement is ON'});
+ return lines;
 }
 export function ageOn(dateOfBirth:string,today:string):number{
  const [by,bm,bd]=dateOfBirth.split('-').map(Number),[ty,tm,td]=today.split('-').map(Number);

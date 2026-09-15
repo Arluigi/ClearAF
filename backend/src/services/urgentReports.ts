@@ -33,6 +33,7 @@ export async function queue(clinicianId:string,p:number,limit:number){return pri
  const where={status:{not:'resolved'},patient:{dermatologistId:clinicianId}};
  const total=await db.urgentReport.count({where});
  const openCount=await db.urgentReport.count({where:{...where,status:'open'}});
+ // status desc puts 'open' before 'acknowledged' only because it sorts after it alphabetically; resolved rows are excluded above.
  const rows=await db.urgentReport.findMany({where,orderBy:[{status:'desc'},{createdAt:'asc'},{id:'asc'}],skip:(p-1)*limit,take:limit,include:{patient:{select:{name:true}}}});
  return {data:rows.map(r=>({...reportDTO(r),patientName:r.patient.name})),pagination:page(total,p,limit),openCount};
 },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead})}

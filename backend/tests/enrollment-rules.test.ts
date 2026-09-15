@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {evaluate,ageOn,rulesFromEnv,RULES_VERSION,US_STATES} from '../src/services/enrollmentRules';
+import {evaluate,ageOn,rulesFromEnv,RULES_VERSION,US_STATES,enforcementMode,enrollmentStartupLog} from '../src/services/enrollmentRules';
 import {currentConsent,consentHash} from '../src/content/consent';
 const rules=rulesFromEnv({LICENSED_STATES:'IL,NY',MINIMUM_PATIENT_AGE:'18'});
 const base={stateCode:'IL',dateOfBirth:'2000-06-15',pregnancyStatus:'none' as const};
@@ -31,6 +31,31 @@ test('configuration parsing is strict with documented defaults',()=>{
  assert.deepEqual([...rulesFromEnv({LICENSED_STATES:' il , ny '}).licensedStates],['IL','NY']);
  for(const env of [{LICENSED_STATES:'IL,XX'},{LICENSED_STATES:'NON_US'},{MINIMUM_PATIENT_AGE:'17.5'},{MINIMUM_PATIENT_AGE:'-1'}])assert.throws(()=>rulesFromEnv(env));
  assert.equal(US_STATES.length,51);assert.match(RULES_VERSION,/^\d{4}-\d{2}-\d{2}\.\d+$/);
+});
+test('minimum age must be a whole number from 13 to 120',()=>{
+ for(const v of ['13','18','120'])assert.equal(rulesFromEnv({MINIMUM_PATIENT_AGE:v}).minimumAge,Number(v));
+ for(const v of ['12','121','0','','abc','18.5'])assert.throws(()=>rulesFromEnv({MINIMUM_PATIENT_AGE:v}),/MINIMUM_PATIENT_AGE/,v);
+});
+test('licensed states must all be USPS codes; NON_US and an empty list are refused',()=>{
+ for(const v of ['IL,XX','NON_US','IL,NON_US','',' , '])assert.throws(()=>rulesFromEnv({LICENSED_STATES:v}),/LICENSED_STATES/,v);
+});
+test('enforcement mode: only exactly "off" disables; anything unrecognized is flagged and enforced',()=>{
+ assert.deepEqual(enforcementMode(undefined),{enforced:true,recognized:true});
+ assert.deepEqual(enforcementMode('on'),{enforced:true,recognized:true});
+ assert.deepEqual(enforcementMode('off'),{enforced:false,recognized:true});
+ for(const v of ['OFF','Off',' off','false','0','','disabled'])assert.deepEqual(enforcementMode(v),{enforced:true,recognized:false},v);
+});
+test('startup check validates enrollment configuration and logs the effective mode as metadata only',()=>{
+ assert.deepEqual(enrollmentStartupLog({}),[{level:'info',text:'enrollment enforcement: on'}]);
+ assert.deepEqual(enrollmentStartupLog({ENROLLMENT_ENFORCEMENT:'on'}),[{level:'info',text:'enrollment enforcement: on'}]);
+ assert.deepEqual(enrollmentStartupLog({ENROLLMENT_ENFORCEMENT:'off'}),[{level:'info',text:'enrollment enforcement: off'}]);
+ const warned=enrollmentStartupLog({ENROLLMENT_ENFORCEMENT:'disabled-typo'});
+ assert.deepEqual(warned.map(l=>l.level),['info','warn']);
+ assert.equal(warned[0].text,'enrollment enforcement: on');
+ assert.match(warned[1].text,/unrecognized.*enforcement is ON/);
+ assert.doesNotMatch(warned[1].text,/disabled-typo/);
+ assert.throws(()=>enrollmentStartupLog({LICENSED_STATES:'IL,NON_US'}),/^Error: Invalid enrollment configuration: LICENSED_STATES/);
+ assert.throws(()=>enrollmentStartupLog({MINIMUM_PATIENT_AGE:'5'}),/^Error: Invalid enrollment configuration: MINIMUM_PATIENT_AGE/);
 });
 test('consent is a hashed DRAFT version 1',()=>{
  const doc=currentConsent();

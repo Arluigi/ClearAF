@@ -34,6 +34,8 @@ app.use('/photos',require('../src/routes/photos').default);
 app.use('/routines',require('../src/routes/routines').default);
 app.use('/care-support',require('../src/routes/care-support').default);
 app.use('/messages',require('../src/routes/assigned-messages').default);
+app.use('/appointments',require('../src/routes/appointments').default);
+app.use('/users',require('../src/routes/users').default);
 app.use(require('../src/middleware/errorHandler').errorHandler);(Module as any)._load=original;
 let server:any,base:string;
 before(async()=>{server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`});
@@ -49,6 +51,9 @@ const gated:[string,string,any][]=[
  ['PUT',`/care-support/responses/${randomUUID()}`,{formId:randomUUID(),submittedAt:'2026-09-01T10:00:00.000Z',answers:[]}],
  ['PUT',`/messages/patients/${A}/clinicians/${C}/messages/${randomUUID()}`,{content:'Synthetic',reference:null}],
  ['PATCH',`/photos/${randomUUID()}`,{notes:'Synthetic'}],
+ ['POST','/appointments',{scheduledDate:'2026-10-01T10:00:00.000Z',type:'consultation',concern:'Synthetic concern text',duration:30}],
+ ['PATCH',`/appointments/${randomUUID()}`,{scheduledDate:'2026-10-02T10:00:00.000Z'}],
+ ['POST','/users/skin-score',{skinScore:50}],
 ];
 test('unenrolled patients are refused on every gated write before any storage or database write',async()=>{
  process.env.ENROLLMENT_ENFORCEMENT='on';
@@ -67,6 +72,7 @@ test('enrolled patients, clinicians and disabled enforcement pass the gate',asyn
  for(const [method,path,body] of gated)assert.notEqual((await call(path,A,method,body)).body.code,'ENROLLMENT_REQUIRED',path);
  screenings=[];acceptances=[];
  assert.notEqual((await call(`/messages/patients/${A}/clinicians/${C}/messages/${randomUUID()}`,C,'PUT',{content:'Synthetic',reference:null})).body.code,'ENROLLMENT_REQUIRED');
+ for(const [method,path,body] of gated)assert.notEqual((await call(path,C,method,body)).body.code,'ENROLLMENT_REQUIRED',`clinician ${path}`);
  process.env.ENROLLMENT_ENFORCEMENT='off';
  for(const [method,path,body] of gated)assert.notEqual((await call(path,A,method,body)).body.code,'ENROLLMENT_REQUIRED',path);
 });

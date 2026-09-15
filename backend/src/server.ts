@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { createDatabaseProbe, createDependencyProbes, createReadiness, installHealthRoutes } from './services/readiness';
+import { enrollmentStartupLog } from './services/enrollmentRules';
 
 // Import routes
 import authRoutes from './routes/auth-supabase';
@@ -28,6 +29,10 @@ import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
 dotenv.config();
+
+// Fail fast on invalid enrollment configuration (throws with a clear message) and record the
+// effective enforcement mode once. Rules are still read per request, so behaviour is unchanged.
+for (const line of enrollmentStartupLog()) console[line.level](line.text);
 
 const app = express();
 const PORT = process.env.PORT || 3000;

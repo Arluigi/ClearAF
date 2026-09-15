@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { parsePagination, parsePatientSearch } from '../services/pagination';
+import { requireEnrolledPatient } from '../middleware/enrollmentGate';
 
 const router = express.Router();
 
@@ -151,7 +152,7 @@ router.patch('/profile', async (req, res, next) => {
 });
 
 // Update skin score (patients only)
-router.post('/skin-score', async (req, res, next) => {
+router.post('/skin-score', requireEnrolledPatient, async (req, res, next) => {
   try {
     if (req.user!.userType !== 'patient') {
       return res.status(403).json({
