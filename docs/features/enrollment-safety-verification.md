@@ -13,20 +13,31 @@ First release of the [client expansion](client-expansion.md): [enrollment and sa
 
 | Area | Result |
 |---|---|
-| Backend unit tests | 204/204 pass (`cd backend && npm test`) |
+| Backend unit tests | 205/205 pass (`cd backend && npm test`) — includes the `5ad0b32` photo/care-decision conflict test |
 | Backend build | `tsc` clean, 0 errors |
 | Backend `npm audit --audit-level=low` | 0 vulnerabilities |
-| Portal unit tests | 98/98 pass (`cd web-portal && npm test`) |
+| Portal unit tests | 102/102 pass (`cd web-portal && npm test`) — includes the `cf25f58` urgent-errors tests |
 | Portal lint | 0 warnings/errors (`eslint src`) |
 | Portal typecheck | `tsc --noEmit` clean |
 | Portal build | `next build` clean, 18 routes |
 | Portal `npm audit --audit-level=low` | 0 vulnerabilities |
-| iOS unit tests (fix wave B, full run) | 105 run, 104 pass, 1 skipped (`MVPConnectivityTests`, needs a physical-device host, pre-existing), 0 failed |
-| iOS UI test (`AccountFlowUITests`) | Passed |
+| iOS unit tests (full run after `d7043dd`) | 105 run, 104 pass, 1 skipped (`MVPConnectivityTests`, needs a physical-device host, environment-only), 0 failed |
+| iOS Debug build (signed, after `d7043dd`) | Clean, 0 warnings |
+| iOS UI test (`AccountFlowUITests`) | Last passed at `d941c96` (fix wave B); not rerun after `d7043dd` (iOS unit-level fix, no UI-affecting change) or the portal fix (portal-only) |
 | Live probe (`enrollment-safety-live.cjs`) | 11 PASS checks (8 original + 3 anonymous-401 checks added in the fix wave), `{"passed":true,"cleanup":true}` |
-| Recovery drill | See "Final checks" below |
+| Recovery drill (`node scripts/recovery.cjs`) | Passed at `4ae3d51` (code state `3f99c69`); not rerun since — see "Final checks" below |
+| Source hygiene / diff-check / audits | See "Final checks" below |
 
-Backend and portal counts above are from this task's own run against the final commit (`3f99c69`). iOS counts are from the fix-wave-B report (`d941c96`); iOS suites were not rerun in this task per the Step 5 checklist, which covers backend and web-portal only.
+Backend counts above are from this task's own run against `5ad0b32` (the last backend-affecting commit). Portal counts are from this task's own run against `cf25f58` (`fix(portal): keep urgent errors until the attempted change is confirmed`, this task's fix and the final code commit on this branch). iOS unit-test and Debug-build counts are from the run made after `d7043dd` (the last iOS commit); the iOS UI test and Simulator were out of scope for this task (no xcodebuild/Simulator) and so were not rerun — see the UI test row above for what that means in practice.
+
+### Final checks
+
+- Recovery drill (`node scripts/recovery.cjs`): `{"passed":true}`, ~41s, 28 live checks after restore, at commit `4ae3d51` (code state `3f99c69`). Pre-drill `auth.users` count: 0.
+- Not rerun since: `5ad0b32` (backend photo-delete/care-decision conflict), `d7043dd` (iOS-only) and `cf25f58` (this task's portal fix) came after the drill and don't touch anything it exercises — it backs up/restores synthetic application rows, auth users/identities and private storage bytes, and does not call the API's photo-delete route, run any iOS code, or drive the portal UI.
+- Backend `npm audit --audit-level=low`: 0 vulnerabilities (rerun this task, after `cf25f58`).
+- Portal `npm audit --audit-level=low`: 0 vulnerabilities (rerun this task, after `cf25f58`).
+- `node scripts/source-hygiene.cjs`: passed (rerun this task, after `cf25f58`).
+- `git diff --check 57455388..HEAD`: clean (rerun this task, after `cf25f58`).
 
 ### Portal walkthrough (`task-9-portal-walkthrough.md`), 11/11 items PASS
 
@@ -42,7 +53,16 @@ Signup and Mailpit confirmation; not-eligible screen (state reason, "You have no
 - `care-access-reviewer` run on Tasks 2, 3, 4, 5, 6 (2 re-review rounds) and 8, in addition to the whole-branch pass below. Findings and rulings (all fixed before the next task built on the code, or in the final fix wave): a 404-vs-409 convention for cross-patient decision/report ids; gating the legacy `PATCH /photos/:id` while leaving `DELETE` ungated with a pinning test; isolating per-step failures and revalidating identities before deletes in `enrollment-safety-live.cjs`; making a persistent urgent-report entry reachable from every signed-in iOS phase, not only `.ready`, with its draft preserved across a phase change.
 - `api-contract-checker` run once both clients existed (Task 8, whole branch vs `main`): contract consistent, no field/enum/envelope/nullability drift; flagged the enforcement-default and iOS-requires-`/api/enrollment` operational risks that drove the Rollout order below.
 - A whole-branch review (range `57455388`, the merge-base with `main`, through the pre-fix-wave tip) ruled "ready to merge with fixes" — no Critical findings; four Important findings (refund action stranded on history rows, the async-care message field shown when it shouldn't be, three ungated legacy patient-write routes, and the rollout order omitting the portal's auto-deploy from `main`) were fixed in one combined fix wave together with both walkthroughs' bugs and the deferred minors the reviewer chose to fix now.
-- Fix wave A (backend/scripts/portal) and fix wave B (iOS) each got a scoped re-review; all items were confirmed addressed with no new breakage. A final care-access review and API contract check against the whole branch, and `/code-review`, are the last gate before this branch is offered for merge.
+- Fix wave A (backend/scripts/portal) and fix wave B (iOS) each got a scoped re-review; all items were confirmed addressed with no new breakage.
+- The final pre-PR code review (`/code-review` against the whole branch) found three issues, each fixed and confirmed with no new breakage: photos still deletable while referenced by a care decision, fixed in `5ad0b32` (see Limits, below); an ambiguous urgent-report confirmation and a missing urgent entry point, fixed in `d7043dd` (see "iOS fixes after the whole-branch review" below); and the urgent-errors row-clearing bug, fixed in `cf25f58` (see "Portal urgent-report error handling" below). This was the last gate before the branch was offered for merge.
+
+### Portal urgent-report error handling (`cf25f58`)
+
+`clearStaleErrors` previously cleared a row's "Not saved" warning whenever the refetched report was resolved, regardless of which attempt had failed. That hid a real failure: if clinician A resolves a report with no note, and in an older tab clinician B types a resolution note and clicks Confirm resolve, the server returns 409 `REPORT_RESOLVED` (the notes differ) so B's note is never saved — but the refetch showed "Resolved" with no note and no warning, so B believed the note reached the patient. `clearStaleErrors` now takes the failed attempt (acknowledge, or resolve with its normalized note) per row and only clears the error once the refetched row shows that exact attempt took effect (acknowledged/resolved for acknowledge; resolved with a matching `resolutionNote` for resolve). Covered by new cases in `web-portal/tests/urgent-reports.test.ts`.
+
+### iOS fixes after the whole-branch review (`d7043dd`)
+
+An account-changed error from the urgent report confirmation (mismatched report id or patient id) is ambiguous, not a refusal — the server may already have stored the report. It is now treated like a decoding failure and the attempt is kept frozen so a retry reuses the same report id instead of risking a duplicate; a genuine account change is still handled safely by the existing `cancel()` path. The always-available "Something's wrong?" urgent-report entry point is now also shown during the "Opening your account…" enrollment sub-state, the one signed-in phase it was previously missing from.
 
 ## Decisions and defaults
 
@@ -56,6 +76,7 @@ See [client-expansion.md](client-expansion.md) for the full decisions/defaults t
 - Minimum patient age defaults to 18 and is configurable from 13 to 120 (`MINIMUM_PATIENT_AGE`); the API now refuses to start if either value is invalid.
 - No notifications or push. Patients see decisions and urgent-report status only when they open the app; clinicians see the queue only when they open the portal.
 - Acknowledging an already-resolved urgent report returns 200 unchanged (idempotent, not an error) — a client racing another clinician's resolve sees the true current state rather than a conflict.
+- A photo referenced by a clinician's care decision cannot be deleted (`DELETE /photos/:id` now returns 409 `PHOTO_IN_CARE_DECISION`, `5ad0b32`), mirroring the existing review-lock (`PHOTO_REVIEWED`), so a care decision never ends up pointing at a deleted photo. Neither client calls photo delete, so this needed no iOS or portal change (confirmed in the final code review).
 - iOS tests use protocol doubles (fake repositories/services), not raw-JSON decode fixtures, so they do not independently catch a JSON shape drift the way a fixture-based decode test would; the API contract check covers that gap by diffing DTOs against both clients' models directly.
 
 ## Rollout
