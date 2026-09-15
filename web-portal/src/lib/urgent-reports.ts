@@ -24,3 +24,20 @@ export const categoryLabel = (c: UrgentCategory) =>
     other: 'Something else',
   } as const)[c];
 export const statusLabel = (s: UrgentStatus) => ({ open: 'Open', acknowledged: 'Seen', resolved: 'Resolved' } as const)[s];
+/** Runs an acknowledge/resolve. On any failure (e.g. 409 REPORT_RESOLVED because another clinician
+ * resolved it) the row is flagged and the list refetched, so it shows its current state, not a stale one. */
+export async function runReportAction(
+  action: () => Promise<UrgentReport>,
+  on: { saved: (row: UrgentReport) => void; failed: () => void; refetch: () => void },
+): Promise<boolean> {
+  let row: UrgentReport;
+  try {
+    row = await action();
+  } catch {
+    on.failed();
+    on.refetch();
+    return false;
+  }
+  on.saved(row);
+  return true;
+}

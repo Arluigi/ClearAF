@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useClinicalAPI } from '@/lib/auth';
-import { IdempotentAction } from '@/lib/care-decisions';
+import { IdempotentAction, decisionBody, showsPatientMessage } from '@/lib/care-decisions';
 import type { CareDecision, DecisionBody, DecisionKind } from '@/lib/care-decisions';
 
 const MAX_MESSAGE = 2000;
@@ -18,6 +18,7 @@ export default function CareDecisionDialog({
   open,
   onOpenChange,
   onSaved,
+  onSettledAfterClose,
 }: {
   patientId: string;
   photoId: string | null;
@@ -25,6 +26,8 @@ export default function CareDecisionDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (result: CareDecision) => void;
+  /** Called when a save that was in flight as the dialog closed settles; the server may have stored it. */
+  onSettledAfterClose?: () => void;
 }) {
   const api = useClinicalAPI();
   // A fresh attempt (and client id) starts each time the dialog opens.
@@ -35,6 +38,11 @@ export default function CareDecisionDialog({
   const state = useSyncExternalStore(action.subscribe, action.snapshot, action.snapshot);
   const [decision, setDecision] = useState<DecisionKind>(defaultDecision);
   const [message, setMessage] = useState('');
+  // Latest callback for a save that settles after close (the submit closure may be stale by then).
+  const settledAfterClose = useRef(onSettledAfterClose);
+  useEffect(() => {
+    settledAfterClose.current = onSettledAfterClose;
+  });
 
   useEffect(() => {
     if (open) {
@@ -53,7 +61,7 @@ export default function CareDecisionDialog({
   }, [state.status, state.result]);
 
   const disabled = action.frozenBody !== null || state.status === 'saving';
-  const helper = decision !== 'async_care';
+  const withMessage = showsPatientMessage(decision);
 
   return (
     <Dialog
@@ -66,13 +74,18 @@ export default function CareDecisionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Care decision</DialogTitle>
-          <DialogDescription>Record how this case should proceed. The patient is notified with the message below.</DialogDescription>
+          <DialogDescription>
+            Record how this case should proceed.{withMessage && ' The patient sees this on their Today screen.'}
+          </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            void action.submit({ decision, patientMessage: message.trim() ? message : null, photoId });
+            // Closing mid-save cancels this attempt; refresh once it settles so a stored decision shows.
+            void action.submit(decisionBody(decision, message, photoId)).then((outcome) => {
+              if (outcome === 'cancelled') settledAfterClose.current?.();
+            });
           }}
         >
           <fieldset disabled={disabled} className="space-y-2">
@@ -99,27 +112,33 @@ export default function CareDecisionDialog({
                     name="care-decision"
                     value="async_care"
                     checked={decision === 'async_care'}
-                    onChange={() => setDecision('async_care')}
+                    onChange={() => {
+                      setDecision('async_care');
+                      setMessage('');
+                    }}
                   />
                   Resume online care
                 </label>
               )}
             </div>
           </fieldset>
-          <div className="space-y-1">
-            <Label htmlFor="care-decision-message">Message to the patient (optional)</Label>
-            <Textarea
-              id="care-decision-message"
-              maxLength={MAX_MESSAGE}
-              disabled={disabled}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-            />
-            <p className="text-sm text-muted-foreground">
-              {message.length}/{MAX_MESSAGE}
-            </p>
-            {helper && <p className="text-sm text-muted-foreground">Shown to the patient with next steps. A refund will be marked pending.</p>}
-          </div>
+          {/* Online care shows no card in the iOS app, so there is no message to write. */}
+          {withMessage && (
+            <div className="space-y-1">
+              <Label htmlFor="care-decision-message">Message to the patient (optional)</Label>
+              <Textarea
+                id="care-decision-message"
+                maxLength={MAX_MESSAGE}
+                disabled={disabled}
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+              />
+              <p className="text-sm text-muted-foreground">
+                {message.length}/{MAX_MESSAGE}
+              </p>
+              <p className="text-sm text-muted-foreground">Shown to the patient with next steps. A refund will be marked pending.</p>
+            </div>
+          )}
           {state.status === 'error' && (
             <p role="alert" className="flex items-center gap-1 text-sm">
               <AlertTriangle aria-hidden className="h-4 w-4 text-destructive" />

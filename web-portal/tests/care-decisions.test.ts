@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { IdempotentAction, careStatusView, decisionLabel, refundLabel } from "../src/lib/care-decisions";
+import fs from "node:fs";
+import path from "node:path";
+import { IdempotentAction, canMarkRefund, careStatusView, decisionBody, decisionLabel, refundLabel, showsPatientMessage } from "../src/lib/care-decisions";
 import type { CareDecision } from "../src/lib/care-decisions";
 import type { PaginatedResponse } from "../src/types/api";
 
@@ -99,4 +101,68 @@ test("decision labels and refund wording", () => {
   assert.equal(refundLabel("pending"), "Refund pending");
   assert.equal(refundLabel("issued"), "Refund issued");
   assert.equal(refundLabel("not_applicable"), null);
+});
+
+const decision = (o: Partial<CareDecision>): CareDecision => ({
+  id: "d",
+  patientId: "p",
+  clinicianId: "c",
+  clinicianName: "Dr. Lee",
+  decision: "refer_out",
+  patientMessage: null,
+  photoId: null,
+  refundStatus: "pending",
+  refundUpdatedAt: null,
+  createdAt: "2026-09-15T00:00:00.000Z",
+  ...o,
+});
+
+test("any decision with a pending refund offers Mark refund issued, including history rows", () => {
+  // Refer out, then resume online care: the earlier refund is still pending on a history row.
+  const resumed = decision({ id: "resumed", decision: "async_care", refundStatus: "not_applicable" });
+  const referred = decision({ id: "referred", decision: "refer_out", refundStatus: "pending", createdAt: "2026-09-10T00:00:00.000Z" });
+  const issued = decision({ id: "issued", decision: "needs_in_person", refundStatus: "issued", createdAt: "2026-09-05T00:00:00.000Z" });
+  const online = decision({ id: "online", decision: "async_care", refundStatus: "not_applicable", createdAt: "2026-09-01T00:00:00.000Z" });
+  const page: PaginatedResponse<CareDecision> = { data: [resumed, referred, issued, online], pagination: { page: 1, limit: 20, total: 4, totalPages: 1 } };
+  const view = careStatusView(page, page, 1);
+  assert.equal(view.canOfferRefund, false);
+  assert.deepEqual(view.historyRows.filter(canMarkRefund).map((d) => d.id), ["referred"]);
+  assert.equal(canMarkRefund(issued), false);
+  assert.equal(canMarkRefund(online), false);
+  assert.equal(canMarkRefund(referred), true);
+  // After issuing, the refetched row no longer offers the action anywhere.
+  const after = careStatusView(page, { ...page, data: [resumed, { ...referred, refundStatus: "issued" }, issued, online] }, 1);
+  assert.deepEqual(after.historyRows.filter(canMarkRefund), []);
+});
+
+test("online care carries no patient message; other decisions send a non-blank message as typed", () => {
+  assert.equal(showsPatientMessage("async_care"), false);
+  assert.equal(showsPatientMessage("refer_out"), true);
+  assert.equal(showsPatientMessage("needs_in_person"), true);
+  assert.deepEqual(decisionBody("async_care", "Typed before switching", null), { decision: "async_care", patientMessage: null, photoId: null });
+  assert.deepEqual(decisionBody("refer_out", "   ", "photo-1"), { decision: "refer_out", patientMessage: null, photoId: "photo-1" });
+  assert.deepEqual(decisionBody("needs_in_person", "Book a visit", null), { decision: "needs_in_person", patientMessage: "Book a visit", photoId: null });
+});
+
+test("a save that settles after the dialog closed is reported so the card can refresh; its state is still ignored", async () => {
+  let resolve!: (v: unknown) => void;
+  const late = new IdempotentAction(() => new Promise((r) => { resolve = r; }));
+  const pending = late.submit({ x: 1 });
+  late.cancel();
+  resolve({});
+  assert.equal(await pending, "cancelled");
+  assert.equal(late.snapshot().status, "saving");
+  let reject!: (e: unknown) => void;
+  const lost = new IdempotentAction(() => new Promise((_, r) => { reject = r; }));
+  const failing = lost.submit({ x: 1 });
+  lost.cancel();
+  reject(new Error("lost"));
+  assert.equal(await failing, "cancelled");
+  assert.equal(await new IdempotentAction(async () => ({})).submit({ x: 1 }), "saved");
+});
+
+test("the dialog promises no notification and says where the patient sees the decision", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../src/components/patients/CareDecisionDialog.tsx"), "utf8");
+  assert.doesNotMatch(source, /notif/i);
+  assert.match(source, /The patient sees this on their Today screen\./);
 });

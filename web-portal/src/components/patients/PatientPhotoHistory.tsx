@@ -189,6 +189,7 @@ export default function PatientPhotoHistory({ patientId, onCareDecision }: { pat
         open={decisionPhotoId !== null}
         onOpenChange={open => { if (!open) setDecisionPhotoId(null); }}
         onSaved={() => { setDecisionPhotoId(null); onCareDecision?.(); }}
+        onSettledAfterClose={() => onCareDecision?.()}
       />
     </section>
   );

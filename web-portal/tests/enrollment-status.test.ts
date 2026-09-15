@@ -10,9 +10,10 @@ const s = (o: Partial<EnrollmentSummary>): EnrollmentSummary => ({
   ...o,
 });
 test("summaries become factual labels", () => {
+  const acceptedOn = new Date("2026-09-15T00:00:00.000Z").toLocaleDateString(undefined, { dateStyle: "medium" });
   assert.deepEqual(
     enrollmentLines(s({})).map((l) => l.text),
-    ["Eligible (IL)", "Consent v1 accepted"],
+    ["Eligible (IL)", `Consent v1 accepted ${acceptedOn}`],
   );
   assert.deepEqual(
     enrollmentLines(s({ status: "screening_required", screening: null, consent: { version: 1, acceptedAt: null } })).map((l) => l.text),

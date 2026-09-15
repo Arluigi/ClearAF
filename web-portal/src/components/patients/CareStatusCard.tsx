@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useClinicalAPI } from '@/lib/auth';
 import { useRead, LoadState, Pages } from '@/components/care-support/shared';
-import { careStatusView, decisionLabel, refundLabel } from '@/lib/care-decisions';
+import { canMarkRefund, careStatusView, decisionLabel, refundLabel } from '@/lib/care-decisions';
 import type { CareDecision, DecisionKind } from '@/lib/care-decisions';
 import CareDecisionDialog from './CareDecisionDialog';
 
@@ -36,8 +36,10 @@ export default function CareStatusCard({ patientId, refresh }: { patientId: stri
   const api = useClinicalAPI();
   const [page, setPage] = useState(1);
   const [dialogDecision, setDialogDecision] = useState<DecisionKind | null>(null);
-  const [refundPending, setRefundPending] = useState(false);
-  const [refundError, setRefundError] = useState(false);
+  // A refund can be pending on any decision (e.g. refer out, then resume online care), so the
+  // action and its error are tracked per decision id.
+  const [refundPendingId, setRefundPendingId] = useState<string | null>(null);
+  const [refundErrorId, setRefundErrorId] = useState<string | null>(null);
 
   // The current decision is always the newest one (page 1, first row), independent of the
   // history page the clinician is browsing. `refresh` bumps when a decision is recorded
@@ -61,19 +63,32 @@ export default function CareStatusCard({ patientId, refresh }: { patientId: stri
     historyResult.retry();
   };
 
-  const markRefund = async () => {
-    if (!current) return;
-    setRefundPending(true);
-    setRefundError(false);
+  const markRefund = async (decisionId: string) => {
+    setRefundPendingId(decisionId);
+    setRefundErrorId(null);
     try {
-      await api.markRefundIssued(patientId, current.id);
+      await api.markRefundIssued(patientId, decisionId);
       refreshAll();
     } catch {
-      setRefundError(true);
+      setRefundErrorId(decisionId);
     } finally {
-      setRefundPending(false);
+      setRefundPendingId(null);
     }
   };
+
+  const refundButton = (decision: CareDecision, label?: string) => (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={refundPendingId !== null}
+      aria-label={refundPendingId === decision.id ? undefined : label}
+      onClick={() => void markRefund(decision.id)}
+    >
+      {refundPendingId === decision.id ? 'Marking refund issued…' : 'Mark refund issued'}
+    </Button>
+  );
+  const refundError = (decision: CareDecision) =>
+    refundErrorId === decision.id && <p role="alert" className="text-sm">Refund could not be saved. Try again.</p>;
 
   return (
     <section aria-label="Care status" className="space-y-4 border-t pt-6">
@@ -91,13 +106,9 @@ export default function CareStatusCard({ patientId, refresh }: { patientId: stri
           {currentKind !== 'async_care' && (
             <Button size="sm" variant="outline" onClick={() => setDialogDecision('async_care')}>Resume online care</Button>
           )}
-          {current && canOfferRefund && (
-            <Button size="sm" variant="outline" disabled={refundPending} onClick={() => void markRefund()}>
-              {refundPending ? 'Marking refund issued…' : 'Mark refund issued'}
-            </Button>
-          )}
+          {current && canOfferRefund && refundButton(current)}
         </div>
-        {refundError && <p role="alert" className="text-sm">Refund could not be saved. Try again.</p>}
+        {current && refundError(current)}
       </div>
       <LoadState {...historyResult} />
       {historyResult.data && (
@@ -105,8 +116,11 @@ export default function CareStatusCard({ patientId, refresh }: { patientId: stri
           {historyRows.length > 0 && (
             <ul className="space-y-3 divide-y">
               {historyRows.map((decision) => (
-                <li key={decision.id} className="pt-3">
+                <li key={decision.id} className="space-y-2 pt-3">
                   <DecisionMeta decision={decision} />
+                  {canMarkRefund(decision) &&
+                    refundButton(decision, `Mark refund issued for ${decisionLabel(decision.decision)} recorded ${new Date(decision.createdAt).toLocaleString()}`)}
+                  {refundError(decision)}
                 </li>
               ))}
             </ul>
@@ -121,6 +135,7 @@ export default function CareStatusCard({ patientId, refresh }: { patientId: stri
         open={dialogDecision !== null}
         onOpenChange={(next) => { if (!next) setDialogDecision(null); }}
         onSaved={() => { setDialogDecision(null); refreshAll(); }}
+        onSettledAfterClose={refreshAll}
       />
     </section>
   );

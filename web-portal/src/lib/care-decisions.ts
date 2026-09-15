@@ -16,6 +16,16 @@ export interface CareDecision {
 export type DecisionBody = { decision: DecisionKind; patientMessage: string | null; photoId: string | null };
 export const decisionLabel = (d: DecisionKind) => ({ async_care: 'Online care', refer_out: 'Referred out', needs_in_person: 'Needs in-person care' } as const)[d];
 export const refundLabel = (r: RefundStatus) => (r === 'pending' ? 'Refund pending' : r === 'issued' ? 'Refund issued' : null);
+/** Any decision whose refund is still pending can be marked issued, not only the current one
+ * (e.g. refer out, then resume online care leaves the earlier refund pending in history). */
+export const canMarkRefund = (d: CareDecision) => d.refundStatus === 'pending';
+/** The iOS app shows no card for online care, so a message there would never be seen. */
+export const showsPatientMessage = (d: DecisionKind) => d !== 'async_care';
+export const decisionBody = (decision: DecisionKind, message: string, photoId: string | null): DecisionBody => ({
+  decision,
+  patientMessage: showsPatientMessage(decision) && message.trim() ? message : null,
+  photoId,
+});
 
 export type CareStatusView = { current: CareDecision | null; currentKind: DecisionKind; historyRows: CareDecision[]; canOfferRefund: boolean };
 /**
@@ -30,9 +40,12 @@ export function careStatusView(
 ): CareStatusView {
   const current = currentPage?.data[0] ?? null;
   const historyRows = historyPage ? (page === 1 ? historyPage.data.slice(1) : historyPage.data) : [];
-  return { current, currentKind: current?.decision ?? 'async_care', historyRows, canOfferRefund: current?.refundStatus === 'pending' };
+  return { current, currentKind: current?.decision ?? 'async_care', historyRows, canOfferRefund: current !== null && canMarkRefund(current) };
 }
 type State<R> = { status: 'idle' | 'saving' | 'error' | 'saved'; error: string; result: R | null };
+/** 'cancelled': the caller cancelled while the request was in flight and it has since settled; the
+ * server may have stored it, so the caller should refresh. The action's own state is unchanged. */
+export type SubmitOutcome = 'saved' | 'error' | 'cancelled' | 'busy';
 /** Keeps one client id and frozen body per attempt until the server accepts or rejects it (400). */
 export class IdempotentAction<B, R> {
   private state: State<R> = { status: 'idle', error: '', result: null };
@@ -61,19 +74,20 @@ export class IdempotentAction<B, R> {
     this.attempt = null;
     this.publish({ status: 'idle', error: '', result: null });
   }
-  async submit(body: B) {
-    if (this.state.status === 'saving') return;
+  async submit(body: B): Promise<SubmitOutcome> {
+    if (this.state.status === 'saving') return 'busy';
     this.attempt ??= { id: this.uuid(), body: structuredClone(body) };
     const attempt = this.attempt,
       generation = this.generation;
     this.publish({ ...this.state, status: 'saving', error: '' });
     try {
       const result = await this.send(attempt.id, attempt.body);
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) return 'cancelled';
       this.attempt = null;
       this.publish({ status: 'saved', error: '', result });
+      return 'saved';
     } catch (cause) {
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) return 'cancelled';
       const rejected = typeof cause === 'object' && cause !== null && 'status' in cause && (cause as { status: number }).status === 400;
       if (rejected) this.attempt = null;
       this.publish({
@@ -81,6 +95,7 @@ export class IdempotentAction<B, R> {
         result: null,
         error: rejected ? 'The server rejected these fields. Review and try again.' : 'Not confirmed. Retry sends the same decision.',
       });
+      return 'error';
     }
   }
 }
