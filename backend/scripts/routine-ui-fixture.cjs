@@ -10,6 +10,7 @@ const req = createRequire(path.join(root, 'backend/package.json'));
 req('dotenv').config({ path: path.join(root, 'backend/.env'), quiet: true });
 const { Client } = req('pg');
 const { createClient } = req('@supabase/supabase-js');
+const { enrollFixture, unenrollFixture } = require(path.join(__dirname, 'lib/enrollment-fixture.cjs'));
 const statePath = path.join(root, '.local/routine-ui-fixture.json');
 const mode = process.argv[2];
 assert(['create', 'inspect', 'cleanup'].includes(mode),
@@ -87,6 +88,16 @@ async function create() {
     save(state);
   }
   const patientToken = await login(patient);
+  const enrollmentResponse = await fetch('http://127.0.0.1:3001/api/enrollment', {
+    headers: { Authorization: `Bearer ${patientToken}` },
+  });
+  assert(enrollmentResponse.ok, `Enrollment lookup failed ${enrollmentResponse.status}`);
+  const enrollment = await enrollmentResponse.json();
+  await enrollFixture(db, [patient.id], {
+    rulesVersion: enrollment.rulesVersion,
+    documentVersion: enrollment.consent.version,
+    documentSha256: enrollment.consent.sha256,
+  });
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const completedAt = yesterday.toISOString();
@@ -133,6 +144,7 @@ async function inspectOrCleanup() {
   }
   await db.query('delete from care_routine_completions where "userId"=any($1::uuid[])', [ids]);
   await db.query('delete from care_routine_revisions where "userId"=any($1::uuid[])', [ids]);
+  await unenrollFixture(db, ids);
   await db.query('delete from user_profiles where id=any($1::uuid[])', [ids]);
   await db.query('delete from dermatologists where id=any($1::uuid[])', [ids]);
   for (const account of liveAccounts) {

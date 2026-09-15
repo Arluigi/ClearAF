@@ -2,6 +2,7 @@
 // Run from backend: node scripts/security-live.cjs prepare|verify|cleanup
 const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const {Client}=require('pg');const{createClient}=require('@supabase/supabase-js');
+const {enrollFixture,unenrollFixture}=require('./lib/enrollment-fixture.cjs');
 require('dotenv').config({quiet:true});
 const statePath=process.env.SECURITY_FIXTURE_STATE||'/tmp/clearaf-security-fixtures.json';
 const base=process.env.SECURITY_API_URL||'http://127.0.0.1:3001/api';
@@ -23,6 +24,14 @@ async function run(){
    const {data,error}=await admin.auth.admin.createUser({email:account.email,password:account.password,email_confirm:true,user_metadata:{name:'Synthetic Security Test'}});
    if(error)throw error;account.id=data.user.id;s.accounts.push(account);save(s);
    if(role.startsWith('doctor'))await db.query('insert into public.dermatologists (id,name,email,password,"createdAt","updatedAt") values ($1,$2,$3,$4,now(),now())',[account.id,'Synthetic Security Clinician',account.email,'UNUSED_SUPABASE_AUTH']);
+   if(role.startsWith('patient')){
+    const signIn=await publicClient().auth.signInWithPassword({email:account.email,password:account.password});
+    if(signIn.error)throw signIn.error;
+    const enrollmentResp=await fetch(base+'/enrollment',{headers:{Authorization:`Bearer ${signIn.data.session.access_token}`}});
+    if(!enrollmentResp.ok)throw Error('Enrollment lookup failed: '+enrollmentResp.status);
+    const enrollmentBody=await enrollmentResp.json();
+    await enrollFixture(db,[account.id],{rulesVersion:enrollmentBody.rulesVersion,documentVersion:enrollmentBody.consent.version,documentSha256:enrollmentBody.consent.sha256});
+   }
   }
   const [a,b,d,e]=s.accounts;await db.query('update public.user_profiles set "dermatologistId"=case when id=$1::uuid then $3::uuid else $4::uuid end where id in ($1::uuid,$2::uuid)',[a.id,b.id,d.id,e.id]);
   s.routineRevisionIds=[crypto.randomUUID()];s.routineCompletionIds=[crypto.randomUUID()];save(s);
@@ -106,6 +115,7 @@ async function run(){
   await db.query('delete from public.skin_photos where "userId"=any($1::uuid[])',[ids]);
   await db.query('delete from public.messages where "senderId"=any($1::text[]) or "recipientId"=any($1::text[])',[ids]);
   await db.query('delete from public.prescriptions where "patientId"=any($1::uuid[])',[ids]);
+  await unenrollFixture(db,ids);
   await db.query('delete from public.user_profiles where id=any($1::uuid[])',[ids]);
   await db.query('delete from public.dermatologists where id=any($1::uuid[])',[ids]);
   for(const a of s.accounts){const{error}=await admin.auth.admin.deleteUser(a.id);if(error)throw error}

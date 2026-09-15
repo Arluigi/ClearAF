@@ -6,6 +6,7 @@ const path = require('node:path');
 const { Client } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 const { v5: uuidv5 } = require('uuid');
+const { enrollFixture, unenrollFixture } = require('./lib/enrollment-fixture.cjs');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
@@ -93,6 +94,15 @@ async function json(response, expectedStatus) {
   return response.json();
 }
 
+async function enrollPatients(patientAccounts) {
+  const enrollment = await json(await call('/enrollment', patientAccounts[0]), 200);
+  await enrollFixture(db, patientAccounts.map(account => account.id), {
+    rulesVersion: enrollment.rulesVersion,
+    documentVersion: enrollment.consent.version,
+    documentSha256: enrollment.consent.sha256
+  });
+}
+
 async function uploadSigned(intent) {
   assert.equal(new URL(intent.signedUrl).hostname, new URL(supabaseUrl).hostname, 'Signed upload escaped local Supabase');
   storagePaths.push(intent.storagePath);
@@ -149,6 +159,7 @@ async function cleanup() {
 
   if (accounts.length) {
     try {
+      await unenrollFixture(db, accounts.map(account => account.id));
       await db.query('delete from public.user_profiles where id=any($1::uuid[])', [accounts.map(account => account.id)]);
     } catch (error) { cleanupErrors.push(error); }
   }
@@ -176,6 +187,7 @@ async function run() {
       [patientA.id, assignedClinician.id]
     );
     for (const account of accounts) await signIn(account);
+    await enrollPatients([patientA, patientB]);
 
     const firstIntent = await json(
       await call(`/photos/captures/${captureId}/upload-url`, patientA, 'POST', {}),
