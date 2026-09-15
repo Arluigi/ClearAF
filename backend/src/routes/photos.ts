@@ -472,7 +472,7 @@ router.get('/:id', requirePatient, async (req, res, next) => {
 });
 
 // Update photo details
-router.patch('/:id', requirePatient, async (req, res, next) => {
+router.patch('/:id', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const { id } = req.params;
     const validatedData = updatePhotoSchema.parse(req.body);

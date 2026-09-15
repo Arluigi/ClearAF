@@ -48,6 +48,7 @@ const gated:[string,string,any][]=[
  ['PUT',`/routines/completions/${randomUUID()}`,{revisionId:randomUUID(),completedAt:'2026-09-01T10:00:00.000Z',localDate:'2026-09-01',timeZone:'UTC'}],
  ['PUT',`/care-support/responses/${randomUUID()}`,{formId:randomUUID(),submittedAt:'2026-09-01T10:00:00.000Z',answers:[]}],
  ['PUT',`/messages/patients/${A}/clinicians/${C}/messages/${randomUUID()}`,{content:'Synthetic',reference:null}],
+ ['PATCH',`/photos/${randomUUID()}`,{notes:'Synthetic'}],
 ];
 test('unenrolled patients are refused on every gated write before any storage or database write',async()=>{
  process.env.ENROLLMENT_ENFORCEMENT='on';
@@ -72,4 +73,11 @@ test('enrolled patients, clinicians and disabled enforcement pass the gate',asyn
 test('reads are never gated',async()=>{
  process.env.ENROLLMENT_ENFORCEMENT='on';
  for(const path of ['/routines/?localDate=2026-09-01','/care-support/form','/messages/current'])assert.notEqual((await call(path,A)).body.code,'ENROLLMENT_REQUIRED',path);
+});
+test('photo deletion is never gated; a patient can always remove their own photos',async()=>{
+ process.env.ENROLLMENT_ENFORCEMENT='on';
+ const r=await call(`/photos/${randomUUID()}`,A,'DELETE');
+ assert.notEqual(r.status,403);
+ assert.notEqual(r.body.code,'ENROLLMENT_REQUIRED');
+ assert.equal(r.body.code,'PHOTO_NOT_FOUND');
 });

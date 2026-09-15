@@ -62,6 +62,16 @@ test('another patient cannot replay or waitlist a screening they do not own',asy
  assert.equal((await screen(id,answers(),B)).status,404);
  assert.equal((await call('/waitlist',B,'PUT',{screeningId:id})).status,404);
 });
+test('a patient may submit again after moving; the latest screening decides status',async()=>{
+ const first=await screen(randomUUID(),answers({stateCode:'WA'}));
+ assert.equal(first.body.status,'ineligible');
+ const secondId=randomUUID(),second=await screen(secondId,answers({stateCode:'IL'}));
+ assert.equal(second.status,201);assert.equal(second.body.status,'consent_required');assert.equal(second.body.screening.id,secondId);
+ const status=await call('/');
+ assert.equal(status.body.status,'consent_required');assert.equal(status.body.screening.id,secondId);
+ const accepted=await call('/consents/1',A,'PUT',{documentSha256:consent().sha256});
+ assert.equal(accepted.status,201);assert.equal(accepted.body.status,'enrolled');
+});
 test('strict validation rejects malformed answers before storage',async()=>{
  for(const body of [answers({stateCode:'ZZ'}),answers({dateOfBirth:'2026-02-30'}),answers({dateOfBirth:'2999-01-01'}),answers({pregnancyStatus:'unknown'}),{...answers(),eligible:true},answers({dateOfBirth:'1899-12-31'})])assert.equal((await screen(randomUUID(),body)).status,400);
  assert.equal((await screen('not-a-uuid')).status,400);
