@@ -27,20 +27,25 @@ enum EnrollmentCopy {
 struct EnrollmentView: View {
     @ObservedObject private var repository = APIService.shared.enrollment
     @State private var updatingAnswers = false
-    @State private var showingUrgent = false
 
     var body: some View {
         NavigationStack {
+            // Each step starts with the "Something's wrong?" row (icon, text and error colour) in its content:
+            // iOS 26+ toolbars render a Label icon-only with the glass style's own colour.
             content
                 .background(CareJournal.canvas.ignoresSafeArea())
                 .toolbar {
-                    // An urgent report must be possible before eligibility and consent are complete.
-                    ToolbarItem(placement: .topBarLeading) { UrgentReportButton(isPresented: $showingUrgent) }
+                    if updatingAnswers && repository.state?.status == .ineligible {
+                        ToolbarItem(placement: .cancellationAction) {
+                            // Back to the not-eligible result (and its waitlist action) without submitting anything.
+                            Button("Cancel") { updatingAnswers = false }
+                                .accessibilityIdentifier("enrollmentCancelUpdate")
+                        }
+                    }
                     ToolbarItem(placement: .topBarTrailing) { Button("Sign out") { APIService.shared.logout() } }
                 }
         }
         .tint(CareJournal.actionPrimary)
-        .sheet(isPresented: $showingUrgent) { UrgentReportView() }
         .task(id: repository.state?.status) {
             if repository.state?.status == .enrolled { APIService.shared.enrollmentFinished() }
         }
@@ -66,14 +71,17 @@ struct EnrollmentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case nil:
             VStack(spacing: .spaceLG) {
+                UrgentReportEntry(horizontalPadding: 0)
+                Spacer()
                 Text(repository.error ?? "Loading your eligibility steps…").multilineTextAlignment(.center)
                 Button("Reload") {
                     guard let ticket = APIService.shared.access.snapshot() else { return }
                     Task { await repository.load(ticket: ticket) }
                 }
                 .disabled(repository.loading)
+                Spacer()
             }
-            .padding(.spaceXXL)
+            .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -92,6 +100,12 @@ private struct ScreeningForm: View {
     var body: some View {
         Form {
             Section {
+                UrgentReportEntry(horizontalPadding: 0)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+            }
+            Section {
+                // Standard row insets: with zero insets the wrapped second line was clipped at the leading edge.
                 VStack(alignment: .leading, spacing: .spaceSM) {
                     Text("A few questions first")
                         .font(CareJournal.display)
@@ -99,9 +113,9 @@ private struct ScreeningForm: View {
                     Text("We check eligibility before you start. Your answers are shared with your care team.")
                         .foregroundStyle(CareJournal.textSecondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
             }
             Section {
                 Picker("State of residence", selection: $stateCode) {
@@ -193,49 +207,56 @@ private struct NotEligibleView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: .spaceXL) {
-                Label {
-                    Text("ClearAF can't provide your care right now").font(.title2.weight(.semibold))
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("enrollmentNotEligible")
-                VStack(alignment: .leading, spacing: .spaceSM) {
-                    ForEach(EnrollmentCopy.reasons(for: screening), id: \.self) { Text($0) }
-                    Text("You have not been charged.")
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                if screening.waitlistRequestedAt != nil {
-                    Label("We'll keep your request on file.", systemImage: "checkmark.circle")
-                        .accessibilityIdentifier("enrollmentWaitlisted")
-                } else {
-                    Button {
-                        guard let ticket = APIService.shared.access.snapshot() else { return }
-                        Task { await repository.joinWaitlist(ticket: ticket) }
-                    } label: {
-                        Text("Notify me if ClearAF becomes available to me").frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(CareJournal.actionPrimary)
-                    .foregroundStyle(CareJournal.onPrimary)
-                    .disabled(repository.saving)
-                    .accessibilityIdentifier("enrollmentWaitlist")
-                }
-                Button(action: onUpdate) {
-                    Text("Update my answers").frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.bordered)
-                .disabled(repository.saving)
-                .accessibilityIdentifier("enrollmentUpdateAnswers")
-                if let error = repository.error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.retainedErrorText)
-                }
+            VStack(spacing: .spaceLG) {
+                UrgentReportEntry(horizontalPadding: 0)
+                result
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .careJournalSurface()
             .padding(20)
         }
+    }
+
+    private var result: some View {
+        VStack(alignment: .leading, spacing: .spaceXL) {
+            Label {
+                Text("ClearAF can't provide your care right now").font(.title2.weight(.semibold))
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("enrollmentNotEligible")
+            VStack(alignment: .leading, spacing: .spaceSM) {
+                ForEach(EnrollmentCopy.reasons(for: screening), id: \.self) { Text($0) }
+                Text("You have not been charged.")
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            if screening.waitlistRequestedAt != nil {
+                Label("We'll keep your request on file.", systemImage: "checkmark.circle")
+                    .accessibilityIdentifier("enrollmentWaitlisted")
+            } else {
+                Button {
+                    guard let ticket = APIService.shared.access.snapshot() else { return }
+                    Task { await repository.joinWaitlist(ticket: ticket) }
+                } label: {
+                    Text("Notify me if ClearAF becomes available to me").frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(CareJournal.actionPrimary)
+                .foregroundStyle(CareJournal.onPrimary)
+                .disabled(repository.saving)
+                .accessibilityIdentifier("enrollmentWaitlist")
+            }
+            Button(action: onUpdate) {
+                Text("Update my answers").frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .disabled(repository.saving)
+            .accessibilityIdentifier("enrollmentUpdateAnswers")
+            if let error = repository.error {
+                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.retainedErrorText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .careJournalSurface()
     }
 }
 
@@ -245,33 +266,40 @@ private struct ConsentView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: .spaceXL) {
-                Text(consent.title).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                // Plain string: paragraphs are kept and nothing in the document is interpreted as Markdown.
-                Text(verbatim: consent.body).fixedSize(horizontal: false, vertical: true)
-                Button {
-                    guard let ticket = APIService.shared.access.snapshot() else { return }
-                    Task { await repository.acceptConsent(ticket: ticket) }
-                } label: {
-                    HStack(spacing: .spaceSM) {
-                        if repository.saving { SwiftUI.ProgressView().tint(CareJournal.onPrimary) }
-                        Text("I understand and agree")
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(CareJournal.actionPrimary)
-                .foregroundStyle(CareJournal.onPrimary)
-                .disabled(repository.saving)
-                .accessibilityIdentifier("enrollmentAgree")
-                if let error = repository.error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.retainedErrorText)
-                }
-                Text("Version \(consent.version)").font(.caption).foregroundStyle(CareJournal.textSecondary)
+            VStack(spacing: .spaceLG) {
+                UrgentReportEntry(horizontalPadding: 0)
+                document
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .careJournalSurface()
             .padding(20)
         }
+    }
+
+    private var document: some View {
+        VStack(alignment: .leading, spacing: .spaceXL) {
+            Text(consent.title).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+            // Plain string: paragraphs are kept and nothing in the document is interpreted as Markdown.
+            Text(verbatim: consent.body).fixedSize(horizontal: false, vertical: true)
+            Button {
+                guard let ticket = APIService.shared.access.snapshot() else { return }
+                Task { await repository.acceptConsent(ticket: ticket) }
+            } label: {
+                HStack(spacing: .spaceSM) {
+                    if repository.saving { SwiftUI.ProgressView().tint(CareJournal.onPrimary) }
+                    Text("I understand and agree")
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(CareJournal.actionPrimary)
+            .foregroundStyle(CareJournal.onPrimary)
+            .disabled(repository.saving)
+            .accessibilityIdentifier("enrollmentAgree")
+            if let error = repository.error {
+                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.retainedErrorText)
+            }
+            Text("Version \(consent.version)").font(.caption).foregroundStyle(CareJournal.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .careJournalSurface()
     }
 }

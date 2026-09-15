@@ -39,11 +39,20 @@ struct CareStatusCard: View {
             Text(CareStatusCopy.title(for: decision.decision))
                 .font(.headlineLarge)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: .spaceXS) {
-                Text("From \(decision.clinicianName)")
-                if let date = RoutineDates.instant(decision.createdAt) {
-                    Text("·").accessibilityHidden(true)
-                    Text(date, format: .dateTime.month().day().year())
+            // One line when it fits; otherwise name and date stack instead of squeezing the name into a column.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: .spaceXS) {
+                    Text("From \(decision.clinicianName)")
+                    if let date = RoutineDates.instant(decision.createdAt) {
+                        Text("·").accessibilityHidden(true)
+                        Text(date, format: .dateTime.month().day().year())
+                    }
+                }
+                VStack(alignment: .leading, spacing: .spaceXXS) {
+                    Text("From \(decision.clinicianName)").fixedSize(horizontal: false, vertical: true)
+                    if let date = RoutineDates.instant(decision.createdAt) {
+                        Text(date, format: .dateTime.month().day().year())
+                    }
                 }
             }
             .font(.subheadline)

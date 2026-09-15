@@ -69,7 +69,8 @@ struct UrgentDraft: Equatable {
             guard (try? require(ticket, e)) != nil else { return }
             if case AccountFailure.noAssignedClinician = error {
                 pending = nil; self.error = AccountFailure.noAssignedClinician.localizedDescription
-            } else if AccountFailure.isTransient(error) {
+            } else if AccountFailure.isTransient(error) || Self.mayHaveBeenStored(error) {
+                // Keep the same report ID: a retry either reaches the server or returns the row it already stored.
                 self.error = "Not sent yet. Check your connection and tap Retry. If this is an emergency, call 911."
             } else {
                 // Refused as sent: unfreeze so the person can edit and send again; the typed text stays in the draft.
@@ -77,6 +78,13 @@ struct UrgentDraft: Equatable {
                 self.error = "Couldn't send your report. Check what you wrote and try again. If this is an emergency, call 911."
             }
         }
+    }
+
+    /// An unreadable or mismatched confirmation can follow a report the server did store.
+    private static func mayHaveBeenStored(_ error: Error) -> Bool {
+        if error is DecodingError { return true }
+        if case RoutineFailure.invalidData = error { return true }
+        return false
     }
 
     func load(ticket: AccountAccess.Ticket) async {

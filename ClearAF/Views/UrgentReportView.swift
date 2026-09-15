@@ -12,8 +12,10 @@ enum UrgentReportCopy {
     }
 }
 
-/// Today's entry point to the urgent report sheet.
+/// The "Something's wrong?" row on Today and at the top of each enrollment step.
 struct UrgentReportEntry: View {
+    /// 20 on Today; 0 where the row sits inside a padded container or a form section.
+    var horizontalPadding: CGFloat = 20
     @State private var showing = false
     var body: some View {
         Button { showing = true } label: {
@@ -39,13 +41,13 @@ struct UrgentReportEntry: View {
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, horizontalPadding)
         .accessibilityIdentifier("urgentEntry")
         .sheet(isPresented: $showing) { UrgentReportView() }
     }
 }
 
-/// Compact entry for the enrollment toolbar and onboarding, so an urgent report is possible in every signed-in phase.
+/// Compact entry for the onboarding overlay, so an urgent report is possible in every signed-in phase.
 struct UrgentReportButton: View {
     @Binding var isPresented: Bool
     var body: some View {

@@ -39,6 +39,28 @@ import Testing
         await repo.send(category: .painOrInfection, description: "Swelling and pain", ticket: ticket)
         #expect(Set(transport.sent.map(\.0)).count == 2 && repo.sent?.description == "Swelling and pain")
     }
+    @Test func untrustedConfirmationKeepsTheAttemptFrozen() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = UrgentFake(patient: ticket.accountID)
+        let repo = UrgentReportRepository(access: access, transport: transport)
+        transport.wrongCategory = true // the server may have stored it, but the confirmation doesn't match
+        await repo.send(category: .rapidWorsening, description: "Spreading", ticket: ticket)
+        #expect(repo.pending != nil && repo.error?.contains("Check your connection and tap Retry") == true)
+        transport.wrongCategory = false
+        transport.failure = DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Synthetic unreadable body"))
+        await repo.send(category: .other, description: "Edited", ticket: ticket)
+        #expect(repo.pending != nil && repo.error?.contains("Check your connection and tap Retry") == true)
+        transport.failure = nil
+        await repo.send(category: .other, description: "Edited", ticket: ticket)
+        #expect(Set(transport.sent.map(\.0)).count == 1 && repo.pending == nil && repo.sent?.category == "rapid_worsening")
+    }
+    @Test func refusedReportUnfreezesForEditing() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = UrgentFake(patient: ticket.accountID)
+        let repo = UrgentReportRepository(access: access, transport: transport)
+        transport.failure = AccountFailure.requestFailed(413)
+        await repo.send(category: .other, description: "Too much", ticket: ticket)
+        #expect(repo.pending == nil && repo.error?.contains("Check what you wrote") == true)
+        #expect(repo.draft == UrgentDraft(category: .other, description: "Too much"))
+    }
     @Test func draftOutlivesTheSheetAndClearsAfterSendOrSignOut() async throws {
         let access = AccountAccess(), ticket = access.activate(UUID()), transport = UrgentFake(patient: ticket.accountID)
         let repo = UrgentReportRepository(access: access, transport: transport)
@@ -113,6 +135,7 @@ import Testing
 @MainActor private final class UrgentFake: UrgentReportTransport {
     let patient: UUID
     var fail = false
+    var wrongCategory = false
     var failure: Error?
     var onSend: (() -> Void)?
     var sent: [(UUID, UrgentCategory, String)] = []
@@ -123,7 +146,7 @@ import Testing
         onSend?()
         if let failure { throw failure }
         if fail { throw URLError(.networkConnectionLost) }
-        return UrgentReport(id: id, patientId: patient, category: category.rawValue, description: description, status: "open",
+        return UrgentReport(id: id, patientId: patient, category: wrongCategory ? "other" : category.rawValue, description: description, status: "open",
             createdAt: "2026-09-15T12:00:00.000Z", acknowledgedAt: nil, resolvedAt: nil, resolutionNote: nil)
     }
     func urgentReports(ticket: AccountAccess.Ticket) async throws -> [UrgentReport] { rows }

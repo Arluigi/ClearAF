@@ -86,7 +86,10 @@ import Combine
             _ = try await transport.acceptConsent(version: consent.version, sha256: consent.sha256, ticket: ticket)
             try require(ticket, e)
         } catch {
-            if (try? require(ticket, e)) != nil { self.error = "Couldn't record your consent. Try again." }
+            guard (try? require(ticket, e)) != nil else { return }
+            guard !AccountFailure.isTransient(error) else { self.error = "Couldn't record your consent. Try again."; return }
+            // Refused, for example 409 CONSENT_OUTDATED: reload so the current document and version are shown.
+            if await load(ticket: ticket) { self.error = "Couldn't record your consent. Review the current document and try again." }
             return
         }
         await load(ticket: ticket)

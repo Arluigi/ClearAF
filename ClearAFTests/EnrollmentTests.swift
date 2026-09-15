@@ -24,6 +24,32 @@ import Testing
         #expect(transport.accepted.first?.0 == 1 && transport.accepted.first?.1 == String(repeating: "a", count: 64))
         #expect(repo.state?.status == .enrolled)
     }
+    @Test func outdatedConsentReloadsTheCurrentDocument() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = EnrollmentFake()
+        transport.state = EnrollmentFake.make(.consentRequired)
+        let repo = EnrollmentRepository(access: access, transport: transport)
+        await repo.load(ticket: ticket)
+        // The server has published version 2 and refuses the old version/hash (409 CONSENT_OUTDATED).
+        transport.state = EnrollmentFake.make(.consentRequired, version: 2, sha256: String(repeating: "b", count: 64))
+        transport.failAccept = AccountFailure.requestFailed(409)
+        await repo.acceptConsent(ticket: ticket)
+        #expect(repo.state?.consent.version == 2 && repo.error != nil)
+        transport.failAccept = nil
+        await repo.acceptConsent(ticket: ticket)
+        #expect(transport.accepted.map(\.0) == [1, 2] && transport.accepted.last?.1 == String(repeating: "b", count: 64))
+        #expect(repo.state?.status == .enrolled)
+    }
+    @Test func transientConsentFailureKeepsTheShownDocument() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = EnrollmentFake()
+        transport.state = EnrollmentFake.make(.consentRequired)
+        let repo = EnrollmentRepository(access: access, transport: transport)
+        await repo.load(ticket: ticket)
+        let fetches = transport.fetchCount
+        transport.failAccept = URLError(.networkConnectionLost)
+        await repo.acceptConsent(ticket: ticket)
+        #expect(transport.fetchCount == fetches && repo.state?.consent.version == 1)
+        #expect(repo.error == "Couldn't record your consent. Try again.")
+    }
     @Test func lateResponseAfterAccountChangeIsDropped() async throws {
         let access = AccountAccess(), ticket = access.activate(UUID()), transport = EnrollmentFake()
         transport.onFetch = { access.invalidate() }
@@ -93,21 +119,24 @@ import Testing
     var state = EnrollmentFake.make(.screeningRequired)
     var failSubmit = false
     var failFetch = false
+    var failAccept: Error?
+    var fetchCount = 0
     var submittedIDs: [UUID] = []
     var accepted: [(Int, String)] = []
     var waitlisted: [UUID?] = []
     var onFetch: (() -> Void)?
 
-    static func make(_ status: EnrollmentStatus) -> EnrollmentState {
+    static func make(_ status: EnrollmentStatus, version: Int = 1, sha256: String = String(repeating: "a", count: 64)) -> EnrollmentState {
         let screening = status == .screeningRequired ? nil : EligibilityScreening(
             id: UUID(), stateCode: "IL", dateOfBirth: "1990-01-01", pregnancyStatus: "none",
             eligible: status != .ineligible, reasons: status == .ineligible ? ["state"] : [], flags: [],
             rulesVersion: "2026-09-15.1", submittedAt: "2026-09-15T12:00:00.000Z", waitlistRequestedAt: nil)
-        let consent = ConsentDocument(version: 1, title: "Consent", body: "First paragraph.\n\nSecond paragraph.",
-            sha256: String(repeating: "a", count: 64), acceptedAt: status == .enrolled ? "2026-09-15T12:01:00.000Z" : nil)
+        let consent = ConsentDocument(version: version, title: "Consent", body: "First paragraph.\n\nSecond paragraph.",
+            sha256: sha256, acceptedAt: status == .enrolled ? "2026-09-15T12:01:00.000Z" : nil)
         return EnrollmentState(status: status, rulesVersion: "2026-09-15.1", screening: screening, consent: consent)
     }
     func fetchEnrollment(ticket: AccountAccess.Ticket) async throws -> EnrollmentState {
+        fetchCount += 1
         onFetch?()
         if failFetch { throw URLError(.networkConnectionLost) }
         return state
@@ -129,6 +158,7 @@ import Testing
     }
     func acceptConsent(version: Int, sha256: String, ticket: AccountAccess.Ticket) async throws -> EnrollmentStatus {
         accepted.append((version, sha256))
+        if let failAccept { throw failAccept }
         state = Self.make(.enrolled)
         return .enrolled
     }

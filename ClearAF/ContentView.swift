@@ -66,7 +66,11 @@ struct ContentView: View {
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)
         .id(apiService.access.snapshot()?.generation)
         .task { apiService.start(); resumeRepositories() }
-        .onChange(of: apiService.phase) { _, _ in resumeRepositories() }
+        .onChange(of: apiService.phase) { _, _ in
+            // The onboarding urgent sheet belongs to one phase and one login; never carry it into the next.
+            showingUrgent = false
+            resumeRepositories()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { resumeRepositories() }
             else { apiService.photos.cancel(); apiService.routines.cancel() }
