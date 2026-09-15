@@ -21,18 +21,23 @@ const TABLES=['eligibility_screenings','consent_acceptances','care_decisions','u
 async function cleanup(){
  // Every step is isolated: one failing step must never skip the rest (auth-user, profile,
  // clinician deletion and the manifest unlink all still need to run), so we push failures
- // and only throw the first one after every step has been attempted.
+ // and only throw the first one after every step has been attempted. Revalidation gates
+ // every later delete: an account that fails identity revalidation is never touched again.
  const cleanupErrors=[];
- const ids=s.accounts.map(a=>a.id);
- const patientIds=s.accounts.filter(a=>a.role.startsWith('patient')).map(a=>a.id);
+ const verified=[];
  for(const a of s.accounts){
   try{
    const {data,error}=await admin.auth.admin.getUserById(a.id);
-   assert(a.email===`clearaf-enrollment-${s.run}-${a.role.toLowerCase()}@example.invalid`&&!error&&data.user.email===a.email,'Fixture identity mismatch');
+   const identityOk=!error&&data.user.email===a.email&&a.email===`clearaf-enrollment-${s.run}-${a.role.toLowerCase()}@example.invalid`;
+   assert(identityOk,`Identity mismatch for ${a.role}`);
+   verified.push(a);
   }catch(error){cleanupErrors.push(error)}
  }
+ const ids=verified.map(a=>a.id);
+ const patientIds=verified.filter(a=>a.role.startsWith('patient')).map(a=>a.id);
  // Defence in depth: remove anything that might have landed at the fixed check-7 row ID in
  // any of the four tables, in case RLS/grants ever regressed and a write actually succeeded.
+ // Keyed by the probe's own random id, not an account, so this always runs.
  if(s.rowId){
   for(const table of TABLES){
    try{await db.query(`delete from ${table} where id=$1::uuid`,[s.rowId])}catch(error){cleanupErrors.push(error)}
@@ -44,7 +49,7 @@ async function cleanup(){
  try{await db.query('delete from auth.sessions where user_id=any($1::uuid[])',[ids])}catch(error){cleanupErrors.push(error)}
  try{await db.query('delete from user_profiles where id=any($1::uuid[])',[ids])}catch(error){cleanupErrors.push(error)}
  try{await db.query('delete from dermatologists where id=any($1::uuid[])',[ids])}catch(error){cleanupErrors.push(error)}
- for(const a of s.accounts){
+ for(const a of verified){
   try{
    const removed=await admin.auth.admin.deleteUser(a.id);
    if(removed.error)throw removed.error;
@@ -53,8 +58,10 @@ async function cleanup(){
  try{
   assert.equal(Number((await db.query('select count(*) from auth.users where id=any($1::uuid[])',[ids])).rows[0].count),0,'Synthetic auth cleanup incomplete');
  }catch(error){cleanupErrors.push(error)}
- try{fs.unlinkSync(state)}catch(error){cleanupErrors.push(error)}
+ // Only remove the manifest once every step has actually succeeded; otherwise leave it in
+ // place (still 0600) so a rerun or manual cleanup can finish by exact recorded identity.
  if(cleanupErrors.length)throw cleanupErrors[0];
+ fs.unlinkSync(state);
  ok('recorded synthetic accounts, sessions, screenings, consents, decisions and reports removed');
 }
 (async()=>{
