@@ -41,3 +41,15 @@ export async function runReportAction(
   on.saved(row);
   return true;
 }
+
+/** Clears error flags for reports that no longer need action (i.e., are resolved).
+ * Returns a new errors object containing only errors for reports that still need action. */
+export function clearStaleErrors(
+  errors: Record<string, boolean>,
+  rows: UrgentReport[],
+): Record<string, boolean> {
+  const resolvedIds = new Set(rows.filter((r) => r.status === 'resolved').map((r) => r.id));
+  return Object.fromEntries(
+    Object.entries(errors).filter(([id]) => !resolvedIds.has(id) && errors[id]),
+  );
+}

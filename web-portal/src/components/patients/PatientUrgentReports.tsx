@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useRead, LoadState, Pages } from '@/components/care-support/shared';
-import { categoryLabel, runReportAction, statusLabel } from '@/lib/urgent-reports';
+import { categoryLabel, clearStaleErrors, runReportAction, statusLabel } from '@/lib/urgent-reports';
 import type { UrgentReport } from '@/lib/urgent-reports';
 
 export default function PatientUrgentReports({ patientId }: { patientId: string }) {
@@ -15,7 +15,11 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
   const fetch = useCallback(() => api.getPatientUrgentReports(patientId, page), [api, patientId, page]);
   const result = useRead(fetch);
   const [rows, setRows] = useState<UrgentReport[]>([]);
-  useEffect(() => { setRows(result.data?.data ?? []); }, [result.data]);
+  useEffect(() => {
+    const newRows = result.data?.data ?? [];
+    setRows(newRows);
+    setErrors((e) => clearStaleErrors(e, newRows));
+  }, [result.data]);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [resolving, setResolving] = useState<Record<string, boolean>>({});

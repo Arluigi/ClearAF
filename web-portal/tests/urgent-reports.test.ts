@@ -32,3 +32,16 @@ test("urgent labels are text, not colour alone", () => {
   assert.equal(statusLabel("acknowledged"), "Seen");
   assert.equal(statusLabel("resolved"), "Resolved");
 });
+
+test("clearStaleErrors removes error flags for reports that no longer need action", () => {
+  const { clearStaleErrors } = require("../src/lib/urgent-reports");
+  const errors = { r1: true, r2: true, r3: false };
+  const rows: UrgentReport[] = [
+    { id: "r1", patientId: "p", category: "other", description: "Open report", status: "open", createdAt: "2026-09-15T00:00:00.000Z", acknowledgedAt: null, resolvedAt: null, resolutionNote: null },
+    { id: "r2", patientId: "p", category: "other", description: "Resolved report", status: "resolved", createdAt: "2026-09-15T00:00:00.000Z", acknowledgedAt: null, resolvedAt: "2026-09-15T01:00:00.000Z", resolutionNote: null },
+    { id: "r3", patientId: "p", category: "other", description: "Acknowledged report", status: "acknowledged", createdAt: "2026-09-15T00:00:00.000Z", acknowledgedAt: "2026-09-15T00:30:00.000Z", resolvedAt: null, resolutionNote: null },
+  ];
+  const cleared = clearStaleErrors(errors, rows);
+  // r1 is still open (needs action), so error stays. r2 is resolved (doesn't need action), so error is cleared. r3 has no error.
+  assert.deepEqual(cleared, { r1: true });
+});
