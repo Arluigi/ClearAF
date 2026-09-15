@@ -9,6 +9,7 @@ import { sessionBoundary } from '@/lib/api';
 import { PhotoHistoryController, photoDetailState, type PhotoOriginalState } from '@/lib/photo-history';
 import { PrivateThumbnailController, type ThumbnailState } from '@/lib/private-thumbnail';
 import { PhotoReviewController } from '@/lib/photo-review';
+import CareDecisionDialog from './CareDecisionDialog';
 import type { PhotoSummary } from '@/types/api';
 
 type PhotoFocusTarget = Pick<HTMLElement, 'isConnected' | 'focus'>;
@@ -51,7 +52,7 @@ function Thumbnail({ photo, state }: { photo: PhotoSummary; state?: ThumbnailSta
   </p>;
 }
 
-export default function PatientPhotoHistory({ patientId }: { patientId: string }) {
+export default function PatientPhotoHistory({ patientId, onCareDecision }: { patientId: string; onCareDecision?: () => void }) {
   const api = useClinicalAPI();
   const photoTrigger = useRef<HTMLButtonElement>(null);
   const historySection = useRef<HTMLElement>(null);
@@ -69,6 +70,7 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
     return () => { unsubscribe(); reviews.reset(); };
   }, [reviews, state.photos]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [decisionPhotoId, setDecisionPhotoId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PhotoOriginalState | null>(null);
   const [detailRevision, setDetailRevision] = useState(0);
   const selectedPhoto = state.photos.find(photo => photo.id === selected);
@@ -137,6 +139,7 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
               </button>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={reviewState.selected.includes(photo.id)} disabled={!reviewState.selected.includes(photo.id) && reviewState.selected.length >= 2} onChange={() => reviews.toggle(photo.id)} />Select photo from {captureDate(photo)} for comparison</label>
               {reviewState.status === 'loading' ? <p role="status" className="text-sm">Loading review status…</p> : reviewState.status === 'ready' && (reviewState.reviews[photo.id] ? <p className="text-sm">Reviewed by {reviewState.reviews[photo.id].reviewerName} · {new Date(reviewState.reviews[photo.id].reviewedAt).toLocaleString()}</p> : <div className="space-y-2"><p className="text-sm">Not reviewed</p>{reviewState.errors[photo.id] && <p role="alert" className="text-sm">Review could not be saved. Try again.</p>}<Button size="sm" variant="outline" disabled={reviewState.pending[photo.id]} onClick={() => void reviews.mark(photo.id)}>{reviewState.pending[photo.id] ? 'Saving review…' : reviewState.errors[photo.id] ? 'Retry marking reviewed' : 'Mark reviewed'}</Button></div>)}
+              <Button size="sm" variant="outline" onClick={() => setDecisionPhotoId(photo.id)}>Refer out or in-person…</Button>
               </div>
             ))}
           </div>
@@ -179,6 +182,14 @@ export default function PatientPhotoHistory({ patientId }: { patientId: string }
           <Button variant="outline" disabled={state.status === 'loading'} onClick={refresh}>Refresh images</Button>
         </DialogContent>
       </Dialog>
+      <CareDecisionDialog
+        patientId={patientId}
+        photoId={decisionPhotoId}
+        defaultDecision="refer_out"
+        open={decisionPhotoId !== null}
+        onOpenChange={open => { if (!open) setDecisionPhotoId(null); }}
+        onSaved={() => { setDecisionPhotoId(null); onCareDecision?.(); }}
+      />
     </section>
   );
 }

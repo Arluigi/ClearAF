@@ -1,6 +1,9 @@
 import type { Conversation, MessagePage, MessageBody, MessageRecord, ReferenceResult } from './assigned-messaging';
 import type { Template, TemplateDraft, Form, FormDraft, CheckInResponse, Month } from './care-support';
 import type { PhotoReview, ReviewQueueItem } from './photo-review';
+import type { EnrollmentSummary } from './enrollment';
+import type { CareDecision, DecisionBody } from './care-decisions';
+import type { UrgentReport, UrgentQueue } from './urgent-reports';
 // API Service for Clear AF Web Portal
 // Connects to the configured ClearAF API.
 
@@ -291,6 +294,15 @@ class APIService {
   async sendAssignedMessage(patientId:string,clinicianId:string,id:string,body:MessageBody):Promise<MessageRecord> { const result=await this.request<{message:MessageRecord}>(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/messages/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(body)});return result.message; }
   async acknowledgeMessages(patientId:string,clinicianId:string,messageIds:string[]):Promise<{acknowledgedIds:string[];unreadCount:number}> { return this.request(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/read`,{method:'POST',body:JSON.stringify({messageIds})}); }
   async getMessageReference(patientId:string,clinicianId:string,messageId:string):Promise<ReferenceResult> { return this.request(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/messages/${encodeURIComponent(messageId)}/reference`); }
+
+  async getEnrollmentSummary(patientId:string):Promise<EnrollmentSummary> { return this.request(`/enrollment/patients/${encodeURIComponent(patientId)}`); }
+  async getCareDecisions(patientId:string,page=1):Promise<PaginatedResponse<CareDecision>> { return this.request(`/care-decisions/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({page:String(page),limit:'20'})}`); }
+  async recordCareDecision(patientId:string,id:string,body:DecisionBody):Promise<CareDecision> { const result=await this.request<{decision:CareDecision}>(`/care-decisions/patients/${encodeURIComponent(patientId)}/decisions/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(body)});return result.decision; }
+  async markRefundIssued(patientId:string,id:string):Promise<CareDecision> { const result=await this.request<{decision:CareDecision}>(`/care-decisions/patients/${encodeURIComponent(patientId)}/decisions/${encodeURIComponent(id)}/refund`,{method:'PUT',body:JSON.stringify({refundStatus:'issued'})});return result.decision; }
+  async getUrgentQueue(page=1):Promise<UrgentQueue> { return this.request(`/urgent-reports/queue?${new URLSearchParams({page:String(page),limit:'20'})}`); }
+  async getPatientUrgentReports(patientId:string,page=1):Promise<PaginatedResponse<UrgentReport>> { return this.request(`/urgent-reports/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({page:String(page),limit:'20'})}`); }
+  async acknowledgeUrgentReport(id:string):Promise<UrgentReport> { const result=await this.request<{report:UrgentReport}>(`/urgent-reports/${encodeURIComponent(id)}/acknowledge`,{method:'POST',body:JSON.stringify({})});return result.report; }
+  async resolveUrgentReport(id:string,resolutionNote:string|null):Promise<UrgentReport> { const result=await this.request<{report:UrgentReport}>(`/urgent-reports/${encodeURIComponent(id)}/resolve`,{method:'POST',body:JSON.stringify({resolutionNote})});return result.report; }
 
 }
 
