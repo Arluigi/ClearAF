@@ -5,6 +5,7 @@ import Module from 'node:module';
 import { randomUUID } from 'node:crypto';
 const A='11111111-1111-4111-8111-111111111111', B='22222222-2222-4222-8222-222222222222', C='33333333-3333-4333-8333-333333333333', D='44444444-4444-4444-8444-444444444444';
 process.env.SUPABASE_URL='https://routine-test.supabase.co';process.env.SUPABASE_ANON_KEY='synthetic';process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic';
+process.env.ENROLLMENT_ENFORCEMENT='off'; // The gate itself is covered by enrollment-gate.test.ts.
 let revisions:any[]=[],completions:any[]=[],legacyWrites=0,assigned=C,queue=Promise.resolve(),afterLock:(()=>void)|undefined;
 const matches=(r:any,w:any):boolean=>Object.entries(w||{}).every(([k,v]:any)=>typeof v==='object'&&v!==null?matches(r,v):r[k]===v);
 function model(rows:()=>any[]){return {

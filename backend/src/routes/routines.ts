@@ -1,6 +1,7 @@
 import express from 'express';
 import { z, ZodError } from 'zod';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
+import { requireEnrolledPatient } from '../middleware/enrollmentGate';
 import { careError, completionInput, history, localDate, revisionInput, saveCompletion, saveRevision, slot, snapshot, uuid } from '../services/routineCare';
 const router = express.Router();
 // Keep provider details and development stacks out of this clinical API.
@@ -19,7 +20,7 @@ router.put('/patients/:patientId/:timeOfDay/revisions/:revisionId',requireDermat
   const result=await saveRevision(uuid.parse(req.params.patientId),req.user!.id,slot.parse(req.params.timeOfDay),uuid.parse(req.params.revisionId),revisionInput.parse(req.body));
   res.status(result.created?201:200).json({routine:result.routine});
 }));
-router.put('/completions/:completionId',requirePatient,route(async(req,res)=>{
+router.put('/completions/:completionId',requirePatient,requireEnrolledPatient,route(async(req,res)=>{
   const result=await saveCompletion(req.user!.id,uuid.parse(req.params.completionId),completionInput.parse(req.body));
   res.status(result.created?201:200).json({completion:result.completion});
 }));

@@ -11,6 +11,7 @@ const P='55555555-5555-4555-8555-555555555555';
 process.env.SUPABASE_URL='https://security-test.supabase.co';
 process.env.SUPABASE_ANON_KEY='synthetic-anon';
 process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic-service';
+process.env.ENROLLMENT_ENFORCEMENT='off'; // The gate itself is covered by enrollment-gate.test.ts.
 let writes:any[], signed:string[], removed:string[], failRemove=false;
 let users:any[], photos:any[], appointments:any[], queries:any[], reviews:any[], cleanups:any[];
 let uploadSize=68,transactionActive=false;

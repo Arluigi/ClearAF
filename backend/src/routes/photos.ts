@@ -3,6 +3,7 @@ import { photoThumbnails, photoOriginal, ThumbnailError } from '../services/phot
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
+import { requireEnrolledPatient } from '../middleware/enrollmentGate';
 import multer from 'multer';
 import { privatePhoto, privatePhotos, deletePhotoObject, ownedPhotoPath } from '../services/photoAccess';
 import { v4 as uuidv4 } from 'uuid';
@@ -82,7 +83,7 @@ async function captureObjectInfo(storagePath: string) {
   return { state: 'uploaded' as const };
 }
 
-router.post('/captures/:captureId/upload-url', requirePatient, async (req, res, next) => {
+router.post('/captures/:captureId/upload-url', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const captureId = captureIdSchema.parse(req.params.captureId);
     captureIntentSchema.parse(req.body);
@@ -111,7 +112,7 @@ router.post('/captures/:captureId/upload-url', requirePatient, async (req, res, 
   }
 });
 
-router.post('/captures/:captureId/complete', requirePatient, async (req, res, next) => {
+router.post('/captures/:captureId/complete', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const captureId = captureIdSchema.parse(req.params.captureId);
     const input = completeCaptureSchema.parse(req.body);
@@ -148,7 +149,7 @@ router.post('/captures/:captureId/complete', requirePatient, async (req, res, ne
 
 // Large images travel directly to private Storage instead of through Vercel's
 // request-size limit. Only the server chooses the owner-bound object path.
-router.post('/upload-url', requirePatient, async (req, res, next) => {
+router.post('/upload-url', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const { mimeType } = z.object({ mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']) }).parse(req.body);
     const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[mimeType];
@@ -159,7 +160,7 @@ router.post('/upload-url', requirePatient, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/complete-upload', requirePatient, async (req, res, next) => {
+router.post('/complete-upload', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const input = z.object({
       storagePath: z.string(), skinScore: z.number().int().min(0).max(100).default(0),
@@ -207,7 +208,7 @@ router.post('/complete-upload', requirePatient, async (req, res, next) => {
 });
 
 // File upload endpoint - uploads to Supabase Storage and stores URL in database
-router.post('/upload', requirePatient, upload.single('photo'), async (req, res, next) => {
+router.post('/upload', requirePatient, requireEnrolledPatient, upload.single('photo'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({

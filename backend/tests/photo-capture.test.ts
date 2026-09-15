@@ -16,6 +16,7 @@ const ORIGINAL_DATE = '2026-07-04T15:16:17.000Z';
 process.env.SUPABASE_URL = 'https://capture-test.supabase.co';
 process.env.SUPABASE_ANON_KEY = 'synthetic-anon';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'synthetic-service';
+process.env.ENROLLMENT_ENFORCEMENT='off'; // The gate itself is covered by enrollment-gate.test.ts.
 
 type StoredObject = { size: number; contentType: string };
 
