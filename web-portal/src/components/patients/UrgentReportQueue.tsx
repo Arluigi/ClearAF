@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useClinicalAPI } from '@/lib/auth';
 import { sessionBoundary } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { categoryLabel, statusLabel } from '@/lib/urgent-reports';
 import type { UrgentQueue } from '@/lib/urgent-reports';
@@ -44,10 +45,13 @@ export default function UrgentReportQueue({ context }: { context: string }) {
                 <li key={report.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
                   <div className="min-w-0 space-y-1">
                     <p className="font-medium">{report.patientName || 'Unnamed patient'}</p>
-                    <p className="flex items-center gap-1 text-sm">
-                      {report.status !== 'resolved' && <AlertTriangle aria-hidden className="h-3.5 w-3.5 text-destructive" />}
-                      {categoryLabel(report.category)} · {statusLabel(report.status)}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span>{categoryLabel(report.category)}</span>
+                      <Badge variant={report.status === 'open' ? 'destructive' : 'secondary'} className="gap-1">
+                        {report.status === 'open' && <AlertTriangle aria-hidden className="h-3 w-3" />}
+                        {statusLabel(report.status)}
+                      </Badge>
+                    </div>
                     <p className="text-sm text-muted-foreground">{new Date(report.createdAt).toLocaleString()}</p>
                     <p className="line-clamp-2 text-sm">{report.description}</p>
                   </div>

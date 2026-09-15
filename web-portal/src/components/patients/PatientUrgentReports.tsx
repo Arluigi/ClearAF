@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useClinicalAPI } from '@/lib/auth';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useRead, LoadState } from '@/components/care-support/shared';
@@ -57,10 +58,13 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
         <ul className="space-y-3">
           {rows.map((report) => (
             <li key={report.id} className="space-y-2 rounded-md border p-4">
-              <p className="flex items-center gap-1 text-sm font-medium">
-                {report.status !== 'resolved' && <AlertTriangle aria-hidden className="h-3.5 w-3.5 text-destructive" />}
-                {categoryLabel(report.category)} · {statusLabel(report.status)}
-              </p>
+              <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                <span>{categoryLabel(report.category)}</span>
+                <Badge variant={report.status === 'open' ? 'destructive' : 'secondary'} className="gap-1">
+                  {report.status === 'open' && <AlertTriangle aria-hidden className="h-3 w-3" />}
+                  {statusLabel(report.status)}
+                </Badge>
+              </div>
               <p className="text-sm text-muted-foreground">{new Date(report.createdAt).toLocaleString()}</p>
               <p className="whitespace-pre-wrap break-words text-sm">{report.description}</p>
               {report.resolutionNote && <p className="text-sm text-muted-foreground">Note to patient: {report.resolutionNote}</p>}

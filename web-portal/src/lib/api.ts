@@ -303,7 +303,6 @@ class APIService {
   async getPatientUrgentReports(patientId:string,page=1):Promise<PaginatedResponse<UrgentReport>> { return this.request(`/urgent-reports/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({page:String(page),limit:'20'})}`); }
   async acknowledgeUrgentReport(id:string):Promise<UrgentReport> { const result=await this.request<{report:UrgentReport}>(`/urgent-reports/${encodeURIComponent(id)}/acknowledge`,{method:'POST',body:JSON.stringify({})});return result.report; }
   async resolveUrgentReport(id:string,resolutionNote:string|null):Promise<UrgentReport> { const result=await this.request<{report:UrgentReport}>(`/urgent-reports/${encodeURIComponent(id)}/resolve`,{method:'POST',body:JSON.stringify({resolutionNote})});return result.report; }
-
 }
 
 // Create singleton instance

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { IdempotentAction, decisionLabel, refundLabel } from "../src/lib/care-decisions";
+import { IdempotentAction, careStatusView, decisionLabel, refundLabel } from "../src/lib/care-decisions";
+import type { CareDecision } from "../src/lib/care-decisions";
+import type { PaginatedResponse } from "../src/types/api";
 
 test("lost response retries the identical id and body; success clears the attempt", async () => {
   const calls: unknown[] = [];
@@ -45,6 +47,49 @@ test("cancel ignores a late result", async () => {
   resolve({});
   await pending;
   assert.equal(action.snapshot().status, "saving");
+});
+
+test("the current decision and its refund action stay visible while browsing older history pages", () => {
+  const current: CareDecision = {
+    id: "newest",
+    patientId: "p",
+    clinicianId: "c",
+    clinicianName: "Dr. Lee",
+    decision: "refer_out",
+    patientMessage: null,
+    photoId: null,
+    refundStatus: "pending",
+    refundUpdatedAt: null,
+    createdAt: "2026-09-15T00:00:00.000Z",
+  };
+  const older: CareDecision = { ...current, id: "older", decision: "async_care", refundStatus: "not_applicable", createdAt: "2026-09-01T00:00:00.000Z" };
+  const currentPage: PaginatedResponse<CareDecision> = { data: [current], pagination: { page: 1, limit: 20, total: 21, totalPages: 2 } };
+  const historyPageTwo: PaginatedResponse<CareDecision> = { data: [older], pagination: { page: 2, limit: 20, total: 21, totalPages: 2 } };
+  const view = careStatusView(currentPage, historyPageTwo, 2);
+  assert.deepEqual(view.current, current);
+  assert.equal(view.currentKind, "refer_out");
+  assert.equal(view.canOfferRefund, true);
+  assert.deepEqual(view.historyRows, [older]); // page 2 rows are shown as-is, not sliced
+});
+
+test("page 1 history excludes the current row", () => {
+  const current: CareDecision = {
+    id: "newest",
+    patientId: "p",
+    clinicianId: "c",
+    clinicianName: "Dr. Lee",
+    decision: "async_care",
+    patientMessage: null,
+    photoId: null,
+    refundStatus: "not_applicable",
+    refundUpdatedAt: null,
+    createdAt: "2026-09-15T00:00:00.000Z",
+  };
+  const older: CareDecision = { ...current, id: "older", createdAt: "2026-09-01T00:00:00.000Z" };
+  const page: PaginatedResponse<CareDecision> = { data: [current, older], pagination: { page: 1, limit: 20, total: 2, totalPages: 1 } };
+  const view = careStatusView(page, page, 1);
+  assert.deepEqual(view.historyRows, [older]);
+  assert.equal(view.canOfferRefund, false);
 });
 
 test("decision labels and refund wording", () => {

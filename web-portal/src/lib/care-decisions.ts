@@ -1,3 +1,4 @@
+import type { PaginatedResponse } from '@/types/api';
 export type DecisionKind = 'async_care' | 'refer_out' | 'needs_in_person';
 export type RefundStatus = 'not_applicable' | 'pending' | 'issued';
 export interface CareDecision {
@@ -15,6 +16,22 @@ export interface CareDecision {
 export type DecisionBody = { decision: DecisionKind; patientMessage: string | null; photoId: string | null };
 export const decisionLabel = (d: DecisionKind) => ({ async_care: 'Online care', refer_out: 'Referred out', needs_in_person: 'Needs in-person care' } as const)[d];
 export const refundLabel = (r: RefundStatus) => (r === 'pending' ? 'Refund pending' : r === 'issued' ? 'Refund issued' : null);
+
+export type CareStatusView = { current: CareDecision | null; currentKind: DecisionKind; historyRows: CareDecision[]; canOfferRefund: boolean };
+/**
+ * The current decision always comes from the page-1 read, independent of the history page the
+ * clinician is browsing, so paging never hides or misrepresents the current state. Page 1's
+ * history excludes that same row; later pages show their rows as-is.
+ */
+export function careStatusView(
+  currentPage: PaginatedResponse<CareDecision> | null,
+  historyPage: PaginatedResponse<CareDecision> | null,
+  page: number,
+): CareStatusView {
+  const current = currentPage?.data[0] ?? null;
+  const historyRows = historyPage ? (page === 1 ? historyPage.data.slice(1) : historyPage.data) : [];
+  return { current, currentKind: current?.decision ?? 'async_care', historyRows, canOfferRefund: current?.refundStatus === 'pending' };
+}
 type State<R> = { status: 'idle' | 'saving' | 'error' | 'saved'; error: string; result: R | null };
 /** Keeps one client id and frozen body per attempt until the server accepts or rejects it (400). */
 export class IdempotentAction<B, R> {
