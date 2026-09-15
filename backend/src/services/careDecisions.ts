@@ -22,7 +22,8 @@ export async function record(patientId:string,clinicianId:string,id:string,input
  await lock(db,patientId,true);await authorize(db,patientId,clinicianId);
  const existing=await db.careDecision.findUnique({where:{id},include}) as Row|null;
  if(existing){
-  if(existing.patientId!==patientId||existing.clinicianId!==clinicianId||existing.decision!==input.decision||existing.patientMessage!==input.patientMessage||existing.photoId!==input.photoId)throw decisionError(409,'DECISION_CONFLICT');
+  if(existing.patientId!==patientId)throw decisionError(404,'NOT_FOUND');
+  if(existing.clinicianId!==clinicianId||existing.decision!==input.decision||existing.patientMessage!==input.patientMessage||existing.photoId!==input.photoId)throw decisionError(409,'DECISION_CONFLICT');
   return {decision:decisionDTO(existing),created:false};
  }
  if(input.photoId&&!await db.skinPhoto.findFirst({where:{id:input.photoId,userId:patientId},select:{id:true}}))throw decisionError(404,'NOT_FOUND');

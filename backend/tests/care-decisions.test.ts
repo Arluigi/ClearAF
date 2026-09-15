@@ -50,6 +50,12 @@ test('linked photo must belong to the patient',async()=>{
  assert.equal((await record(randomUUID(),{decision:'needs_in_person',patientMessage:null,photoId:other})).status,404);
  assert.equal((await record(randomUUID(),{decision:'needs_in_person',patientMessage:null,photoId:randomUUID()})).status,404);
 });
+test('a decision id belonging to another patient is hidden behind 404, not 409',async()=>{
+ const id=randomUUID();await record(id);
+ const cross=await call(`/patients/${B}/decisions/${id}`,D,'PUT',{decision:'refer_out',patientMessage:'Please see an in-person dermatologist.',photoId:null});
+ assert.equal(cross.status,404);assert.equal(cross.body.code,'NOT_FOUND');assert.equal(decisions.length,1);assert.equal(decisions[0].patientId,A);
+ assert.equal((await record(id,{decision:'needs_in_person',patientMessage:null,photoId:null})).status,409);
+});
 test('assignment is required and rechecked after the lock',async()=>{
  assert.equal((await record(randomUUID(),undefined,D)).status,404);
  assert.equal((await call(`/patients/${A}`,D)).status,404);
