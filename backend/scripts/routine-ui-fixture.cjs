@@ -144,6 +144,9 @@ async function inspectOrCleanup() {
   }
   await db.query('delete from care_routine_completions where "userId"=any($1::uuid[])', [ids]);
   await db.query('delete from care_routine_revisions where "userId"=any($1::uuid[])', [ids]);
+  // Both tables RESTRICT on user_profiles; remove only rows for this run's recorded accounts.
+  await db.query('delete from urgent_reports where "patientId"=any($1::uuid[])', [ids]);
+  await db.query('delete from care_decisions where "patientId"=any($1::uuid[])', [ids]);
   await unenrollFixture(db, ids);
   await db.query('delete from user_profiles where id=any($1::uuid[])', [ids]);
   await db.query('delete from dermatologists where id=any($1::uuid[])', [ids]);

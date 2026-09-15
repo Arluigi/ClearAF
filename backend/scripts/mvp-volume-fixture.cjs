@@ -57,6 +57,9 @@ async function main() {
     async removeRows(s) {
       const ids = s.accounts.map(a=>a.id);
       await db.query('delete from skin_photos where id=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.photos.map(p=>p.id),ids]);
+      // Both tables RESTRICT on user_profiles; remove only rows for this run's recorded accounts.
+      await db.query('delete from urgent_reports where "patientId"=any($1::uuid[])',[ids]);
+      await db.query('delete from care_decisions where "patientId"=any($1::uuid[])',[ids]);
       await unenrollFixture(db,ids);
       await db.query('delete from user_profiles where id=any($1::uuid[])',[ids]);
       await db.query('delete from dermatologists where id=any($1::uuid[])',[ids]);

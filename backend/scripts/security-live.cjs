@@ -115,6 +115,8 @@ async function run(){
   await db.query('delete from public.skin_photos where "userId"=any($1::uuid[])',[ids]);
   await db.query('delete from public.messages where "senderId"=any($1::text[]) or "recipientId"=any($1::text[])',[ids]);
   await db.query('delete from public.prescriptions where "patientId"=any($1::uuid[])',[ids]);
+  await db.query('delete from public.urgent_reports where "patientId"=any($1::uuid[])',[ids]);
+  await db.query('delete from public.care_decisions where "patientId"=any($1::uuid[])',[ids]);
   await unenrollFixture(db,ids);
   await db.query('delete from public.user_profiles where id=any($1::uuid[])',[ids]);
   await db.query('delete from public.dermatologists where id=any($1::uuid[])',[ids]);

@@ -67,6 +67,11 @@ async function cleanup(){
 (async()=>{
  await db.connect();save();
  try{
+  // 0. Anonymous requests (no Authorization header) are refused before any lookup.
+  for(const url of ['/enrollment','/care-decisions/current','/urgent-reports']){
+   const anonymous=await call(url);assert.equal(anonymous.status,401,`Anonymous GET ${url}`);
+   ok(`anonymous GET /api${url} refused with 401`);
+  }
   for(const role of ['patientA','patientB','clinicianA','clinicianB']){
    const email=`clearaf-enrollment-${run}-${role.toLowerCase()}@example.invalid`,password=crypto.randomBytes(30).toString('base64url');
    const {data,error}=await admin.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{name:'Synthetic Enrollment Test'}});assert(!error,'Synthetic signup failed');
