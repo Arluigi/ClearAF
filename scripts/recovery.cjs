@@ -21,8 +21,11 @@ async function stopApi(){if(!api)return;const child=api;api=undefined;if(child.e
 async function startApi(){const fd=fs.openSync(path.join(local,'recovery-api.log'),'w',0o600);api=spawn(process.execPath,['dist/server.js'],{cwd:backend,env,stdio:['ignore',fd,fd]});fs.closeSync(fd);for(let i=0;i<40;i++){await new Promise(r=>setTimeout(r,250));if(api.exitCode!==null)throw Error('Local API exited');try{if((await fetch('http://127.0.0.1:3002/ready',{signal:AbortSignal.timeout(2500)})).status===200)return}catch{}}throw Error('Local API did not become ready')}
 async function main(){
  operation('schema-source');
+ // security-live.cjs prepare enrolls its synthetic patients through the live API
+ // (enrollment-fixture.cjs), so the API must already be up before it runs.
+ await startApi();
  if(!fs.existsSync(state))console.log(run(process.execPath,['scripts/security-live.cjs','prepare'],{cwd:backend}).trim());
- await startApi();console.log(run(process.execPath,['scripts/accounts-live.cjs'],{cwd:backend}).trim());run(process.execPath,['scripts/security-live.cjs','verify'],{cwd:backend});await stopApi();
+ console.log(run(process.execPath,['scripts/accounts-live.cjs'],{cwd:backend}).trim());run(process.execPath,['scripts/security-live.cjs','verify'],{cwd:backend});await stopApi();
  run(process.execPath,['scripts/migration-drill.cjs'],{cwd:backend});
  env.RECOVERY_QUIESCENT='1';env.PG_DOCKER_CONTAINER='supabase_db_clearaf-local';operation('backup');
  cli(['stop','--project-id','clearaf-local']);sourceStopped=true;

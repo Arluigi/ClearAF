@@ -146,6 +146,14 @@ async function cleanup() {
     } catch (error) { cleanupErrors.push(error); }
   }
 
+  // Enrollment records reference user_profiles with ON DELETE RESTRICT, and deleting the
+  // auth user cascades into user_profiles; clear them first or the cascade fails.
+  if (accounts.length) {
+    try {
+      await unenrollFixture(db, accounts.map(account => account.id));
+    } catch (error) { cleanupErrors.push(error); }
+  }
+
   for (const account of accounts) {
     try {
       const found = await admin.auth.admin.getUserById(account.id);
@@ -159,7 +167,6 @@ async function cleanup() {
 
   if (accounts.length) {
     try {
-      await unenrollFixture(db, accounts.map(account => account.id));
       await db.query('delete from public.user_profiles where id=any($1::uuid[])', [accounts.map(account => account.id)]);
     } catch (error) { cleanupErrors.push(error); }
   }
