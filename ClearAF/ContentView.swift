@@ -21,6 +21,8 @@ struct ContentView: View {
                 }.padding()
             case .recovery:
                 PasswordRecoveryView()
+            case .enrollment:
+                EnrollmentView()
             case .onboarding:
                 OnboardingView {}
                     .overlay(alignment: .topTrailing) { Button("Sign out") { apiService.logout() }.padding() }

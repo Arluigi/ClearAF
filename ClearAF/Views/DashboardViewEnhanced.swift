@@ -53,7 +53,11 @@ struct DashboardViewEnhanced: View {
                         .accessibleButton(label: "Profile", hint: "Open your profile settings")
                     }
                     .padding(.horizontal, 20)
-                    
+
+                    UrgentReportEntry()
+
+                    CareStatusSection()
+
                     // Daily Photo & Skin Score Card
                     DailyPhotoCardEnhanced(selectedTab: $selectedTab)
                     
@@ -69,6 +73,11 @@ struct DashboardViewEnhanced: View {
             .tint(CareJournal.actionPrimary)
             .background(CareJournal.canvas.ignoresSafeArea())
             .navigationBarBackButtonHidden(true)
+            .task {
+                guard let ticket = APIService.shared.access.snapshot() else { return }
+                await APIService.shared.careDecisions.load(ticket: ticket)
+                await APIService.shared.urgentReports.load(ticket: ticket)
+            }
             .sheet(isPresented: $showingProfile) {
                 ProfileView()
                     .environment(\.managedObjectContext, viewContext)

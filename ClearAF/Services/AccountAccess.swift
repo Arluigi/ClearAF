@@ -19,9 +19,11 @@ final class AccountAccess: @unchecked Sendable {
 }
 
 enum AccountFailure: LocalizedError {
-    case accountChanged, profileUnavailable, patientRequired, requestFailed(Int)
+    case accountChanged, profileUnavailable, patientRequired, requestFailed(Int), enrollmentRequired, noAssignedClinician
     var errorDescription: String? {
         switch self {
+        case .enrollmentRequired: return "Finish your eligibility and consent steps to continue."
+        case .noAssignedClinician: return "You don't have an assigned clinician yet. If this is an emergency, call 911."
         case .accountChanged: return "Your account changed. Please try again after signing in."
         case .profileUnavailable: return "Your profile could not be loaded. Check your connection and try again."
         case .patientRequired: return "This app is for patient accounts. Clinicians should use the practice portal."

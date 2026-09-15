@@ -310,7 +310,36 @@ final class AccountFlowUITests: XCTestCase {
         return (email, password)
     }
 
+    @MainActor private func completeEnrollment(_ app: XCUIApplication) {
+        guard app.buttons["enrollmentContinue"].waitForExistence(timeout: 10) else { return }
+        dismissPasswordPrompt(app)
+        tap(app.buttons["enrollmentState"], in: app, until: app.navigationBars["State of residence"])
+        // The navigation-link picker list is lazy: rows below the fold exist only after scrolling.
+        let illinois = app.buttons["Illinois"]
+        for _ in 0..<6 where !(illinois.exists && illinois.isHittable) { app.swipeUp() }
+        tap(illinois, in: app, until: app.buttons["enrollmentDOB"])
+        tap(app.buttons["enrollmentDOB"], in: app, until: app.buttons["enrollmentDOBDone"])
+        tap(app.buttons["enrollmentDOBDone"], in: app, until: app.buttons["enrollmentDOBDone"], "exists == false")
+        tap(app.buttons["None of these"], in: app, until: app.buttons["None of these"], "selected == true")
+        app.buttons["enrollmentContinue"].tap()
+        XCTAssertTrue(app.buttons["enrollmentAgree"].waitForExistence(timeout: 15))
+        app.buttons["enrollmentAgree"].tap()
+    }
+
+    /// The system "Save Password?" prompt can appear late and swallow the next tap (seen during enrollment).
+    /// Tap, confirm the expected effect, and retry once after dismissing the prompt.
+    @MainActor private func tap(_ element: XCUIElement, in app: XCUIApplication, until done: XCUIElement, _ format: String = "exists == true") {
+        element.tap()
+        let effect = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: done)
+        guard XCTWaiter().wait(for: [effect], timeout: 3) != .completed else { return }
+        dismissPasswordPrompt(app)
+        if element.exists { element.tap() }
+        let retried = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: done)
+        XCTAssertEqual(XCTWaiter().wait(for: [retried], timeout: 5), .completed, "Tap had no effect: \(element)")
+    }
+
     @MainActor private func finishOnboarding(_ app: XCUIApplication) async throws {
+        completeEnrollment(app)
         let button = app.buttons["onboardingContinue"]
         XCTAssertTrue(button.waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
