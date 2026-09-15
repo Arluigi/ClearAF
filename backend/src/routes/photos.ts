@@ -544,6 +544,8 @@ router.delete('/:id', requirePatient, async (req, res, next) => {
       if (!photo) throw Object.assign(new Error('Photo not found'), {statusCode:404, code:'PHOTO_NOT_FOUND'});
       const review = await tx.photoReview.findUnique({where:{photoId:id},select:{photoId:true}});
       if (review) throw Object.assign(new Error('Reviewed photos cannot be deleted'), {statusCode:409, code:'PHOTO_REVIEWED'});
+      const decision = await tx.careDecision.findFirst({where:{photoId:id},select:{id:true}});
+      if (decision) throw Object.assign(new Error('Photos referenced by a care decision cannot be deleted'), {statusCode:409, code:'PHOTO_IN_CARE_DECISION'});
       const intent = await tx.photoCleanup.create({data:{photoId:id,userId:req.user!.id,photoUrl:photo.photoUrl}});
       await tx.skinPhoto.delete({where:{id}});
       return intent;
