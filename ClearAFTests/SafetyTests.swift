@@ -53,6 +53,16 @@ import Testing
         await repo.send(category: .other, description: "Edited", ticket: ticket)
         #expect(Set(transport.sent.map(\.0)).count == 1 && repo.pending == nil && repo.sent?.category == "rapid_worsening")
     }
+    @Test func ambiguousAccountConfirmationKeepsTheAttemptFrozen() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = UrgentFake(patient: ticket.accountID)
+        let repo = UrgentReportRepository(access: access, transport: transport)
+        transport.failure = AccountFailure.accountChanged // the confirmation's id/patientId didn't match, not necessarily a real account change
+        await repo.send(category: .rapidWorsening, description: "Spreading", ticket: ticket)
+        #expect(repo.pending != nil && repo.error?.contains("Check your connection and tap Retry") == true)
+        transport.failure = nil
+        await repo.send(category: .rapidWorsening, description: "Spreading", ticket: ticket)
+        #expect(Set(transport.sent.map(\.0)).count == 1 && repo.pending == nil && repo.sent?.category == "rapid_worsening")
+    }
     @Test func refusedReportUnfreezesForEditing() async throws {
         let access = AccountAccess(), ticket = access.activate(UUID()), transport = UrgentFake(patient: ticket.accountID)
         let repo = UrgentReportRepository(access: access, transport: transport)

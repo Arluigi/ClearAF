@@ -84,6 +84,7 @@ struct UrgentDraft: Equatable {
     private static func mayHaveBeenStored(_ error: Error) -> Bool {
         if error is DecodingError { return true }
         if case RoutineFailure.invalidData = error { return true }
+        if case AccountFailure.accountChanged = error { return true }
         return false
     }
 

@@ -67,8 +67,12 @@ struct EnrollmentView: View {
         case .consentRequired:
             if let consent = repository.state?.consent { ConsentView(repository: repository, consent: consent) }
         case .enrolled:
-            VStack(spacing: .spaceMD) { SwiftUI.ProgressView(); Text("Opening your account…") }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: .spaceLG) {
+                UrgentReportEntry(horizontalPadding: 0)
+                VStack(spacing: .spaceMD) { SwiftUI.ProgressView(); Text("Opening your account…") }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding(20)
         case nil:
             VStack(spacing: .spaceLG) {
                 UrgentReportEntry(horizontalPadding: 0)
