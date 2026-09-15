@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useRead, LoadState, Pages } from '@/components/care-support/shared';
-import { categoryLabel, clearStaleErrors, runReportAction, statusLabel } from '@/lib/urgent-reports';
-import type { UrgentReport } from '@/lib/urgent-reports';
+import { categoryLabel, clearStaleErrors, normalizeNote, runReportAction, statusLabel } from '@/lib/urgent-reports';
+import type { UrgentAttempt, UrgentReport } from '@/lib/urgent-reports';
 
 export default function PatientUrgentReports({ patientId }: { patientId: string }) {
   const api = useClinicalAPI();
@@ -15,11 +15,12 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
   const fetch = useCallback(() => api.getPatientUrgentReports(patientId, page), [api, patientId, page]);
   const result = useRead(fetch);
   const [rows, setRows] = useState<UrgentReport[]>([]);
+  const [attempts, setAttempts] = useState<Record<string, UrgentAttempt>>({});
   useEffect(() => {
     const newRows = result.data?.data ?? [];
     setRows(newRows);
-    setErrors((e) => clearStaleErrors(e, newRows));
-  }, [result.data]);
+    setErrors((e) => clearStaleErrors(e, newRows, attempts));
+  }, [result.data, attempts]);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [resolving, setResolving] = useState<Record<string, boolean>>({});
@@ -28,14 +29,18 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
   const replace = (row: UrgentReport) => setRows((current) => current.map((r) => (r.id === row.id ? row : r)));
 
   // A failed transition (e.g. 409 REPORT_RESOLVED after someone else resolved it) refetches the
-  // page so the row shows its current state rather than a stale one.
-  const run = async (id: string, action: () => Promise<UrgentReport>, afterSave?: () => void) => {
+  // page so the row shows its current state rather than a stale one. The attempt that failed is
+  // remembered so the error is only cleared once the refetched row shows it actually took effect.
+  const run = async (id: string, action: () => Promise<UrgentReport>, attempt: UrgentAttempt, afterSave?: () => void) => {
     setPending((p) => ({ ...p, [id]: true }));
     setErrors((e) => ({ ...e, [id]: false }));
     try {
       const saved = await runReportAction(action, {
         saved: replace,
-        failed: () => setErrors((e) => ({ ...e, [id]: true })),
+        failed: () => {
+          setAttempts((a) => ({ ...a, [id]: attempt }));
+          setErrors((e) => ({ ...e, [id]: true }));
+        },
         refetch: result.retry,
       });
       if (saved) afterSave?.();
@@ -44,14 +49,17 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
     }
   };
 
-  const acknowledge = (id: string) => run(id, () => api.acknowledgeUrgentReport(id));
+  const acknowledge = (id: string) => run(id, () => api.acknowledgeUrgentReport(id), { type: 'acknowledge' });
 
-  const resolve = (id: string) =>
-    run(
+  const resolve = (id: string) => {
+    const note = normalizeNote(notes[id]);
+    return run(
       id,
-      () => api.resolveUrgentReport(id, notes[id]?.trim() ? notes[id] : null),
+      () => api.resolveUrgentReport(id, note),
+      { type: 'resolve', note },
       () => setResolving((r) => ({ ...r, [id]: false })),
     );
+  };
 
   return (
     <section id="urgent" aria-label="Urgent reports" className="space-y-4 border-t pt-6">

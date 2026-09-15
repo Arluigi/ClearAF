@@ -42,14 +42,38 @@ export async function runReportAction(
   return true;
 }
 
-/** Clears error flags for reports that no longer need action (i.e., are resolved).
- * Returns a new errors object containing only errors for reports that still need action. */
+/** Normalizes a resolution note the same way the send path does: trimmed, empty becomes null. */
+export function normalizeNote(note: string | null | undefined): string | null {
+  const trimmed = note?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/** What a failed acknowledge/resolve attempt was trying to do, so a later refetch can tell
+ * whether it actually took effect (as opposed to merely landing on a "no longer needs action"
+ * status reached some other way, e.g. someone else resolving with a different note). */
+export type UrgentAttempt = { type: 'acknowledge' } | { type: 'resolve'; note: string | null };
+
+/** Clears a row's error only when the refetched row shows that row's failed attempt actually
+ * took effect: for acknowledge, status is acknowledged or resolved; for resolve, status is
+ * resolved AND resolutionNote equals the attempted note. Otherwise the error (and the attempt
+ * that failed) is kept, so a resolve that silently lost to a conflicting concurrent resolve
+ * doesn't look like it succeeded. */
 export function clearStaleErrors(
   errors: Record<string, boolean>,
   rows: UrgentReport[],
+  attempts: Record<string, UrgentAttempt>,
 ): Record<string, boolean> {
-  const resolvedIds = new Set(rows.filter((r) => r.status === 'resolved').map((r) => r.id));
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const confirmedIds = new Set(
+    Object.keys(errors).filter((id) => {
+      const attempt = attempts[id];
+      const row = rowById.get(id);
+      if (!attempt || !row) return false;
+      if (attempt.type === 'acknowledge') return row.status === 'acknowledged' || row.status === 'resolved';
+      return row.status === 'resolved' && row.resolutionNote === attempt.note;
+    }),
+  );
   return Object.fromEntries(
-    Object.entries(errors).filter(([id]) => !resolvedIds.has(id) && errors[id]),
+    Object.entries(errors).filter(([id]) => errors[id] && !confirmedIds.has(id)),
   );
 }
