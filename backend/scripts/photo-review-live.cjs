@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {Client}=require('pg'),{createClient}=require('@supabase/supabase-js');
 require('dotenv').config({quiet:true});
 const {local}=require('./recovery-drill.cjs');
+const {enrollFixture,unenrollFixture}=require('./lib/enrollment-fixture.cjs');
 const base=process.env.SECURITY_API_URL||'http://127.0.0.1:3002/api';
 local(base,['http:','https:']);local(process.env.DATABASE_URL,['postgres:','postgresql:']);local(process.env.SUPABASE_URL,['http:','https:']);
 const db=new Client({connectionString:process.env.DATABASE_URL});
@@ -17,6 +18,7 @@ function save(){fs.writeFileSync(state,JSON.stringify(s),{mode:0o600});fs.chmodS
 function id(kind){const value=crypto.randomUUID();s[kind].push(value);save();return value}
 const results=[];function ok(name){results.push(name);console.log('PASS '+name)}
 async function call(url,account,method='GET',body){const r=await fetch(base+'/photo-reviews'+url,{method,headers:{...(account?{Authorization:`Bearer ${account.token}`} : {}),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return{status:r.status,body:await r.json().catch(()=>({}))}}
+async function enrollPatients(patientAccounts){const r=await fetch(base+'/enrollment',{headers:{Authorization:`Bearer ${patientAccounts[0].token}`}});assert.equal(r.status,200,'Enrollment lookup failed');const body=await r.json();await enrollFixture(db,patientAccounts.map(a=>a.id),{rulesVersion:body.rulesVersion,documentVersion:body.consent.version,documentSha256:body.consent.sha256})}
 async function cleanup(){
  for(const a of s.accounts){const {data,error}=await admin.auth.admin.getUserById(a.id);assert(!error&&data.user.email===a.email,'Fixture identity mismatch')}
  const ids=s.accounts.map(a=>a.id);
@@ -26,6 +28,7 @@ async function cleanup(){
  await db.query('delete from photo_cleanup where "photoId"=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.photoIds,ids]);
  await db.query('delete from photo_reviews where "photoId"=any($1::uuid[])',[s.photoIds]);
  await db.query('delete from skin_photos where id=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.photoIds,ids]);
+ await unenrollFixture(db,ids);
  await db.query('delete from user_profiles where id=any($1::uuid[])',[ids]);
  await db.query('delete from dermatologists where id=any($1::uuid[])',[ids]);
  for(const a of s.accounts){assert(!(await admin.auth.admin.deleteUser(a.id)).error)}
@@ -44,6 +47,7 @@ async function cleanup(){
    const client=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});const login=await client.auth.signInWithPassword({email,password});assert(!login.error,'Synthetic login failed');Object.defineProperty(account,'token',{value:login.data.session.access_token});
   }
   const [a,b,c,d]=s.accounts;
+  await enrollPatients([a,b]);
   await db.query('update user_profiles set "dermatologistId"=case when id=$1::uuid then $3::uuid else $4::uuid end where id in($1::uuid,$2::uuid)',[a.id,b.id,c.id,d.id]);
   const photos=[];
   for(const [owner,date] of [[a,'2026-01-01'],[a,'2026-01-03'],[b,'2026-01-02']]){

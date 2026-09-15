@@ -37,20 +37,6 @@ test('clinical requests bypass caches and do not send referrer information', asy
   try { await apiService.getCurrentUser(); assert.equal(config?.cache, 'no-store'); assert.equal(config?.referrerPolicy, 'no-referrer'); }
   finally { supabase.auth.getSession = getSession; globalThis.fetch = originalFetch; }
 });
-test('prescription and appointment list envelopes become portal paginated data', async () => {
-  const getSession = supabase.auth.getSession;
-  const originalFetch = globalThis.fetch;
-  supabase.auth.getSession = async () => ({ data: { session: null }, error: null });
-  globalThis.fetch = async (input) => new Response(JSON.stringify({
-    [String(input).includes('prescriptions') ? 'prescriptions' : 'appointments']: [{ id: 'record' }],
-    pagination: { page: 1, limit: 10, total: 1, pages: 1 }
-  }), { status: 200 });
-  try {
-    for (const result of [await apiService.getPrescriptions(), await apiService.getAppointments()]) {
-      assert.equal(result.data[0].id, 'record'); assert.equal(result.pagination.totalPages, 1);
-    }
-  } finally { supabase.auth.getSession = getSession; globalThis.fetch = originalFetch; }
-});
 test('offline logout removes persisted Supabase credentials even when revocation returns an error', async () => {
   const key = `sb-${new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split('.')[0]}-auth-token`;
   const values = new Map([[key, 'old-session'], [key + '-user', 'old-user'], [key + '-code-verifier', 'old-code']]);
@@ -99,7 +85,7 @@ test('late clinical response and old multi-step facade are rejected after identi
     apiService.acceptSession({ access_token: 'token-b', user: { id: 'B' } });
     finish(new Response(JSON.stringify({ patients: [{ id: 'private-a' }], total: 1 })));
     await assert.rejects(pending, /changed/);
-    assert.throws(() => scoped.sendMessage({ receiverId: 'patient-a', content: 'old continuation' }), /changed/);
+    assert.throws(() => scoped.getPatient('patient-a'), /changed/);
   } finally { supabase.auth.getSession = getSession; globalThis.fetch = originalFetch; }
 });
 test('an account switch discovered during token lookup never sends old work with the new token', async () => {

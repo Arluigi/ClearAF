@@ -87,7 +87,7 @@ struct CheckInHistoryView: View {
             if records.isEmpty && !loading && error == nil { Text("No responses recorded") }
             ForEach(records) { record in
                 DisclosureGroup("\(record.form.title) · Version \(record.form.version)") {
-                    Text("Submitted: \(record.submittedAt)"); Text("Received: \(record.receivedAt)")
+                    Text("Submitted \(formatted(record.submittedAt))"); Text("Received \(formatted(record.receivedAt))")
                     ForEach(record.form.questions) { q in
                         Text(q.prompt).font(.headline)
                         Text(answer(record, q))
@@ -100,6 +100,9 @@ struct CheckInHistoryView: View {
                 Button("Next") { page += 1; records = []; Task { await load() } }.disabled(page >= totalPages || loading)
             }
         }.navigationTitle("Responses").task { await load() }.refreshable { await load() }
+    }
+    private func formatted(_ value: String) -> String {
+        RoutineDates.instant(value)?.formatted(date: .abbreviated, time: .shortened) ?? value
     }
     private func answer(_ record: CheckInResponse, _ q: CheckInQuestion) -> String {
         guard let a = record.answers.first(where: { $0.questionId == q.id }) else { return "Not answered" }

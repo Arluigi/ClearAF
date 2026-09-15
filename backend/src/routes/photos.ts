@@ -3,6 +3,7 @@ import { photoThumbnails, photoOriginal, ThumbnailError } from '../services/phot
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
+import { requireEnrolledPatient } from '../middleware/enrollmentGate';
 import multer from 'multer';
 import { privatePhoto, privatePhotos, deletePhotoObject, ownedPhotoPath } from '../services/photoAccess';
 import { v4 as uuidv4 } from 'uuid';
@@ -82,7 +83,7 @@ async function captureObjectInfo(storagePath: string) {
   return { state: 'uploaded' as const };
 }
 
-router.post('/captures/:captureId/upload-url', requirePatient, async (req, res, next) => {
+router.post('/captures/:captureId/upload-url', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const captureId = captureIdSchema.parse(req.params.captureId);
     captureIntentSchema.parse(req.body);
@@ -111,7 +112,7 @@ router.post('/captures/:captureId/upload-url', requirePatient, async (req, res, 
   }
 });
 
-router.post('/captures/:captureId/complete', requirePatient, async (req, res, next) => {
+router.post('/captures/:captureId/complete', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const captureId = captureIdSchema.parse(req.params.captureId);
     const input = completeCaptureSchema.parse(req.body);
@@ -148,7 +149,7 @@ router.post('/captures/:captureId/complete', requirePatient, async (req, res, ne
 
 // Large images travel directly to private Storage instead of through Vercel's
 // request-size limit. Only the server chooses the owner-bound object path.
-router.post('/upload-url', requirePatient, async (req, res, next) => {
+router.post('/upload-url', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const { mimeType } = z.object({ mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']) }).parse(req.body);
     const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[mimeType];
@@ -159,7 +160,7 @@ router.post('/upload-url', requirePatient, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/complete-upload', requirePatient, async (req, res, next) => {
+router.post('/complete-upload', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const input = z.object({
       storagePath: z.string(), skinScore: z.number().int().min(0).max(100).default(0),
@@ -207,7 +208,7 @@ router.post('/complete-upload', requirePatient, async (req, res, next) => {
 });
 
 // File upload endpoint - uploads to Supabase Storage and stores URL in database
-router.post('/upload', requirePatient, upload.single('photo'), async (req, res, next) => {
+router.post('/upload', requirePatient, requireEnrolledPatient, upload.single('photo'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -471,7 +472,7 @@ router.get('/:id', requirePatient, async (req, res, next) => {
 });
 
 // Update photo details
-router.patch('/:id', requirePatient, async (req, res, next) => {
+router.patch('/:id', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const { id } = req.params;
     const validatedData = updatePhotoSchema.parse(req.body);
@@ -543,6 +544,8 @@ router.delete('/:id', requirePatient, async (req, res, next) => {
       if (!photo) throw Object.assign(new Error('Photo not found'), {statusCode:404, code:'PHOTO_NOT_FOUND'});
       const review = await tx.photoReview.findUnique({where:{photoId:id},select:{photoId:true}});
       if (review) throw Object.assign(new Error('Reviewed photos cannot be deleted'), {statusCode:409, code:'PHOTO_REVIEWED'});
+      const decision = await tx.careDecision.findFirst({where:{photoId:id},select:{id:true}});
+      if (decision) throw Object.assign(new Error('Photos referenced by a care decision cannot be deleted'), {statusCode:409, code:'PHOTO_IN_CARE_DECISION'});
       const intent = await tx.photoCleanup.create({data:{photoId:id,userId:req.user!.id,photoUrl:photo.photoUrl}});
       await tx.skinPhoto.delete({where:{id}});
       return intent;

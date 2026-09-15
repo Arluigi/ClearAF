@@ -39,6 +39,10 @@ model User {
   careRoutineCompletions CareRoutineCompletion[]
   careForms CareFormRevision[]
   careResponses CareFormResponse[]
+  eligibilityScreenings EligibilityScreening[]
+  consentAcceptances ConsentAcceptance[]
+  careDecisions CareDecision[]
+  urgentReports UrgentReport[]
 
   @@index([dermatologistId], map: "idx_user_profiles_dermatologist")
   @@map("user_profiles")
@@ -64,6 +68,10 @@ model Dermatologist {
   photoReviews PhotoReview[]
   careTemplates CareTemplateRevision[]
   careForms CareFormRevision[]
+  careDecisions CareDecision[]
+  urgentReports UrgentReport[] @relation("UrgentReportClinician")
+  urgentAcknowledgements UrgentReport[] @relation("UrgentReportAcknowledger")
+  urgentResolutions UrgentReport[] @relation("UrgentReportResolver")
 
   @@map("dermatologists")
 }
@@ -342,4 +350,66 @@ model AssignedMessage {
  clinician Dermatologist @relation(fields:[clinicianId],references:[id],onDelete:Restrict,onUpdate:NoAction)
  @@index([patientId,clinicianId,sentAt(sort:Desc),id(sort:Desc)],map:"assigned_messages_pair_page_idx")
  @@map("assigned_messages")
+}
+
+model EligibilityScreening {
+  id String @id @db.Uuid
+  userId String @db.Uuid
+  stateCode String
+  dateOfBirth DateTime @db.Date
+  pregnancyStatus String
+  eligible Boolean
+  reasons String[] @default([])
+  flags String[] @default([])
+  rulesVersion String
+  submittedAt DateTime @default(now()) @db.Timestamp(3)
+  waitlistRequestedAt DateTime? @db.Timestamp(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@index([userId, submittedAt(sort: Desc), id(sort: Desc)], map: "eligibility_screenings_user_latest_idx")
+  @@map("eligibility_screenings")
+}
+model ConsentAcceptance {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  documentVersion Int
+  documentSha256 String
+  acceptedAt DateTime @default(now()) @db.Timestamp(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@unique([userId, documentVersion], map: "consent_acceptances_user_version_key")
+  @@map("consent_acceptances")
+}
+model CareDecision {
+  id String @id @db.Uuid
+  patientId String @db.Uuid
+  clinicianId String @db.Uuid
+  decision String
+  patientMessage String?
+  photoId String? @db.Uuid
+  refundStatus String
+  refundUpdatedAt DateTime? @db.Timestamp(3)
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+  patient User @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clinician Dermatologist @relation(fields: [clinicianId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@index([patientId, createdAt(sort: Desc), id(sort: Desc)], map: "care_decisions_patient_latest_idx")
+  @@map("care_decisions")
+}
+model UrgentReport {
+  id String @id @db.Uuid
+  patientId String @db.Uuid
+  clinicianId String @db.Uuid
+  category String
+  description String
+  status String @default("open")
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+  acknowledgedAt DateTime? @db.Timestamp(3)
+  acknowledgedBy String? @db.Uuid
+  resolvedAt DateTime? @db.Timestamp(3)
+  resolvedBy String? @db.Uuid
+  resolutionNote String?
+  patient User @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clinician Dermatologist @relation("UrgentReportClinician", fields: [clinicianId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  acknowledger Dermatologist? @relation("UrgentReportAcknowledger", fields: [acknowledgedBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  resolver Dermatologist? @relation("UrgentReportResolver", fields: [resolvedBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@index([patientId, createdAt(sort: Desc), id(sort: Desc)], map: "urgent_reports_patient_latest_idx")
+  @@map("urgent_reports")
 }

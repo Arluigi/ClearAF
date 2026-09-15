@@ -28,12 +28,6 @@ extension Color {
     static let warmBeige = Color(red: 0.98, green: 0.96, blue: 0.94) // #FAF5F0
     static let softLavender = Color(red: 0.95, green: 0.93, blue: 0.98) // #F2EDF8
     
-    // Accessible Score Status Colors - WCAG 2.1 AA Compliant
-    static let scoreExcellent = Color(red: 0.13, green: 0.82, blue: 0.53) // #22D187 - High contrast green
-    static let scoreGood = Color(red: 0.34, green: 0.80, blue: 0.28) // #57CC47 - Accessible green
-    static let scoreFair = Color(red: 0.95, green: 0.69, blue: 0.13) // #F2B021 - High contrast amber
-    static let scorePoor = Color(red: 0.94, green: 0.33, blue: 0.31) // #F0544F - Accessible red
-    
     // Dark Theme Neutral System - Elegant & Modern
     static let textPrimary = Color.primary // Adapts to light/dark mode
     static let textSecondary = Color(UIColor { traits in
@@ -65,17 +59,6 @@ extension Color {
         endPoint: .bottomTrailing
     )
     
-    static let sunsetGradient = LinearGradient(
-        colors: [Color(red: 1.0, green: 0.65, blue: 0.4), Color(red: 1.0, green: 0.45, blue: 0.7)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-    
-    static let progressGradient = LinearGradient(
-        colors: [scoreGood.opacity(0.8), scoreExcellent],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
 }
 
 // MARK: - Typography System
@@ -358,41 +341,6 @@ extension View {
             .accessibilityLabel(decorative ? "" : label)
             .accessibilityAddTraits(decorative ? [] : .isImage)
     }
-    
-    func scoreAccessibility(score: Int) -> some View {
-        let description = scoreDescription(for: score)
-        return self
-            .accessibilityLabel("Skin score: \(score) out of 100")
-            .accessibilityValue(description)
-    }
-}
-
-// MARK: - Score Utilities
-func scoreColor(for score: Int) -> Color {
-    switch score {
-    case 0..<25: return .scorePoor
-    case 25..<50: return .scoreFair
-    case 50..<75: return .scoreGood
-    default: return .scoreExcellent
-    }
-}
-
-func scoreDescription(for score: Int) -> String {
-    switch score {
-    case 0..<25: return "Needs attention"
-    case 25..<50: return "Fair condition"
-    case 50..<75: return "Good progress"
-    default: return "Excellent condition"
-    }
-}
-
-func scoreGradient(for score: Int) -> LinearGradient {
-    let baseColor = scoreColor(for: score)
-    return LinearGradient(
-        colors: [baseColor.opacity(0.7), baseColor],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
 }
 
 // MARK: - Animation Presets

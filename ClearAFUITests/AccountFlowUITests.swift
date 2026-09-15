@@ -310,7 +310,45 @@ final class AccountFlowUITests: XCTestCase {
         return (email, password)
     }
 
+    @MainActor private func completeEnrollment(_ app: XCUIApplication) {
+        guard app.buttons["enrollmentContinue"].waitForExistence(timeout: 10) else { return }
+        dismissPasswordPrompt(app)
+        // An urgent report is reachable before eligibility and consent are complete.
+        let notice = app.descendants(matching: .any).matching(identifier: "urgentEmergencyNotice").firstMatch
+        tap(app.buttons["urgentEntry"], in: app, until: notice)
+        tap(app.buttons["Close"], in: app, until: notice, "exists == false")
+        tap(app.buttons["enrollmentState"], in: app, until: app.navigationBars["State of residence"])
+        // The navigation-link picker list is lazy: rows below the fold exist only after scrolling.
+        let illinois = app.buttons["Illinois"]
+        for _ in 0..<6 where !(illinois.exists && illinois.isHittable) { app.swipeUp() }
+        tap(illinois, in: app, until: app.buttons["enrollmentDOB"])
+        tap(app.buttons["enrollmentDOB"], in: app, until: app.buttons["enrollmentDOBDone"])
+        tap(app.buttons["enrollmentDOBDone"], in: app, until: app.buttons["enrollmentDOBDone"], "exists == false")
+        tap(app.buttons["None of these"], in: app, until: app.buttons["None of these"], "selected == true")
+        app.buttons["enrollmentContinue"].tap()
+        XCTAssertTrue(app.buttons["enrollmentAgree"].waitForExistence(timeout: 15))
+        app.buttons["enrollmentAgree"].tap()
+    }
+
+    /// The system "Save Password?" prompt can appear late and swallow a tap, including while it animates away
+    /// (seen during enrollment). Dismiss a visible prompt first; after a tap with no effect, retry only if a prompt
+    /// was actually dismissed during this attempt. Without a prompt, fail immediately.
+    @MainActor private func tap(_ element: XCUIElement, in app: XCUIApplication, until done: XCUIElement, _ format: String = "exists == true") {
+        let dismissedBefore = dismissPasswordPrompt(app, timeout: 0)
+        element.tap()
+        guard !reached(done, format, timeout: 3) else { return }
+        guard dismissedBefore || dismissPasswordPrompt(app) else { XCTFail("Tap had no effect: \(element)"); return }
+        element.tap()
+        XCTAssertTrue(reached(done, format, timeout: 5), "Tap had no effect: \(element)")
+    }
+
+    @MainActor private func reached(_ element: XCUIElement, _ format: String, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
     @MainActor private func finishOnboarding(_ app: XCUIApplication) async throws {
+        completeEnrollment(app)
         let button = app.buttons["onboardingContinue"]
         XCTAssertTrue(button.waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
@@ -328,12 +366,19 @@ final class AccountFlowUITests: XCTestCase {
         app.buttons["authSubmit"].tap()
     }
 
-    @MainActor private func dismissPasswordPrompt(_ app: XCUIApplication) {
+    /// Returns true only when a "Save Password?" prompt was found and declined. A zero timeout checks without waiting.
+    @MainActor @discardableResult private func dismissPasswordPrompt(_ app: XCUIApplication, timeout: TimeInterval = 3) -> Bool {
         // iOS may present Passwords' remote view without an XCUIElementTypeSheet.
         // Match its visible title before dismissing the specific password prompt.
-        guard app.staticTexts["Save Password?"].waitForExistence(timeout: 3) else { return }
+        let title = app.staticTexts["Save Password?"]
+        guard timeout > 0 ? title.waitForExistence(timeout: timeout) : title.exists else { return false }
         let decline = app.buttons["Not Now"]
-        if decline.waitForExistence(timeout: 3), decline.isHittable { decline.tap() }
+        guard decline.waitForExistence(timeout: 3), decline.isHittable else { return false }
+        decline.tap()
+        // The prompt keeps intercepting touches while it animates away; continue only once it has gone.
+        _ = decline.waitForNonExistence(timeout: 5)
+        _ = title.waitForNonExistence(timeout: 5)
+        return true
     }
 
     @MainActor private func signOut(_ app: XCUIApplication) {

@@ -17,9 +17,6 @@ export interface User {
   updatedAt?: string;
   joinDate?: string;
   dermatologistId?: string;
-  skinPhotos?: Photo[];
-  appointments?: Appointment[];
-  prescriptions?: Prescription[];
 }
 
 export interface Dermatologist {
@@ -35,72 +32,6 @@ export interface Dermatologist {
   updatedAt: string;
 }
 
-export interface Appointment {
-  id: string;
-  patientId: string;
-  dermatologistId: string;
-  scheduledDate: string;
-  duration: number;
-  status: 'scheduled' | 'completed' | 'cancelled' | 'in-progress';
-  type: 'consultation' | 'follow-up' | 'emergency';
-  notes?: string;
-  prescription?: string;
-  createdAt: string;
-  updatedAt: string;
-  patient?: User;
-  dermatologist?: Dermatologist;
-}
-
-export interface Message {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  recipientId?: string;
-  appointmentId?: string;
-  content: string;
-  messageType: 'text' | 'image' | 'file';
-  isRead: boolean;
-  createdAt: string;
-  sentDate?: string;
-  sender?: User;
-  receiver?: User;
-}
-
-export interface Product {
-  id: string;
-  name: string;
-  brand?: string;
-  category: string;
-  price: number;
-  productDescription?: string;
-  ingredients?: string;
-  imageUrl?: string;
-  isAvailable: boolean;
-  isPrescriptionRequired: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Prescription {
-  id: string;
-  patientId: string;
-  dermatologistId: string;
-  medicationName: string;
-  dosage: string;
-  instructions: string;
-  prescribedDate: string;
-  expiryDate?: string;
-  refillsRemaining: number;
-  isActive: boolean;
-  pharmacy?: string;
-  productId?: string;
-  createdAt: string;
-  updatedAt: string;
-  patient?: User;
-  prescribedBy?: Dermatologist;
-  relatedProduct?: Product;
-}
-
 export interface Photo {
   id: string;
   userId: string;
@@ -112,7 +43,6 @@ export interface Photo {
   createdAt: string;
   updatedAt: string;
   user?: User;
-  relatedAppointment?: Appointment;
 }
 
 export type RoutineTimeOfDay = 'morning' | 'evening';
@@ -161,30 +91,7 @@ export interface SaveRoutineRevisionInput {
 }
 
 // API Request/Response Types
-export interface LoginRequest {
-  email: string;
-  password: string;
-  userType: 'dermatologist';
-}
-
 export interface LoginResponse {
-  message: string;
-  user: Dermatologist;
-  token: string;
-  userType: string;
-}
-
-export interface RegisterRequest {
-  name: string;
-  email: string;
-  password: string;
-  userType: 'dermatologist';
-  specialization?: string;
-  licenseNumber?: string;
-  yearsOfExperience?: number;
-}
-
-export interface RegisterResponse {
   message: string;
   user: Dermatologist;
   token: string;
@@ -213,16 +120,6 @@ export interface ValidationError {
   message: string;
 }
 
-// Dashboard Stats
-export interface DashboardStats {
-  totalPatients: number;
-  appointmentsToday: number;
-  unreadMessages: number;
-  avgImprovement: number;
-  recentPatients: User[];
-  upcomingAppointments: Appointment[];
-}
-
 // Pagination
 export interface PaginatedResponse<T> {
   data: T[];
@@ -232,14 +129,6 @@ export interface PaginatedResponse<T> {
     total: number;
     totalPages: number;
   };
-}
-
-// API Response wrapper
-export interface APIResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: APIErrorPayload;
-  message?: string;
 }
 
 // Summary grids never receive an original Storage URL.

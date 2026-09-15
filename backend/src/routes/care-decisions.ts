@@ -1,0 +1,13 @@
+import express from 'express';
+import {z,ZodError} from 'zod';
+import {requirePatient,requireDermatologist} from '../middleware/auth';
+import * as service from '../services/careDecisions';
+import {uuid,decisionInput,refundInput,pageQuery} from '../services/careDecisionsValidation';
+const router=express.Router();
+const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{await handler(req,res,next)}catch(error){next(error instanceof ZodError||(error as {statusCode?:number}).statusCode?error:service.decisionError(500,'CARE_DECISION_OPERATION_FAILED'))}};
+const noQuery=(req:express.Request)=>z.object({}).strict().parse(req.query);
+router.get('/current',requirePatient,route(async(req,res)=>{noQuery(req);res.json(await service.current(req.user!.id))}));
+router.get('/patients/:patientId',requireDermatologist,route(async(req,res)=>{const {page,limit}=pageQuery.parse(req.query);res.json(await service.history(uuid.parse(req.params.patientId),req.user!.id,page,limit))}));
+router.put('/patients/:patientId/decisions/:decisionId',requireDermatologist,route(async(req,res)=>{noQuery(req);const r=await service.record(uuid.parse(req.params.patientId),req.user!.id,uuid.parse(req.params.decisionId),decisionInput.parse(req.body));res.status(r.created?201:200).json({decision:r.decision})}));
+router.put('/patients/:patientId/decisions/:decisionId/refund',requireDermatologist,route(async(req,res)=>{noQuery(req);refundInput.parse(req.body);res.json(await service.markRefundIssued(uuid.parse(req.params.patientId),req.user!.id,uuid.parse(req.params.decisionId)))}));
+export default router;

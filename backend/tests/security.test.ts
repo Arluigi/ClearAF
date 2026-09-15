@@ -11,8 +11,9 @@ const P='55555555-5555-4555-8555-555555555555';
 process.env.SUPABASE_URL='https://security-test.supabase.co';
 process.env.SUPABASE_ANON_KEY='synthetic-anon';
 process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic-service';
+process.env.ENROLLMENT_ENFORCEMENT='off'; // The gate itself is covered by enrollment-gate.test.ts.
 let writes:any[], signed:string[], removed:string[], failRemove=false;
-let users:any[], photos:any[], appointments:any[], queries:any[], reviews:any[], cleanups:any[];
+let users:any[], photos:any[], appointments:any[], queries:any[], reviews:any[], cleanups:any[], careDecisions:any[];
 let uploadSize=68,transactionActive=false;
 function matches(row:any,where:any={}):boolean {
  return Object.entries(where).every(([k,v]:any)=> {
@@ -35,7 +36,7 @@ const model=(rows:()=>any[])=>({
  updateMany:async({data}:any)=>{writes.push(data);return {count:0}},
  upsert:async({where,update,create}:any)=>{const r=rows().find(r=>matches(r,where));writes.push(r?update:create);return r?Object.assign(r,update):create}
 });
-const db:any={$transaction:async(fn:any)=>{transactionActive=true;try{return await fn(db)}finally{transactionActive=false}},$queryRaw:async()=>[{active:true}],user:model(()=>users),dermatologist:model(()=>[{id:D,email:'doctor@test.invalid'},{id:E,email:'dr.amitom@clearaf.com'}]),skinPhoto:model(()=>photos),photoReview:model(()=>reviews),photoCleanup:model(()=>cleanups),prescription:model(()=>[{id:P,patientId:B,dermatologistId:D}]),message:model(()=>[]),appointment:model(()=>appointments)};
+const db:any={$transaction:async(fn:any)=>{transactionActive=true;try{return await fn(db)}finally{transactionActive=false}},$queryRaw:async()=>[{active:true}],user:model(()=>users),dermatologist:model(()=>[{id:D,email:'doctor@test.invalid'},{id:E,email:'dr.amitom@clearaf.com'}]),skinPhoto:model(()=>photos),photoReview:model(()=>reviews),photoCleanup:model(()=>cleanups),careDecision:model(()=>careDecisions),prescription:model(()=>[{id:P,patientId:B,dermatologistId:D}]),message:model(()=>[]),appointment:model(()=>appointments)};
 const originalLoad=(Module as any)._load;
 (Module as any)._load=function(name:string,...args:any[]){if(name==='@prisma/client')return {PrismaClient:class{constructor(){return db}}};return originalLoad.call(this,name,...args)};
 const config=require('../src/config/supabase');
@@ -55,7 +56,7 @@ app.use((err:any,_req:any,res:any,_next:any)=>res.status(err instanceof ZodError
 let server:any,base:string;
 before(async()=>{server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`});
 after(()=>new Promise<void>(r=>server.close(r)));
-beforeEach(()=>{cleanups=[];reviews=[];writes=[];signed=[];removed=[];queries=[];failRemove=false;uploadSize=68;users=[{id:A,name:'Assigned Patient',skinType:'Sensitive',dermatologistId:D,createdAt:new Date('2026-01-02'),updatedAt:new Date('2026-01-02')},{id:B,name:'Other Patient',dermatologistId:E,createdAt:new Date('2026-01-01'),updatedAt:new Date('2026-01-01')}];appointments=[{id:P,patientId:B,dermatologistId:D,status:"scheduled",scheduledDate:new Date(),relatedPhotos:[]}];photos=[{id:P,userId:A,photoUrl:`https://security-test.supabase.co/storage/v1/object/public/patient-photos/${A}/photo.jpg`,skinScore:0,captureDate:new Date()}]});
+beforeEach(()=>{cleanups=[];reviews=[];careDecisions=[];writes=[];signed=[];removed=[];queries=[];failRemove=false;uploadSize=68;users=[{id:A,name:'Assigned Patient',skinType:'Sensitive',dermatologistId:D,createdAt:new Date('2026-01-02'),updatedAt:new Date('2026-01-02')},{id:B,name:'Other Patient',dermatologistId:E,createdAt:new Date('2026-01-01'),updatedAt:new Date('2026-01-01')}];appointments=[{id:P,patientId:B,dermatologistId:D,status:"scheduled",scheduledDate:new Date(),relatedPhotos:[]}];photos=[{id:P,userId:A,photoUrl:`https://security-test.supabase.co/storage/v1/object/public/patient-photos/${A}/photo.jpg`,skinScore:0,captureDate:new Date()}]});
 async function request(path:string,identity:string|undefined,method='GET',body?:any){return fetch(base+path,{method,headers:{...(identity?{'x-test-identity':identity}:{}),'content-type':'application/json',authorization:'Bearer e30.'+Buffer.from(JSON.stringify({session_id:A})).toString('base64url')+'.synthetic'},body:body?JSON.stringify(body):undefined})}
 for(const identity of [A,D])test(`client ${identity} cannot reassign a patient`,async()=>{const r=await request('/users/assign-dermatologist',identity,'POST',{patientId:B,dermatologistId:D});assert.equal(r.status,403);assert.equal(writes.length,0)});
 test('sync profile preserves existing assignment',async()=>{const r=await request('/auth-supabase/sync-profile',A,'POST',{});assert.equal(r.status,200);assert.equal(users[0].dermatologistId,D)});
@@ -74,6 +75,7 @@ test('foreign photo path is never signed',async()=>{photos[0].photoUrl=`https://
 test('external photo URL is never returned',async()=>{photos[0].photoUrl='https://external.invalid/image.jpg';const r=await request('/photos/'+P,A);assert.notEqual(r.status,200);assert.equal(signed.length,0)});
 test('photo deletion removes owned object',async()=>{assert.equal((await request('/photos/'+P,A,'DELETE')).status,200);assert.deepEqual(removed,[A+'/photo.jpg'])});
 test('reviewed photo deletion rejects before touching storage or records',async()=>{reviews=[{photoId:P,reviewerId:D}];const response=await request('/photos/'+P,A,'DELETE');assert.equal(response.status,409);assert.equal(removed.length,0);assert.equal(writes.length,0);assert.equal(photos.length,1);assert.equal(reviews.length,1)});
+test('photo referenced by a care decision cannot be deleted',async()=>{careDecisions=[{id:'66666666-6666-4666-8666-666666666666',patientId:A,clinicianId:D,decision:'in_person',photoId:P}];const response=await request('/photos/'+P,A,'DELETE');assert.equal(response.status,409);assert.equal(removed.length,0);assert.equal(writes.length,0);assert.equal(photos.length,1);assert.equal(careDecisions.length,1)});
 test('storage deletion failure retains owned cleanup intent for retry',async()=>{failRemove=true;assert.equal((await request('/photos/'+P,A,'DELETE')).status,503);assert.equal(photos.length,0);assert.equal(cleanups.length,1);assert.equal(cleanups[0].userId,A);removed=[];assert.equal((await request('/photos/'+P,B,'DELETE')).status,404);assert.equal(removed.length,0);failRemove=false;assert.equal((await request('/photos/'+P,A,'DELETE')).status,200);assert.equal(cleanups.length,0);assert.deepEqual(removed,[A+'/photo.jpg'])});
 test('cross-account photo deletion does not touch storage',async()=>{assert.equal((await request('/photos/'+P,B,'DELETE')).status,404);assert.equal(removed.length,0);assert.equal(writes.length,0)});
 

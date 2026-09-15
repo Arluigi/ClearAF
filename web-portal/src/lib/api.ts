@@ -1,6 +1,9 @@
 import type { Conversation, MessagePage, MessageBody, MessageRecord, ReferenceResult } from './assigned-messaging';
 import type { Template, TemplateDraft, Form, FormDraft, CheckInResponse, Month } from './care-support';
 import type { PhotoReview, ReviewQueueItem } from './photo-review';
+import type { EnrollmentSummary } from './enrollment';
+import type { CareDecision, DecisionBody } from './care-decisions';
+import type { UrgentReport, UrgentQueue } from './urgent-reports';
 // API Service for Clear AF Web Portal
 // Connects to the configured ClearAF API.
 
@@ -10,13 +13,8 @@ import { SessionBoundary } from './session-boundary';
 import {
   User,
   Dermatologist,
-  Appointment,
-  Message,
-  Prescription,
-  Photo,
   PhotoSummary,
   LoginResponse,
-  DashboardStats,
   PaginatedResponse,
   APIError,
   RoutineCompletionRecord,
@@ -229,20 +227,6 @@ class APIService {
     return this.request<User>(`/users/${id}`);
   }
 
-  async updatePatient(id: string, data: Partial<User>): Promise<User> {
-    return this.request<User>(`/users/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async assignPatientToDermatologist(patientId: string, dermatologistId: string): Promise<void> {
-    return this.request<void>('/users/assign-dermatologist', {
-      method: 'POST',
-      body: JSON.stringify({ patientId, dermatologistId }),
-    });
-  }
-
   async getPatientRoutines(patientId: string, localDate: string): Promise<RoutineSnapshot> {
     const params = new URLSearchParams({ localDate });
     return this.request<RoutineSnapshot>(`/routines/patients/${encodeURIComponent(patientId)}?${params}`);
@@ -280,130 +264,6 @@ class APIService {
   async savePatientForm(patientId:string,revisionId:string,body:FormDraft&{expectedRevisionId:string|null}):Promise<Form>{const result=await this.request<{form:Form}>(`/care-support/patients/${encodeURIComponent(patientId)}/forms/${encodeURIComponent(revisionId)}`,{method:'PUT',body:JSON.stringify(body)});return result.form;}
   async getPatientResponses(patientId:string,page=1):Promise<PaginatedResponse<CheckInResponse>>{return this.request(`/care-support/patients/${encodeURIComponent(patientId)}/responses?page=${page}&limit=20`);}
 
-  // Appointment Management
-  async getAppointments(
-    page: number = 1,
-    limit: number = 10,
-    status?: string,
-    date?: string
-  ): Promise<PaginatedResponse<Appointment>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString()
-    });
-
-    if (status && status !== 'all') params.append('status', status);
-    if (date) params.append('date', date);
-
-    const response = await this.request<{ appointments: Appointment[]; pagination: { page: number; limit: number; total: number; pages: number } }>(`/appointments?${params}`);
-    return { data: response.appointments, pagination: { ...response.pagination, totalPages: response.pagination.pages } };
-  }
-
-  async createAppointment(data: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>): Promise<Appointment> {
-    return this.request<Appointment>('/appointments', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateAppointment(id: string, data: Partial<Appointment>): Promise<Appointment> {
-    return this.request<Appointment>(`/appointments/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteAppointment(id: string): Promise<void> {
-    return this.request<void>(`/appointments/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Messaging
-  async getMessages(
-    page: number = 1,
-    limit: number = 20,
-    receiverId?: string
-  ): Promise<PaginatedResponse<Message>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString()
-    });
-
-    if (receiverId) params.append('receiverId', receiverId);
-
-    return this.request<PaginatedResponse<Message>>(`/messages?${params}`);
-  }
-
-  async sendMessage(data: {
-    receiverId: string;
-    content: string;
-    messageType?: 'text' | 'image' | 'file';
-    appointmentId?: string;
-  }): Promise<Message> {
-    return this.request<Message>('/messages/reply', {
-      method: 'POST',
-      body: JSON.stringify({
-        patientId: data.receiverId,
-        content: data.content,
-        messageType: data.messageType || 'text'
-      }),
-    });
-  }
-
-  async markMessageAsRead(id: string): Promise<void> {
-    return this.request<void>(`/messages/${id}/read`, {
-      method: 'PATCH',
-    });
-  }
-
-  // Prescriptions
-  async getPrescriptions(
-    page: number = 1,
-    limit: number = 10,
-    patientId?: string
-  ): Promise<PaginatedResponse<Prescription>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString()
-    });
-
-    if (patientId) params.append('patientId', patientId);
-
-    const response = await this.request<{ prescriptions: Prescription[]; pagination: { page: number; limit: number; total: number; pages: number } }>(`/prescriptions?${params}`);
-    return { data: response.prescriptions, pagination: { ...response.pagination, totalPages: response.pagination.pages } };
-  }
-
-  async createPrescription(data: {
-    patientId: string;
-    medicationName: string;
-    dosage: string;
-    instructions: string;
-    expiryDate?: string;
-    refillsRemaining?: number;
-    pharmacy?: string;
-    productId?: string;
-  }): Promise<Prescription> {
-    const response = await this.request<{message: string; prescription: Prescription}>('/prescriptions', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return response.prescription;
-  }
-
-  async updatePrescription(id: string, data: Partial<Prescription>): Promise<Prescription> {
-    const response = await this.request<{message: string; prescription: Prescription}>(`/prescriptions/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-    return response.prescription;
-  }
-
-  // Dashboard Statistics
-  async getDashboardStats(): Promise<DashboardStats> {
-    return this.request<DashboardStats>('/dashboard/stats');
-  }
-
   async getPhotoThumbnail(id: string, signal?: AbortSignal): Promise<Blob> {
     return this.request<Blob>(`/photos/${encodeURIComponent(id)}/thumbnail`, { signal }, 'blob');
   }
@@ -435,45 +295,14 @@ class APIService {
   async acknowledgeMessages(patientId:string,clinicianId:string,messageIds:string[]):Promise<{acknowledgedIds:string[];unreadCount:number}> { return this.request(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/read`,{method:'POST',body:JSON.stringify({messageIds})}); }
   async getMessageReference(patientId:string,clinicianId:string,messageId:string):Promise<ReferenceResult> { return this.request(`/assigned-messages/patients/${encodeURIComponent(patientId)}/clinicians/${encodeURIComponent(clinicianId)}/messages/${encodeURIComponent(messageId)}/reference`); }
 
-  // Photo Management
-  async getPatientPhotos(
-    patientId: string,
-    page: number = 1,
-    limit: number = 10
-  ): Promise<PaginatedResponse<Photo>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString()
-    });
-
-    return this.request<PaginatedResponse<Photo>>(`/photos/patient/${patientId}?${params}`);
-  }
-
-  async getPhotoTimeline(patientId: string, days: number = 30): Promise<{
-    timeline: {
-      photos: Photo[];
-      stats: {
-        totalPhotos: number;
-        averageScore: number;
-        trend: 'improving' | 'declining' | 'stable';
-        trendValue: number;
-      };
-    };
-  }> {
-    const params = new URLSearchParams({
-      days: days.toString()
-    });
-
-    return this.request(`/photos/patient/${patientId}/timeline?${params}`);
-  }
-
-  // File Upload (for future use)
-  async uploadFile(file: File, type: 'avatar' | 'document' | 'image'): Promise<{ url: string }> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('type', type);
-    return this.request('/upload', { method: 'POST', body: formData, headers: {} });
-  }
+  async getEnrollmentSummary(patientId:string):Promise<EnrollmentSummary> { return this.request(`/enrollment/patients/${encodeURIComponent(patientId)}`); }
+  async getCareDecisions(patientId:string,page=1):Promise<PaginatedResponse<CareDecision>> { return this.request(`/care-decisions/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({page:String(page),limit:'20'})}`); }
+  async recordCareDecision(patientId:string,id:string,body:DecisionBody):Promise<CareDecision> { const result=await this.request<{decision:CareDecision}>(`/care-decisions/patients/${encodeURIComponent(patientId)}/decisions/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(body)});return result.decision; }
+  async markRefundIssued(patientId:string,id:string):Promise<CareDecision> { const result=await this.request<{decision:CareDecision}>(`/care-decisions/patients/${encodeURIComponent(patientId)}/decisions/${encodeURIComponent(id)}/refund`,{method:'PUT',body:JSON.stringify({refundStatus:'issued'})});return result.decision; }
+  async getUrgentQueue(page=1):Promise<UrgentQueue> { return this.request(`/urgent-reports/queue?${new URLSearchParams({page:String(page),limit:'20'})}`); }
+  async getPatientUrgentReports(patientId:string,page=1):Promise<PaginatedResponse<UrgentReport>> { return this.request(`/urgent-reports/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({page:String(page),limit:'20'})}`); }
+  async acknowledgeUrgentReport(id:string):Promise<UrgentReport> { const result=await this.request<{report:UrgentReport}>(`/urgent-reports/${encodeURIComponent(id)}/acknowledge`,{method:'POST',body:JSON.stringify({})});return result.report; }
+  async resolveUrgentReport(id:string,resolutionNote:string|null):Promise<UrgentReport> { const result=await this.request<{report:UrgentReport}>(`/urgent-reports/${encodeURIComponent(id)}/resolve`,{method:'POST',body:JSON.stringify({resolutionNote})});return result.report; }
 }
 
 // Create singleton instance

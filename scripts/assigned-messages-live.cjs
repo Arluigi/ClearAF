@@ -4,6 +4,7 @@ const backendRequire=require('node:module').createRequire(path.resolve(__dirname
 const {Client}=backendRequire('pg'),{createClient}=backendRequire('@supabase/supabase-js');
 backendRequire('dotenv').config({path:path.resolve(__dirname,'../backend/.env'),quiet:true});
 const {local}=require('../backend/scripts/recovery-drill.cjs');
+const {enrollFixture,unenrollFixture}=require('../backend/scripts/lib/enrollment-fixture.cjs');
 const base=process.env.SECURITY_API_URL||'http://127.0.0.1:3002/api';
 local(base,['http:','https:']);local(process.env.DATABASE_URL,['postgres:','postgresql:']);local(process.env.SUPABASE_URL,['http:','https:']);
 const db=new Client({connectionString:process.env.DATABASE_URL});
@@ -16,6 +17,7 @@ fs.mkdirSync(path.dirname(state),{recursive:true,mode:0o700});
 function save(){fs.writeFileSync(state,JSON.stringify(s),{mode:0o600});fs.chmodSync(state,0o600)}
 let checks=0;function ok(name){checks++;console.log('PASS '+name)}
 async function call(url,account,method='GET',body){const r=await fetch(base+url,{method,headers:{...(account?{Authorization:`Bearer ${account.token}`} : {}),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,body:await r.json().catch(()=>({}))}}
+async function enrollPatients(patientAccounts){const enrolled=await call('/enrollment',patientAccounts[0]);assert.equal(enrolled.status,200,'Enrollment lookup failed');await enrollFixture(db,patientAccounts.map(a=>a.id),{rulesVersion:enrolled.body.rulesVersion,documentVersion:enrolled.body.consent.version,documentSha256:enrolled.body.consent.sha256})}
 async function cleanup(){
  for(const a of s.accounts){const {data,error}=await admin.auth.admin.getUserById(a.id);assert(a.email===`clearaf-messages-${s.run}-${a.role.toLowerCase()}@example.invalid`&&!error&&data.user.email===a.email,'Fixture identity mismatch')}
  const ids=s.accounts.map(a=>a.id);
@@ -23,6 +25,7 @@ async function cleanup(){
  await db.query('delete from auth.sessions where user_id=any($1::uuid[])',[ids]);
  for(const [table,column] of [['assigned_messages','patientId'],['photo_reviews','photoId']]){if(table==='photo_reviews')await db.query('delete from photo_reviews where "photoId" in(select id from skin_photos where "userId"=any($1::uuid[]))',[ids]);else await db.query(`delete from ${table} where "${column}"=any($1::uuid[])`,[ids])}
  for(const [table,column] of [['care_routine_completions','userId'],['care_routine_revisions','userId'],['skin_photos','userId'],['photo_cleanup','userId']])await db.query(`delete from ${table} where "${column}"=any($1::uuid[])`,[ids]);
+ await unenrollFixture(db,ids);
  await db.query('delete from user_profiles where id=any($1::uuid[])',[ids]);await db.query('delete from dermatologists where id=any($1::uuid[])',[ids]);
  for(const a of s.accounts)assert(!(await admin.auth.admin.deleteUser(a.id)).error,'Synthetic auth cleanup failed');
  assert.equal(Number((await db.query('select count(*) from auth.users where id=any($1::uuid[])',[ids])).rows[0].count),0);fs.unlinkSync(state);ok('exact synthetic owners, sessions, messages and references cleaned');
@@ -35,7 +38,7 @@ async function cleanup(){
   if(role.startsWith('clinician'))await db.query('insert into dermatologists(id,name,email,password) values($1,$2,$3,$4)',[a.id,'Synthetic Messaging Clinician',email,'UNUSED_SUPABASE_AUTH']);
   const client=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});const login=await client.auth.signInWithPassword({email,password});assert(!login.error,'Synthetic login failed');Object.defineProperty(a,'token',{value:login.data.session.access_token});
  }
- const [a,b,c,d]=s.accounts;await db.query('update user_profiles set "dermatologistId"=case when id=$1::uuid then $3::uuid else $4::uuid end,"onboardingCompleted"=true where id in($1::uuid,$2::uuid)',[a.id,b.id,c.id,d.id]);
+ const [a,b,c,d]=s.accounts;await enrollPatients([a,b]);await db.query('update user_profiles set "dermatologistId"=case when id=$1::uuid then $3::uuid else $4::uuid end,"onboardingCompleted"=true where id in($1::uuid,$2::uuid)',[a.id,b.id,c.id,d.id]);
  const pair=`/patients/${a.id}/clinicians/${c.id}`,msg=(url,who=a,method='GET',body)=>call('/assigned-messages'+url,who,method,body),send=(id,who=a,content='Synthetic messaging example',reference=null)=>msg(pair+'/messages/'+id,who,'PUT',{content,reference});
  assert.equal((await msg('/current',null)).status,401);assert.equal((await msg('/current',c)).status,403);assert.equal((await msg('/inbox',a)).status,403);assert.equal((await msg(pair,b)).status,404);assert.equal((await msg(pair,d)).status,404);
  assert.equal((await msg('/current')).body.conversation.patientId,a.id);const inbox=await msg('/inbox?limit=1',c);assert.equal(inbox.body.conversations[0].patientId,a.id);assert.equal(inbox.body.conversations[0].lastMessage,null);ok('verified identities, roles, empty assigned inbox and unrelated-pair denial');

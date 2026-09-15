@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { enrollFixture, unenrollFixture } = require('./lib/enrollment-fixture.cjs');
 const root = path.resolve(__dirname, '../..');
 const manifestPath = path.join(root, '.local/mvp-volume-fixture.json');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -56,6 +57,10 @@ async function main() {
     async removeRows(s) {
       const ids = s.accounts.map(a=>a.id);
       await db.query('delete from skin_photos where id=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.photos.map(p=>p.id),ids]);
+      // Both tables RESTRICT on user_profiles; remove only rows for this run's recorded accounts.
+      await db.query('delete from urgent_reports where "patientId"=any($1::uuid[])',[ids]);
+      await db.query('delete from care_decisions where "patientId"=any($1::uuid[])',[ids]);
+      await unenrollFixture(db,ids);
       await db.query('delete from user_profiles where id=any($1::uuid[])',[ids]);
       await db.query('delete from dermatologists where id=any($1::uuid[])',[ids]);
     },
@@ -79,6 +84,13 @@ async function main() {
       const owner=s.accounts[0], clinician=s.accounts[500];
       await db.query('insert into dermatologists(id,name,email,password) values($1,$2,$3,$4)',[clinician.id,'Synthetic Volume Clinician',clinician.email,'UNUSED_SUPABASE_AUTH']);
       await db.query('update user_profiles set "dermatologistId"=$1,"onboardingCompleted"=true where id=any($2::uuid[])',[clinician.id,s.accounts.slice(0,500).map(a=>a.id)]);
+      const patientIds=s.accounts.slice(0,500).map(a=>a.id);
+      const anonClient=createClient(supabase.href,process.env.SUPABASE_ANON_KEY,options);
+      const patientLogin=await anonClient.auth.signInWithPassword({email:owner.email,password:owner.password}); assert.ifError(patientLogin.error);
+      const enrollmentResp=await fetch(api.href.replace(/\/$/,'')+'/enrollment',{headers:{Authorization:`Bearer ${patientLogin.data.session.access_token}`}});
+      assert.equal(enrollmentResp.status,200,'Enrollment lookup failed');
+      const enrollment=await enrollmentResp.json();
+      await enrollFixture(db,patientIds,{rulesVersion:enrollment.rulesVersion,documentVersion:enrollment.consent.version,documentSha256:enrollment.consent.sha256});
       const bytes=await require('sharp')({create:{width:1600,height:1200,channels:3,background:'#739586'}}).jpeg().toBuffer(); s.originalBytes=bytes.length; save(s);
       for (let i=0;i<1000;i++) {
         const id=crypto.randomUUID(), p={id,owner:owner.id,path:`${owner.id}/${id}.jpg`,captureDate:new Date(Date.UTC(2026,0,1)+i*60_000).toISOString()};

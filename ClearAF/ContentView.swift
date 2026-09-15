@@ -4,6 +4,7 @@ import CoreData
 struct ContentView: View {
     @StateObject private var apiService = APIService.shared
     @State private var selectedTab = 0
+    @State private var showingUrgent = false
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         Group {
@@ -21,9 +22,18 @@ struct ContentView: View {
                 }.padding()
             case .recovery:
                 PasswordRecoveryView()
+            case .enrollment:
+                EnrollmentView()
             case .onboarding:
                 OnboardingView {}
-                    .overlay(alignment: .topTrailing) { Button("Sign out") { apiService.logout() }.padding() }
+                    .overlay(alignment: .topTrailing) {
+                        HStack(spacing: .spaceLG) {
+                            UrgentReportButton(isPresented: $showingUrgent)
+                            Button("Sign out") { apiService.logout() }
+                        }
+                        .padding()
+                    }
+                    .sheet(isPresented: $showingUrgent) { UrgentReportView() }
             case .ready:
                 TabView(selection: $selectedTab) {
                     DashboardViewEnhanced(selectedTab: $selectedTab)
@@ -56,7 +66,11 @@ struct ContentView: View {
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)
         .id(apiService.access.snapshot()?.generation)
         .task { apiService.start(); resumeRepositories() }
-        .onChange(of: apiService.phase) { _, _ in resumeRepositories() }
+        .onChange(of: apiService.phase) { _, _ in
+            // The onboarding urgent sheet belongs to one phase and one login; never carry it into the next.
+            showingUrgent = false
+            resumeRepositories()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { resumeRepositories() }
             else { apiService.photos.cancel(); apiService.routines.cancel() }

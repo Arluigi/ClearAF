@@ -1,0 +1,14 @@
+import express from 'express';
+import {z,ZodError} from 'zod';
+import {requirePatient,requireDermatologist} from '../middleware/auth';
+import * as service from '../services/enrollment';
+import {uuid,screeningInput,waitlistInput,consentInput,consentVersion} from '../services/enrollmentValidation';
+const router=express.Router();
+const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{await handler(req,res,next)}catch(error){next(error instanceof ZodError||(error as {statusCode?:number}).statusCode?error:service.enrollmentError(500,'ENROLLMENT_OPERATION_FAILED'))}};
+const noQuery=(req:express.Request)=>z.object({}).strict().parse(req.query);
+router.get('/',requirePatient,route(async(req,res)=>{noQuery(req);res.json(await service.enrollmentStatus(req.user!.id))}));
+router.put('/screenings/:screeningId',requirePatient,route(async(req,res)=>{noQuery(req);const r=await service.submitScreening(req.user!.id,uuid.parse(req.params.screeningId),screeningInput.parse(req.body));res.status(r.created?201:200).json({screening:r.screening,status:r.status})}));
+router.put('/waitlist',requirePatient,route(async(req,res)=>{noQuery(req);res.json(await service.requestWaitlist(req.user!.id,waitlistInput.parse(req.body).screeningId))}));
+router.put('/consents/:version',requirePatient,route(async(req,res)=>{noQuery(req);const r=await service.acceptConsent(req.user!.id,consentVersion.parse(req.params.version),consentInput.parse(req.body).documentSha256);res.status(r.created?201:200).json({acceptance:r.acceptance,status:r.status})}));
+router.get('/patients/:patientId',requireDermatologist,route(async(req,res)=>{noQuery(req);res.json(await service.clinicianSummary(uuid.parse(req.params.patientId),req.user!.id))}));
+export default router;

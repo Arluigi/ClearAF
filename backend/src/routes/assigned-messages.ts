@@ -1,6 +1,7 @@
 import express from 'express';
 import {z,ZodError} from 'zod';
 import {requirePatient,requireDermatologist} from '../middleware/auth';
+import {requireEnrolledPatient} from '../middleware/enrollmentGate';
 import * as service from '../services/assignedMessages';
 import {uuid,messageInput,readInput,pageInput,inboxInput} from '../services/assignedMessagesValidation';
 const router=express.Router();
@@ -10,7 +11,7 @@ const path='/patients/:patientId/clinicians/:clinicianId';
 router.get('/current',requirePatient,route(async(req,res)=>{z.object({}).strict().parse(req.query);res.json(await service.current(req.user!))}));
 router.get('/inbox',requireDermatologist,route(async(req,res)=>{const q=inboxInput.parse(req.query);res.json(await service.inbox(req.user!,q.limit,q.cursor))}));
 router.get(path,route(async(req,res)=>{const q=pageInput.parse(req.query);res.json(await service.page(req.user!,pair(req),q.limit,q.before))}));
-router.put(path+'/messages/:messageId',route(async(req,res)=>{z.object({}).strict().parse(req.query);const result=await service.send(req.user!,pair(req),uuid.parse(req.params.messageId),messageInput.parse(req.body));res.status(result.created?201:200).json({message:result.message})}));
+router.put(path+'/messages/:messageId',requireEnrolledPatient,route(async(req,res)=>{z.object({}).strict().parse(req.query);const result=await service.send(req.user!,pair(req),uuid.parse(req.params.messageId),messageInput.parse(req.body));res.status(result.created?201:200).json({message:result.message})}));
 router.post(path+'/read',route(async(req,res)=>{z.object({}).strict().parse(req.query);res.json(await service.acknowledge(req.user!,pair(req),readInput.parse(req.body).messageIds))}));
 router.get(path+'/messages/:messageId/reference',route(async(req,res)=>{z.object({}).strict().parse(req.query);res.json(await service.openReference(req.user!,pair(req),uuid.parse(req.params.messageId)))}));
 export default router;

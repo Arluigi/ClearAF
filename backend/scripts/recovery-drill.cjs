@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const tables = ['assigned_messages','care_template_revisions','care_form_revisions','care_form_responses','appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','photo_reviews','photo_cleanup','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles'];
+const tables = ['assigned_messages','care_template_revisions','care_form_revisions','care_form_responses','appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','photo_reviews','photo_cleanup','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles','eligibility_screenings','consent_acceptances','care_decisions','urgent_reports'];
 let phase = 'local target and backup validation';
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 function local(value, protocol) {
@@ -128,7 +128,7 @@ async function run(mode) {
       assert.deepEqual(users,fixture.accounts.map(({id,email})=>({id,email})).sort((a,b)=>a.id.localeCompare(b.id)), 'Database contains accounts outside synthetic fixtures');
       const doctors = (await db.query('select id,email,name from public.dermatologists')).rows;
       assert(doctors.every(d=>fixture.accounts.some(a=>a.id===d.id&&a.email===d.email)&&d.name.startsWith('Synthetic')), 'Non-synthetic clinicians');
-      for (const table of tables.filter(t=>!['user_profiles','dermatologists','skin_photos','care_routine_revisions','care_routine_completions'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
+      for (const table of tables.filter(t=>!['user_profiles','dermatologists','skin_photos','care_routine_revisions','care_routine_completions','eligibility_screenings','consent_acceptances'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
       const revisions=(await db.query('select id,"userId","createdBy",name from public.care_routine_revisions')).rows;
       assert(revisions.length > 0 && revisions.every(r=>(fixture.routineRevisionIds||[]).includes(r.id) && fixture.accounts.some(a=>a.id===r.userId&&a.role.startsWith('patient')) && fixture.accounts.some(a=>a.id===r.createdBy&&a.role.startsWith('doctor')) && r.name.startsWith('Synthetic')), 'Non-fixture routine revision');
       const completions=(await db.query('select id,"userId","revisionId" from public.care_routine_completions')).rows;
@@ -137,6 +137,8 @@ async function run(mode) {
       assert(profiles.every(p=>fixture.accounts.some(a=>a.id===p.id)&&p.name?.startsWith('Synthetic')), 'Non-synthetic profiles');
       const photos=(await db.query('select "userId",notes from public.skin_photos')).rows;
       assert(photos.every(p=>fixture.accounts.some(a=>a.id===p.userId)&&p.notes?.startsWith('Synthetic')), 'Non-synthetic photos');
+      const enrollmentRows=(await db.query('select "userId" from public.eligibility_screenings union all select "userId" from public.consent_acceptances')).rows;
+      assert(enrollmentRows.every(r=>fixture.accounts.some(a=>a.id===r.userId)), 'Non-fixture enrollment records');
       fs.mkdirSync(dir,{recursive:true,mode:0o700}); fs.chmodSync(dir,0o700);
       const syntheticPath = `${fixture.accounts[0].id}/recovery-${fixture.run}.txt`;
       fixture.paths = [...new Set([...(fixture.paths || []),syntheticPath])];
