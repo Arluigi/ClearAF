@@ -17,6 +17,7 @@ import photoRoutes from './routes/photos';
 import photoReviewRoutes from './routes/photo-reviews';
 import routineRoutes from './routes/routines';
 import careSupportRoutes from './routes/care-support';
+import careDecisionRoutes from './routes/care-decisions';
 import enrollmentRoutes from './routes/enrollment';
 import dashboardRoutes from './routes/dashboard';
 
@@ -70,6 +71,7 @@ app.use('/api/photos', authenticateToken, photoRoutes);
 app.use('/api/photo-reviews', authenticateToken, photoReviewRoutes);
 app.use('/api/routines', authenticateToken, routineRoutes);
 app.use('/api/care-support', authenticateToken, careSupportRoutes);
+app.use('/api/care-decisions', authenticateToken, careDecisionRoutes);
 app.use('/api/enrollment', authenticateToken, enrollmentRoutes);
 app.use('/api/dashboard', authenticateToken, dashboardRoutes);
 
