@@ -45,11 +45,26 @@ struct UrgentReportEntry: View {
     }
 }
 
+/// Compact entry for the enrollment toolbar and onboarding, so an urgent report is possible in every signed-in phase.
+struct UrgentReportButton: View {
+    @Binding var isPresented: Bool
+    var body: some View {
+        Button { isPresented = true } label: {
+            Label {
+                Text("Something's wrong?").foregroundStyle(Color.retainedErrorText)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+            }
+            .labelStyle(.titleAndIcon)
+        }
+        .accessibilityIdentifier("urgentEntry")
+        .accessibilityHint("Tell your care team about a reaction or sudden change")
+    }
+}
+
 struct UrgentReportView: View {
     @ObservedObject private var repository = APIService.shared.urgentReports
     @Environment(\.dismiss) private var dismiss
-    @State private var category: UrgentCategory?
-    @State private var details = ""
     private let question = "What's happening?"
 
     var body: some View {
@@ -61,6 +76,7 @@ struct UrgentReportView: View {
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
                     }
+                    .accessibilityIdentifier("urgentEmergencyNotice")
                 }
                 .listRowBackground(Color.red.opacity(0.12))
                 if repository.sent != nil {
@@ -82,17 +98,27 @@ struct UrgentReportView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
             .task {
                 repository.startNew()
-                if let pending = repository.pending { category = pending.category; details = pending.description }
                 guard let ticket = APIService.shared.access.snapshot() else { return }
                 await repository.load(ticket: ticket)
             }
         }
     }
 
+    // The draft lives in the account-scoped repository, so closing the sheet or a phase change never loses it.
+    private var category: Binding<UrgentCategory?> {
+        Binding(get: { repository.draft.category },
+                set: { repository.updateDraft(UrgentDraft(category: $0, description: repository.draft.description)) })
+    }
+    private var details: Binding<String> {
+        Binding(get: { repository.draft.description },
+                set: { repository.updateDraft(UrgentDraft(category: repository.draft.category, description: $0)) })
+    }
+
     @ViewBuilder private var composer: some View {
         let frozen = repository.pending != nil
+        let count = repository.draft.description.utf16.count
         Section {
-            Picker(question, selection: $category) {
+            Picker(question, selection: category) {
                 ForEach(UrgentCategory.allCases) { Text($0.title).tag(Optional($0)) }
             }
             .pickerStyle(.inline)
@@ -101,13 +127,13 @@ struct UrgentReportView: View {
             .disabled(frozen)
         } header: { Text(question).textCase(nil) }
         Section {
-            TextField("Describe what's happening", text: $details, axis: .vertical)
+            TextField("Describe what's happening", text: details, axis: .vertical)
                 .lineLimit(3...8)
                 .accessibilityIdentifier("urgentDescription")
                 .disabled(frozen)
-            Text("\(details.utf16.count)/2000")
+            Text("\(count)/2000")
                 .font(.caption)
-                .foregroundStyle(details.utf16.count > 2000 ? Color.retainedErrorText : CareJournal.textSecondary)
+                .foregroundStyle(count > 2000 ? Color.retainedErrorText : CareJournal.textSecondary)
         } header: { Text("Details").textCase(nil) }
         Section {
             Button(action: send) {
@@ -133,14 +159,15 @@ struct UrgentReportView: View {
     private var canSend: Bool {
         guard !repository.sending else { return false }
         if repository.pending != nil { return true }
-        let count = details.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count
-        return category != nil && (1...2000).contains(count)
+        let count = repository.draft.description.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count
+        return repository.draft.category != nil && (1...2000).contains(count)
     }
 
     private func send() {
         guard canSend, let ticket = APIService.shared.access.snapshot() else { return }
-        let chosen = repository.pending?.category ?? category ?? .other
-        Task { await repository.send(category: chosen, description: details, ticket: ticket) }
+        let draft = repository.draft
+        let chosen = repository.pending?.category ?? draft.category ?? .other
+        Task { await repository.send(category: chosen, description: draft.description, ticket: ticket) }
     }
 }
 

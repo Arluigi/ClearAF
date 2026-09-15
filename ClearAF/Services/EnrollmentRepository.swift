@@ -52,15 +52,17 @@ import Combine
         do {
             _ = try await transport.submitScreening(id: id, answers: answers, ticket: ticket)
             try require(ticket, e)
-            attempt = nil
         } catch {
             guard (try? require(ticket, e)) != nil else { return }
             if case AccountFailure.requestFailed(400) = error { attempt = nil }
             self.error = "Couldn't save your answers. Check your connection and try again."
             return
         }
-        await load(ticket: ticket)
+        // Keep the attempt until the refreshed state arrives: Continue after a failed reload reuses the saved screening.
+        if await load(ticket: ticket) { attempt = nil }
     }
+
+    func clearError() { error = nil }
 
     func joinWaitlist(ticket: AccountAccess.Ticket) async {
         guard (try? access.require(ticket)) != nil, !saving, let current = state, let screening = current.screening else { return }

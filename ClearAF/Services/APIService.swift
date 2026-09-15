@@ -266,20 +266,13 @@ class APIService: ObservableObject {
         try access.require(ticket)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(http.statusCode) else {
-            switch (try? JSONDecoder().decode(APIErrorCode.self, from: data))?.code {
-            case "ENROLLMENT_REQUIRED":
-                recheckEnrollment()
-                throw AccountFailure.enrollmentRequired
-            case "NO_ASSIGNED_CLINICIAN":
-                throw AccountFailure.noAssignedClinician
-            default:
-                throw AccountFailure.requestFailed(http.statusCode)
-            }
+            let failure = AccountFailure.from(status: http.statusCode, body: data)
+            if case .enrollmentRequired = failure { recheckEnrollment() }
+            throw failure
         }
         return try JSONDecoder().decode(U.self, from: data)
     }
 }
-private struct APIErrorCode: Decodable { let code: String? }
 
 // MARK: - API Service Extensions for Future Features
 extension APIService {

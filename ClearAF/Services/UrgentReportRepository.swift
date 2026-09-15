@@ -6,10 +6,17 @@ import Combine
     func urgentReports(ticket: AccountAccess.Ticket) async throws -> [UrgentReport]
 }
 
+/// What the person has chosen and typed so far; kept with the account so it survives the sheet closing or a phase change.
+struct UrgentDraft: Equatable {
+    var category: UrgentCategory?
+    var description = ""
+}
+
 /// Urgent reports go to the patient's assigned clinician. They are never gated on enrollment.
 @MainActor final class UrgentReportRepository: ObservableObject {
     @Published private(set) var reports: [UrgentReport] = []
-    /// The first attempt is frozen until it succeeds or is refused, so a retry never creates a second report.
+    @Published private(set) var draft = UrgentDraft()
+    /// The first attempt is frozen while it can be retried unchanged, so a retry never creates a second report.
     @Published private(set) var pending: (id: UUID, category: UrgentCategory, description: String)?
     @Published private(set) var sending = false
     @Published private(set) var error: String?
@@ -20,9 +27,15 @@ import Combine
 
     init(access: AccountAccess, transport: any UrgentReportTransport) { self.access = access; self.transport = transport }
 
-    func cancel() { epoch = UUID(); reports = []; pending = nil; sending = false; error = nil; sent = nil }
+    func cancel() { epoch = UUID(); reports = []; draft = UrgentDraft(); pending = nil; sending = false; error = nil; sent = nil }
     private func require(_ ticket: AccountAccess.Ticket, _ e: UUID) throws {
         try access.require(ticket); guard epoch == e else { throw AccountFailure.accountChanged }
+    }
+
+    /// Edits are ignored while an attempt is frozen or sending.
+    func updateDraft(_ next: UrgentDraft) {
+        guard pending == nil, !sending else { return }
+        draft = next
     }
 
     /// Clears a previous confirmation when the sheet opens again; a frozen attempt and its error stay.
@@ -36,6 +49,7 @@ import Combine
         guard (try? access.require(ticket)) != nil, !sending else { return }
         let e = epoch
         if pending == nil {
+            draft = UrgentDraft(category: category, description: description)
             let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
             guard (1...2000).contains(text.utf16.count) else { error = "Describe what's happening (up to 2,000 characters)."; return }
             pending = (UUID(), category, text)
@@ -49,17 +63,18 @@ import Combine
             guard report.id == attempt.id, report.patientId == ticket.accountID, report.category == attempt.category.rawValue else {
                 throw RoutineFailure.invalidData
             }
-            pending = nil; sent = report
+            pending = nil; draft = UrgentDraft(); sent = report
             reports = [report] + reports.filter { $0.id != report.id }
         } catch {
             guard (try? require(ticket, e)) != nil else { return }
-            switch error {
-            case AccountFailure.noAssignedClinician:
+            if case AccountFailure.noAssignedClinician = error {
                 pending = nil; self.error = AccountFailure.noAssignedClinician.localizedDescription
-            case AccountFailure.requestFailed(400):
-                pending = nil; self.error = "Couldn't send your report. Check what you wrote and try again. If this is an emergency, call 911."
-            default:
+            } else if AccountFailure.isTransient(error) {
                 self.error = "Not sent yet. Check your connection and tap Retry. If this is an emergency, call 911."
+            } else {
+                // Refused as sent: unfreeze so the person can edit and send again; the typed text stays in the draft.
+                pending = nil
+                self.error = "Couldn't send your report. Check what you wrote and try again. If this is an emergency, call 911."
             }
         }
     }

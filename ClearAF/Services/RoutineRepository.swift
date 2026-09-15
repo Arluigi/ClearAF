@@ -259,11 +259,7 @@ enum RoutineFailure: LocalizedError {
         if let error = error as? AccountFailure { return error.localizedDescription }
         return pending.isEmpty ? "Routines could not be refreshed. Check your connection and try again." : "Saved on this device. Completion could not be synced. Check your connection and retry."
     }
-    private static func isTransient(_ error: Error) -> Bool {
-        if error is URLError { return true }
-        if case AccountFailure.requestFailed(let status) = error { return status == 408 || status == 429 || status >= 500 }
-        return false
-    }
+    private static func isTransient(_ error: Error) -> Bool { AccountFailure.isTransient(error) }
 }
 
 private struct RoutineCareFile: Codable {

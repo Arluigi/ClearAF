@@ -23,7 +23,8 @@ enum AccountFailure: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .enrollmentRequired: return "Finish your eligibility and consent steps to continue."
-        case .noAssignedClinician: return "You don't have an assigned clinician yet. If this is an emergency, call 911."
+        case .noAssignedClinician:
+            return "You don't have an assigned clinician yet. If this is an emergency, call 911. If it isn't an emergency, contact your own doctor or a local urgent care clinic."
         case .accountChanged: return "Your account changed. Please try again after signing in."
         case .profileUnavailable: return "Your profile could not be loaded. Check your connection and try again."
         case .patientRequired: return "This app is for patient accounts. Clinicians should use the practice portal."
@@ -31,4 +32,22 @@ enum AccountFailure: LocalizedError {
             return status == 401 ? "Your session has ended. Please sign in again." : "The request could not be completed. Please try again."
         }
     }
+}
+
+extension AccountFailure {
+    /// Maps a non-2xx API response to the failure the app acts on, using the server's `code` when present.
+    static func from(status: Int, body: Data) -> AccountFailure {
+        switch (try? JSONDecoder().decode(ErrorCode.self, from: body))?.code {
+        case "ENROLLMENT_REQUIRED": return .enrollmentRequired
+        case "NO_ASSIGNED_CLINICIAN": return .noAssignedClinician
+        default: return .requestFailed(status)
+        }
+    }
+    /// Connection problems and server hiccups are worth retrying unchanged; anything else needs the person.
+    static func isTransient(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        if case AccountFailure.requestFailed(let status) = error { return status == 408 || status == 429 || status >= 500 }
+        return false
+    }
+    private struct ErrorCode: Decodable { let code: String? }
 }

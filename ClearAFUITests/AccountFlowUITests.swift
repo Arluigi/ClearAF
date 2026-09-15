@@ -313,6 +313,10 @@ final class AccountFlowUITests: XCTestCase {
     @MainActor private func completeEnrollment(_ app: XCUIApplication) {
         guard app.buttons["enrollmentContinue"].waitForExistence(timeout: 10) else { return }
         dismissPasswordPrompt(app)
+        // An urgent report is reachable before eligibility and consent are complete.
+        let notice = app.descendants(matching: .any).matching(identifier: "urgentEmergencyNotice").firstMatch
+        tap(app.buttons["urgentEntry"], in: app, until: notice)
+        tap(app.buttons["Close"], in: app, until: notice, "exists == false")
         tap(app.buttons["enrollmentState"], in: app, until: app.navigationBars["State of residence"])
         // The navigation-link picker list is lazy: rows below the fold exist only after scrolling.
         let illinois = app.buttons["Illinois"]
@@ -326,16 +330,21 @@ final class AccountFlowUITests: XCTestCase {
         app.buttons["enrollmentAgree"].tap()
     }
 
-    /// The system "Save Password?" prompt can appear late and swallow the next tap (seen during enrollment).
-    /// Tap, confirm the expected effect, and retry once after dismissing the prompt.
+    /// The system "Save Password?" prompt can appear late and swallow a tap, including while it animates away
+    /// (seen during enrollment). Dismiss a visible prompt first; after a tap with no effect, retry only if a prompt
+    /// was actually dismissed during this attempt. Without a prompt, fail immediately.
     @MainActor private func tap(_ element: XCUIElement, in app: XCUIApplication, until done: XCUIElement, _ format: String = "exists == true") {
+        let dismissedBefore = dismissPasswordPrompt(app, timeout: 0)
         element.tap()
-        let effect = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: done)
-        guard XCTWaiter().wait(for: [effect], timeout: 3) != .completed else { return }
-        dismissPasswordPrompt(app)
-        if element.exists { element.tap() }
-        let retried = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: done)
-        XCTAssertEqual(XCTWaiter().wait(for: [retried], timeout: 5), .completed, "Tap had no effect: \(element)")
+        guard !reached(done, format, timeout: 3) else { return }
+        guard dismissedBefore || dismissPasswordPrompt(app) else { XCTFail("Tap had no effect: \(element)"); return }
+        element.tap()
+        XCTAssertTrue(reached(done, format, timeout: 5), "Tap had no effect: \(element)")
+    }
+
+    @MainActor private func reached(_ element: XCUIElement, _ format: String, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
     @MainActor private func finishOnboarding(_ app: XCUIApplication) async throws {
@@ -357,12 +366,19 @@ final class AccountFlowUITests: XCTestCase {
         app.buttons["authSubmit"].tap()
     }
 
-    @MainActor private func dismissPasswordPrompt(_ app: XCUIApplication) {
+    /// Returns true only when a "Save Password?" prompt was found and declined. A zero timeout checks without waiting.
+    @MainActor @discardableResult private func dismissPasswordPrompt(_ app: XCUIApplication, timeout: TimeInterval = 3) -> Bool {
         // iOS may present Passwords' remote view without an XCUIElementTypeSheet.
         // Match its visible title before dismissing the specific password prompt.
-        guard app.staticTexts["Save Password?"].waitForExistence(timeout: 3) else { return }
+        let title = app.staticTexts["Save Password?"]
+        guard timeout > 0 ? title.waitForExistence(timeout: timeout) : title.exists else { return false }
         let decline = app.buttons["Not Now"]
-        if decline.waitForExistence(timeout: 3), decline.isHittable { decline.tap() }
+        guard decline.waitForExistence(timeout: 3), decline.isHittable else { return false }
+        decline.tap()
+        // The prompt keeps intercepting touches while it animates away; continue only once it has gone.
+        _ = decline.waitForNonExistence(timeout: 5)
+        _ = title.waitForNonExistence(timeout: 5)
+        return true
     }
 
     @MainActor private func signOut(_ app: XCUIApplication) {

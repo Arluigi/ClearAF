@@ -1,14 +1,25 @@
 import SwiftUI
 
 enum EnrollmentCopy {
-    static func reason(_ code: String) -> String? {
-        switch code {
-        case "state": return "ClearAF isn't available in your state yet."
-        case "age": return "You need to be at least 18 to use ClearAF."
-        case "pregnancy": return "ClearAF can't treat you online during pregnancy."
-        case "breastfeeding": return "ClearAF can't treat you online while breastfeeding."
-        default: return nil
+    static let fallbackReason = "You're not eligible for online care right now."
+    /// One sentence per reason, never empty; unknown future codes fall back to a general sentence.
+    static func reasons(for screening: EligibilityScreening) -> [String] {
+        var lines: [String] = []
+        for code in screening.reasons {
+            let line: String
+            switch code {
+            case "state":
+                line = screening.stateCode == "NON_US"
+                    ? "ClearAF is only available in the United States right now."
+                    : "ClearAF isn't available in your state yet."
+            case "age": line = "You don't meet the minimum age for online care yet."
+            case "pregnancy": line = "ClearAF can't treat you online during pregnancy."
+            case "breastfeeding": line = "ClearAF can't treat you online while breastfeeding."
+            default: line = fallbackReason
+            }
+            if !lines.contains(line) { lines.append(line) }
         }
+        return lines.isEmpty ? [fallbackReason] : lines
     }
 }
 
@@ -16,19 +27,26 @@ enum EnrollmentCopy {
 struct EnrollmentView: View {
     @ObservedObject private var repository = APIService.shared.enrollment
     @State private var updatingAnswers = false
+    @State private var showingUrgent = false
 
     var body: some View {
         NavigationStack {
             content
                 .background(CareJournal.canvas.ignoresSafeArea())
                 .toolbar {
+                    // An urgent report must be possible before eligibility and consent are complete.
+                    ToolbarItem(placement: .topBarLeading) { UrgentReportButton(isPresented: $showingUrgent) }
                     ToolbarItem(placement: .topBarTrailing) { Button("Sign out") { APIService.shared.logout() } }
                 }
         }
         .tint(CareJournal.actionPrimary)
+        .sheet(isPresented: $showingUrgent) { UrgentReportView() }
         .task(id: repository.state?.status) {
             if repository.state?.status == .enrolled { APIService.shared.enrollmentFinished() }
         }
+        // A message from one step never carries into the next.
+        .onChange(of: repository.state?.status) { _, _ in repository.clearError() }
+        .onChange(of: updatingAnswers) { _, _ in repository.clearError() }
     }
 
     @ViewBuilder private var content: some View {
@@ -184,7 +202,7 @@ private struct NotEligibleView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("enrollmentNotEligible")
                 VStack(alignment: .leading, spacing: .spaceSM) {
-                    ForEach(screening.reasons.compactMap(EnrollmentCopy.reason), id: \.self) { Text($0) }
+                    ForEach(EnrollmentCopy.reasons(for: screening), id: \.self) { Text($0) }
                     Text("You have not been charged.")
                 }
                 .fixedSize(horizontal: false, vertical: true)

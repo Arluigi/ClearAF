@@ -4,6 +4,7 @@ import CoreData
 struct ContentView: View {
     @StateObject private var apiService = APIService.shared
     @State private var selectedTab = 0
+    @State private var showingUrgent = false
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         Group {
@@ -25,7 +26,14 @@ struct ContentView: View {
                 EnrollmentView()
             case .onboarding:
                 OnboardingView {}
-                    .overlay(alignment: .topTrailing) { Button("Sign out") { apiService.logout() }.padding() }
+                    .overlay(alignment: .topTrailing) {
+                        HStack(spacing: .spaceLG) {
+                            UrgentReportButton(isPresented: $showingUrgent)
+                            Button("Sign out") { apiService.logout() }
+                        }
+                        .padding()
+                    }
+                    .sheet(isPresented: $showingUrgent) { UrgentReportView() }
             case .ready:
                 TabView(selection: $selectedTab) {
                     DashboardViewEnhanced(selectedTab: $selectedTab)

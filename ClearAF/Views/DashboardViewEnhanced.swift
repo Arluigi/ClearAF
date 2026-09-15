@@ -21,7 +21,8 @@ struct DashboardViewEnhanced: View {
     private var users: FetchedResults<User>
     
     @State private var showingProfile = false
-    
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -73,10 +74,9 @@ struct DashboardViewEnhanced: View {
             .tint(CareJournal.actionPrimary)
             .background(CareJournal.canvas.ignoresSafeArea())
             .navigationBarBackButtonHidden(true)
-            .task {
-                guard let ticket = APIService.shared.access.snapshot() else { return }
-                await APIService.shared.careDecisions.load(ticket: ticket)
-                await APIService.shared.urgentReports.load(ticket: ticket)
+            .task { await refreshCareStatus() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await refreshCareStatus() } }
             }
             .sheet(isPresented: $showingProfile) {
                 ProfileView()
@@ -85,6 +85,13 @@ struct DashboardViewEnhanced: View {
         }
     }
     
+    /// Care status and urgent reports change on the clinician's side; refresh on appear and when the app returns to the foreground.
+    private func refreshCareStatus() async {
+        guard let ticket = APIService.shared.access.snapshot() else { return }
+        await APIService.shared.careDecisions.load(ticket: ticket)
+        await APIService.shared.urgentReports.load(ticket: ticket)
+    }
+
     private func getTimeBasedGreeting() -> String {
         let hour = Calendar.current.component(.hour, from: Date())
         

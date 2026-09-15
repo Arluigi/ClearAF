@@ -39,6 +39,41 @@ import Testing
         #expect(transport.waitlisted == [transport.state.screening?.id])
         #expect(repo.state?.status == .ineligible && repo.state?.screening?.waitlistRequestedAt != nil)
     }
+    @Test func failedReloadAfterASavedScreeningReusesTheSameId() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = EnrollmentFake()
+        let repo = EnrollmentRepository(access: access, transport: transport)
+        let answers = ScreeningAnswers(stateCode: "IL", dateOfBirth: "1990-01-01", pregnancyStatus: "none")
+        transport.failFetch = true
+        await repo.submit(answers, ticket: ticket)
+        #expect(repo.error != nil && repo.state == nil)
+        transport.failFetch = false
+        await repo.submit(answers, ticket: ticket)
+        #expect(transport.submittedIDs.count == 2 && Set(transport.submittedIDs).count == 1)
+        #expect(repo.state?.status == .consentRequired && repo.error == nil)
+        await repo.submit(answers, ticket: ticket)
+        #expect(Set(transport.submittedIDs).count == 2) // the attempt ends once the refreshed state arrives
+    }
+    @Test func staleErrorCanBeCleared() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = EnrollmentFake()
+        let repo = EnrollmentRepository(access: access, transport: transport)
+        transport.failSubmit = true
+        await repo.submit(ScreeningAnswers(stateCode: "IL", dateOfBirth: "1990-01-01", pregnancyStatus: "none"), ticket: ticket)
+        #expect(repo.error != nil)
+        repo.clearError()
+        #expect(repo.error == nil)
+    }
+    @Test func notEligibleReasonsNeverMisstateTheCause() {
+        func screening(_ state: String, _ reasons: [String]) -> EligibilityScreening {
+            EligibilityScreening(id: UUID(), stateCode: state, dateOfBirth: "2010-01-01", pregnancyStatus: "none", eligible: false,
+                reasons: reasons, flags: [], rulesVersion: "2026-09-15.1", submittedAt: "2026-09-15T12:00:00.000Z", waitlistRequestedAt: nil)
+        }
+        #expect(EnrollmentCopy.reasons(for: screening("NON_US", ["state", "age"])) ==
+            ["ClearAF is only available in the United States right now.", "You don't meet the minimum age for online care yet."])
+        #expect(EnrollmentCopy.reasons(for: screening("IL", ["state", "pregnancy", "breastfeeding"])) ==
+            ["ClearAF isn't available in your state yet.", "ClearAF can't treat you online during pregnancy.", "ClearAF can't treat you online while breastfeeding."])
+        #expect(EnrollmentCopy.reasons(for: screening("IL", ["new_rule", "other_rule"])) == ["You're not eligible for online care right now."])
+        #expect(EnrollmentCopy.reasons(for: screening("IL", [])) == ["You're not eligible for online care right now."])
+    }
     @Test func residenceOptionsMirrorTheServerCodesInNameOrder() {
         let codes = ResidenceOption.all.map(\.code)
         #expect(codes.count == 52 && Set(codes).count == 52 && codes.last == "NON_US")
@@ -57,6 +92,7 @@ import Testing
 @MainActor private final class EnrollmentFake: EnrollmentTransport {
     var state = EnrollmentFake.make(.screeningRequired)
     var failSubmit = false
+    var failFetch = false
     var submittedIDs: [UUID] = []
     var accepted: [(Int, String)] = []
     var waitlisted: [UUID?] = []
@@ -73,6 +109,7 @@ import Testing
     }
     func fetchEnrollment(ticket: AccountAccess.Ticket) async throws -> EnrollmentState {
         onFetch?()
+        if failFetch { throw URLError(.networkConnectionLost) }
         return state
     }
     func submitScreening(id: UUID, answers: ScreeningAnswers, ticket: AccountAccess.Ticket) async throws -> EnrollmentStatus {
