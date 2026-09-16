@@ -134,3 +134,5 @@ Routine templates, calendars, local reminders and clinician-configured check-ins
 Assigned-clinician text messaging and linked photo/routine feedback: [verification and compatibility](../features/messaging-verification.md).
 
 Eligibility/consent enrollment, refer-out/needs-in-person care decisions with refund status, and urgent reports (Release 1 of the [client expansion](../features/client-expansion.md)): [enrollment and safety verification](../features/enrollment-safety-verification.md).
+
+Release 1 (enrollment and safety) is deployed: hosted migration applied, API and portal live with `ENROLLMENT_ENFORCEMENT=off` until the new iPhone build is installed. Deployment IDs, rollback target and two rollout incidents (database password reset, API Git auto-deploy) are recorded in [enrollment and safety verification](../features/enrollment-safety-verification.md).

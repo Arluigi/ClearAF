@@ -91,3 +91,22 @@ See [client-expansion.md](client-expansion.md) for the full decisions/defaults t
 
 - `PATCH /appointments/:id` has no role check. This is pre-existing and unrelated to this release's gating change; retiring or fixing legacy appointment routes is a separate API decision.
 - Client questions carried into [client-expansion.md](client-expansion.md): whether a clinician changing "refer out" to "needs in-person" (or back) owes one refund or two (the app currently creates a separate pending refund per decision), and confirmation of the licensed-state list (the demo default includes TX).
+
+## Deployed — September 15, 2026
+
+Release 1 is live. [PR #15](https://github.com/Arluigi/ClearAF/pull/15) squash-merged to `main` as `f8bd522` (branch tip `f12f6a5`).
+
+- **Migration**: `20260915185139_enrollment_and_safety.sql`, SHA-256 `c399e3cf6cb2beb9bbf64f61293ae45e4535d2cf1456dea32ffba610f9d2db64`, applied with Supabase CLI 2.117.0 `db push --linked`. Dry run listed only this file; the ledger version equals the repository filename. Verified afterwards: RLS enabled on all four tables, zero `anon`/`authenticated` grants, and the public anon key denied (401, `42501`) on each table from outside.
+- **API**: `dpl_41eh1VXiQANVgtV4tQkPX4awXFa4`, immutable `https://clearaf-6p7k7gnhd-arluigis-projects.vercel.app`, alias https://clearaf-api.vercel.app. `ENROLLMENT_ENFORCEMENT=off` set in production before deploying; startup log line `enrollment enforcement: off` confirmed.
+- **Portal**: `clearaf-portal-kheh58g1h-arluigis-projects.vercel.app`, Ready, built from `main` after the merge.
+- **Rollback target** (production before this release): `https://clearaf-2tg6jpwcx-arluigis-projects.vercel.app`. The migration is additive only, so that build runs unchanged against the new schema.
+- **Checks**: `/health` 200, `/ready` 200 and `GET /api/enrollment` 401 across four consecutive rounds after the final promotion; the owner signed in to the hosted portal successfully.
+
+### Two incidents during rollout
+
+1. **Database password reset invalidated the stored connection strings.** The owner reset the Supabase database password while retrieving it for the migration. `DATABASE_URL` and `DIRECT_URL` in Vercel still held the old password, so the API threw on every database query: `/ready` returned 503 and authenticated requests returned 500 `Authentication error` (middleware/auth.ts catch-all). This affected **every** deployment, including the untouched prior production build, which is what identified it as environmental rather than a regression. Fixed by setting `DATABASE_URL` to the transaction pooler (`:6543`, `pgbouncer=true&connection_limit=1`) and `DIRECT_URL` to the session pooler (`:5432`) with the new password, then redeploying. **After any Supabase password reset, update both variables in Vercel and redeploy; existing deployments do not pick up new values on their own.**
+2. **Merging replaced the API with a repo-root build.** The `clearaf-api` Vercel project still had the GitHub integration enabled with Root Directory `.`, so merging PR #15 triggered a 4-second deployment of the repository root over the working API; every route returned 404 for roughly two minutes. Restored with `vercel promote` back to `dpl_41eh1VXiQANVgtV4tQkPX4awXFa4`, then the Git connection was disconnected (`vercel git disconnect`). The API is CLI-deployed from `backend/` per the baseline runbook; only the portal is Git-connected.
+
+### Still outstanding
+
+`ENROLLMENT_ENFORCEMENT` stays `off` until the new iOS build is installed on the owner's phone (rollout steps 3–4 above). Only then set it to `on` and redeploy.
