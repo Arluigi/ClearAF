@@ -15,7 +15,6 @@ struct RoutineView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    NavigationLink("Completion history") { CompletionCalendarView() }
                     Text("Your clinician assigns and updates these routines.")
                         .foregroundStyle(CareJournal.textSecondary)
                     CareJournalPicker(title: "Time of day", selection: $selectedSlot) {
@@ -69,17 +68,22 @@ struct RoutineView: View {
             .background(CareJournal.canvas)
             .navigationTitle("Routines")
             .toolbar {
-                Button {
-                    Task { @MainActor in
-                        guard APIService.shared.access.snapshot() == ticket else { return }
-                        actionError = nil
-                        await repository.refresh()
+                ToolbarItemGroup {
+                    NavigationLink { CompletionCalendarView() } label: {
+                        Label("Completion history", systemImage: "calendar")
                     }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                        .labelStyle(.iconOnly)
-                        .frame(minWidth: 44, minHeight: 44)
-                }.disabled(repository.isRefreshing)
+                    Button {
+                        Task { @MainActor in
+                            guard APIService.shared.access.snapshot() == ticket else { return }
+                            actionError = nil
+                            await repository.refresh()
+                        }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }.disabled(repository.isRefreshing)
+                }
             }
             .refreshable {
                 guard APIService.shared.access.snapshot() == ticket else { return }

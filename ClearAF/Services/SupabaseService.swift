@@ -73,7 +73,7 @@ final class SupabaseService: ObservableObject {
         let generation = clientGeneration
         let auth = client.auth
         listener = Task { @MainActor in
-            for await (event, session) in await auth.authStateChanges {
+            for await (event, session) in auth.authStateChanges {
                 guard generation == clientGeneration, !Task.isCancelled else { return }
                 APIService.shared.authChanged(event, session: session)
             }

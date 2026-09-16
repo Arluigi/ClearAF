@@ -3,6 +3,7 @@ import { privatePhotos } from '../services/photoAccess';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
+import { requireEnrolledPatient } from '../middleware/enrollmentGate';
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ const updateAppointmentSchema = z.object({
 });
 
 // Create appointment (patients only)
-router.post('/', requirePatient, async (req, res, next) => {
+router.post('/', requirePatient, requireEnrolledPatient, async (req, res, next) => {
   try {
     const validatedData = createAppointmentSchema.parse(req.body);
     const { scheduledDate, type, concern, duration, dermatologistId } = validatedData;
@@ -280,7 +281,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // Update appointment
-router.patch('/:id', async (req, res, next) => {
+router.patch('/:id', requireEnrolledPatient, async (req, res, next) => {
   try {
     const { id } = req.params;
     const validatedData = updateAppointmentSchema.parse(req.body);

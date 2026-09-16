@@ -76,130 +76,6 @@ struct UpdateProfileResponse: Codable {
     let user: APIUser
 }
 
-struct LoginRequest: Codable {
-    let email: String
-    let password: String
-    let userType: String
-
-    init(email: String, password: String) {
-        self.email = email
-        self.password = password
-        self.userType = "patient"
-    }
-}
-
-struct RegisterRequest: Codable {
-    let name: String
-    let email: String
-    let password: String
-    let userType: String
-    let skinType: String?
-
-    init(name: String, email: String, password: String, skinType: String?) {
-        self.name = name
-        self.email = email
-        self.password = password
-        self.userType = "patient"
-        self.skinType = skinType
-    }
-}
-
-struct AuthResponse: Codable {
-    let message: String
-    let user: APIUser
-    let token: String
-    let userType: String
-}
-
-struct APIError: Codable {
-    let error: String
-    let code: String?
-    let details: [ValidationError]?
-}
-
-struct ValidationError: Codable {
-    let field: String
-    let message: String
-}
-
-// MARK: - Photo Models
-struct APIPhoto: Codable {
-    let id: String
-    let photoUrl: String
-    let skinScore: Int
-    let notes: String?
-    let userId: String
-    let captureDate: String
-    let appointmentId: String?
-    let fileSize: Int?
-    let mimeType: String?
-}
-
-struct PhotoUploadResponse: Codable {
-    let message: String
-    let photo: APIPhoto
-}
-
-struct SyncProfileResponse: Codable {
-    let success: Bool
-    let user: SyncedUser
-    let assignedDermatologist: AssignedDerm?
-
-    struct SyncedUser: Codable {
-        let id: String
-        let name: String?
-        let skinType: String?
-        let dermatologistId: String?
-    }
-
-    struct AssignedDerm: Codable {
-        let id: String
-        let name: String
-    }
-}
-
-// MARK: - Appointment Structures
-struct CreateAppointmentRequest: Codable {
-    let scheduledDate: String  // ISO8601 format
-    let type: String           // "consultation", "follow-up", "treatment", "emergency"
-    let concern: String
-    let duration: Int?         // minutes, defaults to 30
-    let dermatologistId: String?
-}
-
-struct CreateAppointmentResponse: Codable {
-    let message: String
-    let appointment: AppointmentResponse
-}
-
-struct AppointmentResponse: Codable {
-    let id: String
-    let scheduledDate: String
-    let type: String
-    let concern: String
-    let status: String
-    let duration: Int
-    let createdAt: String?
-    let patient: PatientInfo
-    let dermatologist: DermatologistInfo
-
-    struct PatientInfo: Codable {
-        let id: String
-        let name: String?
-    }
-
-    struct DermatologistInfo: Codable {
-        let id: String
-        let name: String
-        let title: String?
-    }
-}
-
-struct AppointmentListResponse: Codable {
-    let appointments: [AppointmentResponse]
-    let total: Int
-}
-
 // MARK: - API Service
 class APIService: ObservableObject {
     static let shared = APIService()
@@ -207,7 +83,7 @@ class APIService: ObservableObject {
     private let baseURL = AppEnvironment.apiURL
     private let session = AccountNetwork.session()
     let access = AccountAccess()
-    enum Phase: Equatable { case loading, signedOut, profileError, onboarding, ready, recovery }
+    enum Phase: Equatable { case loading, signedOut, profileError, enrollment, onboarding, ready, recovery }
     @Published var currentUser: APIUser?
     @Published var phase: Phase = .loading
     @Published var persistence = PersistenceController(inMemory: true)
@@ -222,6 +98,10 @@ class APIService: ObservableObject {
     @MainActor lazy var messaging = MessagingRepository(access: access, transport: self)
     @MainActor lazy var checkIns = CheckInRepository(access: access, transport: self)
     @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
+    @MainActor lazy var enrollment = EnrollmentRepository(access: access, transport: self)
+    @MainActor lazy var careDecisions = CareDecisionRepository(access: access, transport: self)
+    @MainActor lazy var urgentReports = UrgentReportRepository(access: access, transport: self)
+    private var recheckingEnrollment = false
     private init() {}
 
     @MainActor func start() {
@@ -261,9 +141,18 @@ class APIService: ObservableObject {
                 }
                 let store = try PersistenceController(accountID: id)
                 try hydrate(profile.user, in: store.container.viewContext)
+                // Eligibility and consent come before onboarding and the tabs.
+                guard await enrollment.load(ticket: ticket) else {
+                    guard access.snapshot() == ticket else { return }
+                    accountError = enrollment.error ?? AccountFailure.profileUnavailable.localizedDescription
+                    phase = .profileError
+                    return
+                }
+                try access.require(ticket)
                 persistence = store
                 currentUser = profile.user
-                phase = profile.user.onboardingCompleted ? .ready : .onboarding
+                if enrollment.state?.status != .enrolled { phase = .enrollment }
+                else { phase = profile.user.onboardingCompleted ? .ready : .onboarding }
             } catch {
                 guard access.snapshot() == ticket else { return }
                 if case AccountFailure.requestFailed(401) = error { logout(); return }
@@ -293,6 +182,10 @@ class APIService: ObservableObject {
         checkIns.cancel()
         messaging.cancel()
         photoReviews.cancel()
+        enrollment.cancel()
+        careDecisions.cancel()
+        urgentReports.cancel()
+        recheckingEnrollment = false
         access.invalidate()
         profileTask?.cancel()
         profileTask = nil
@@ -303,6 +196,25 @@ class APIService: ObservableObject {
     @MainActor func logout() {
         clearAccount()
         SupabaseService.shared.signOut()
+    }
+
+    @MainActor func enrollmentFinished() {
+        guard phase == .enrollment, enrollment.state?.status == .enrolled else { return }
+        phase = currentUser?.onboardingCompleted == true ? .ready : .onboarding
+    }
+
+    /// A clinical write was refused for enrollment: reload the state and return to the enrollment steps if needed.
+    @MainActor func recheckEnrollment() {
+        guard phase == .ready || phase == .onboarding, !recheckingEnrollment, let ticket = access.snapshot() else { return }
+        recheckingEnrollment = true
+        Task { @MainActor in
+            let loaded = await enrollment.load(ticket: ticket)
+            guard access.snapshot() == ticket else { return }
+            recheckingEnrollment = false
+            guard loaded, phase == .ready || phase == .onboarding,
+                  let status = enrollment.state?.status, status != .enrolled else { return }
+            phase = .enrollment
+        }
     }
 
     @MainActor func finishOnboarding(name: String) async throws {
@@ -334,52 +246,7 @@ class APIService: ObservableObject {
         logout()
     }
 
-    // MARK: - User Profile
-    func syncProfile() -> AnyPublisher<SyncProfileResponse, Error> {
-        return performAuthenticatedRequest(
-            endpoint: "/auth/sync-profile",
-            method: "POST",
-            body: EmptyBody(),
-            responseType: SyncProfileResponse.self
-        )
-        .eraseToAnyPublisher()
-    }
-
     struct EmptyBody: Codable {}
-    func updateProfile(skinType: String?, allergies: String?, currentMedications: String?, skinConcerns: String?) -> AnyPublisher<APIUser, Error> {
-        let request = UpdateProfileRequest(
-            skinType: skinType,
-            allergies: allergies,
-            currentMedications: currentMedications,
-            skinConcerns: skinConcerns
-        )
-
-        return performAuthenticatedRequest(
-            endpoint: "/users/profile",
-            method: "PATCH",
-            body: request,
-            responseType: UpdateProfileResponse.self
-        )
-        .map(\.user)
-        .handleEvents(receiveOutput: { [weak self] user in
-            self?.currentUser = user
-        })
-        .eraseToAnyPublisher()
-    }
-
-    func getCurrentUser() -> AnyPublisher<APIUser, Error> {
-        return performAuthenticatedRequest(
-            endpoint: "/users/profile",
-            method: "GET",
-            body: Optional<String>.none,
-            responseType: UserProfileResponse.self
-        )
-        .map(\.user)
-        .handleEvents(receiveOutput: { [weak self] user in
-            self?.currentUser = user
-        })
-        .eraseToAnyPublisher()
-    }
 
     // Each request captures its login before work starts and checks it after every suspension.
     @MainActor private func request<T: Encodable, U: Decodable>(endpoint: String, method: String,
@@ -398,23 +265,12 @@ class APIService: ObservableObject {
         let (data, response) = try await session.data(for: request)
         try access.require(ticket)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        guard (200..<300).contains(http.statusCode) else { throw AccountFailure.requestFailed(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            let failure = AccountFailure.from(status: http.statusCode, body: data)
+            if case .enrollmentRequired = failure { recheckEnrollment() }
+            throw failure
+        }
         return try JSONDecoder().decode(U.self, from: data)
-    }
-
-    private func performAuthenticatedRequest<T: Codable, U: Codable>(endpoint: String, method: String,
-        body: T? = nil, responseType: U.Type, ticket expected: AccountAccess.Ticket? = nil) -> AnyPublisher<U, Error> {
-        let ticket = expected ?? access.snapshot()
-        return Deferred {
-            Future<U, Error> { promise in
-                Task { @MainActor in
-                    do { promise(.success(try await self.request(endpoint: endpoint, method: method, body: body, ticket: ticket))) }
-                    catch { promise(.failure(error)) }
-                }
-            }
-        }.receive(on: DispatchQueue.main)
-        .tryMap { value in try self.access.require(ticket); return value }
-        .eraseToAnyPublisher()
     }
 }
 
@@ -452,27 +308,6 @@ extension APIService {
     private static let photoStorageSession = URLSession(
         configuration: .ephemeral, delegate: PhotoUploadRedirectDelegate(), delegateQueue: nil
     )
-
-    // Placeholder methods for future API integrations
-    // MARK: - Appointment API Methods
-
-    func createAppointment(scheduledDate: Date, type: String, concern: String, notes: String? = nil) -> AnyPublisher<AppointmentResponse, Error> {
-        let body = CreateAppointmentRequest(scheduledDate: ISO8601DateFormatter().string(from: scheduledDate),
-            type: type, concern: concern, duration: 30, dermatologistId: nil)
-        return performAuthenticatedRequest(endpoint: "/appointments", method: "POST", body: body,
-            responseType: CreateAppointmentResponse.self).map(\.appointment).eraseToAnyPublisher()
-    }
-    func fetchAppointments() -> AnyPublisher<[AppointmentResponse], Error> {
-        performAuthenticatedRequest(endpoint: "/appointments", method: "GET", body: Optional<String>.none,
-            responseType: AppointmentListResponse.self).map(\.appointments).eraseToAnyPublisher()
-    }
-
-    func fetchProducts() -> AnyPublisher<[String], Error> {
-        // TODO: Implement when products API is ready
-        return Just([])
-            .setFailureType(to: Error.self)
-            .eraseToAnyPublisher()
-    }
 }
 private enum PhotoUploadError: LocalizedError {
     case tooLarge, invalidDestination, uploadFailed
@@ -594,7 +429,7 @@ extension APIService: PhotoReviewTransport {
 extension APIService: CheckInTransport {
     @MainActor func fetchCheckInForm(ticket: AccountAccess.Ticket) async throws -> CheckInForm? {
         let result: CheckInFormEnvelope = try await request(endpoint: "/care-support/form", method: "GET", body: Optional<String>.none, ticket: ticket)
-        guard result.form == nil || result.form.map { CheckInValidation.form($0, owner: ticket.accountID) } == true else { throw AccountFailure.accountChanged }
+        guard result.form == nil || result.form.map({ CheckInValidation.form($0, owner: ticket.accountID) }) == true else { throw AccountFailure.accountChanged }
         return result.form
     }
     @MainActor func sendCheckIn(_ draft: CheckInDraft, ticket: AccountAccess.Ticket) async throws -> CheckInResponse {
@@ -654,6 +489,62 @@ private struct PatientMessageBody: Encodable {
     enum CodingKeys: String, CodingKey { case content, reference }
     func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(content, forKey: .content); try c.encodeNil(forKey: .reference) }
 }
+
+extension APIService: EnrollmentTransport {
+    @MainActor func fetchEnrollment(ticket: AccountAccess.Ticket) async throws -> EnrollmentState {
+        let state: EnrollmentState = try await request(endpoint: "/enrollment", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard state.consent.version > 0, state.consent.sha256.utf8.count == 64 else { throw RoutineFailure.invalidData }
+        return state
+    }
+    @MainActor func submitScreening(id: UUID, answers: ScreeningAnswers, ticket: AccountAccess.Ticket) async throws -> EnrollmentStatus {
+        let result: ScreeningEnvelope = try await request(endpoint: "/enrollment/screenings/\(id.uuidString.lowercased())", method: "PUT", body: answers, ticket: ticket)
+        guard result.screening.id == id else { throw AccountFailure.accountChanged }
+        return result.status
+    }
+    @MainActor func joinWaitlist(screeningId: UUID, ticket: AccountAccess.Ticket) async throws -> EligibilityScreening {
+        let result: WaitlistEnvelope = try await request(endpoint: "/enrollment/waitlist", method: "PUT", body: WaitlistBody(screeningId: screeningId.uuidString.lowercased()), ticket: ticket)
+        guard result.screening.id == screeningId else { throw AccountFailure.accountChanged }
+        return result.screening
+    }
+    @MainActor func acceptConsent(version: Int, sha256: String, ticket: AccountAccess.Ticket) async throws -> EnrollmentStatus {
+        let result: ConsentEnvelope = try await request(endpoint: "/enrollment/consents/\(version)", method: "PUT", body: ConsentBody(documentSha256: sha256), ticket: ticket)
+        guard result.acceptance.version == version else { throw RoutineFailure.invalidData }
+        return result.status
+    }
+}
+private struct ScreeningEnvelope: Decodable { let screening: EligibilityScreening; let status: EnrollmentStatus }
+private struct WaitlistBody: Encodable { let screeningId: String }
+private struct WaitlistEnvelope: Decodable { let screening: EligibilityScreening }
+private struct ConsentBody: Encodable { let documentSha256: String }
+private struct ConsentEnvelope: Decodable {
+    struct Acceptance: Decodable { let version: Int }
+    let acceptance: Acceptance; let status: EnrollmentStatus
+}
+
+extension APIService: CareDecisionTransport {
+    @MainActor func currentCareDecision(ticket: AccountAccess.Ticket) async throws -> CareDecision? {
+        let result: CareDecisionEnvelope = try await request(endpoint: "/care-decisions/current", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard result.decision.map({ $0.patientId == ticket.accountID }) ?? true else { throw AccountFailure.accountChanged }
+        return result.decision
+    }
+}
+private struct CareDecisionEnvelope: Decodable { let decision: CareDecision? }
+
+extension APIService: UrgentReportTransport {
+    @MainActor func sendUrgentReport(id: UUID, category: UrgentCategory, description: String, ticket: AccountAccess.Ticket) async throws -> UrgentReport {
+        let result: UrgentReportEnvelope = try await request(endpoint: "/urgent-reports/\(id.uuidString.lowercased())", method: "PUT",
+            body: UrgentReportBody(category: category.rawValue, description: description), ticket: ticket)
+        guard result.report.id == id, result.report.patientId == ticket.accountID else { throw AccountFailure.accountChanged }
+        return result.report
+    }
+    @MainActor func urgentReports(ticket: AccountAccess.Ticket) async throws -> [UrgentReport] {
+        let result: SupportPage<UrgentReport> = try await request(endpoint: "/urgent-reports?limit=20", method: "GET", body: Optional<String>.none, ticket: ticket)
+        guard result.data.allSatisfy({ $0.patientId == ticket.accountID }) else { throw AccountFailure.accountChanged }
+        return result.data
+    }
+}
+private struct UrgentReportBody: Encodable { let category: String; let description: String }
+private struct UrgentReportEnvelope: Decodable { let report: UrgentReport }
 
 extension APIService {
     @MainActor func messagePhotoThumbnail(id: UUID, ticket: AccountAccess.Ticket) async throws -> Data {

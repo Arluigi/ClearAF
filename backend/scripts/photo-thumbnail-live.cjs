@@ -6,6 +6,7 @@ const path = require('node:path');
 const { Client } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 const sharp = require('sharp');
+const { enrollFixture, unenrollFixture } = require('./lib/enrollment-fixture.cjs');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
@@ -87,6 +88,15 @@ async function json(response, expectedStatus) {
   return response.json();
 }
 
+async function enrollPatients(patientAccounts) {
+  const enrollment = await json(await call('/enrollment', patientAccounts[0]), 200);
+  await enrollFixture(db, patientAccounts.map(account => account.id), {
+    rulesVersion: enrollment.rulesVersion,
+    documentVersion: enrollment.consent.version,
+    documentSha256: enrollment.consent.sha256
+  });
+}
+
 async function cleanup() {
   const cleanupErrors = [];
   if (storagePaths.length) {
@@ -116,6 +126,14 @@ async function cleanup() {
   if (clinicians.length) {
     try {
       await db.query('delete from public.dermatologists where id=any($1::uuid[])', [clinicians.map(account => account.id)]);
+    } catch (error) { cleanupErrors.push(error); }
+  }
+
+  // Enrollment records reference user_profiles with ON DELETE RESTRICT, and deleting the
+  // auth user cascades into user_profiles; clear them first or the cascade fails.
+  if (accounts.length) {
+    try {
+      await unenrollFixture(db, accounts.map(account => account.id));
     } catch (error) { cleanupErrors.push(error); }
   }
 
@@ -151,6 +169,7 @@ async function run() {
     }
     await db.query('update public.user_profiles set "dermatologistId"=$2 where id=$1', [owner.id, clinician.id]);
     for (const account of accounts) await signIn(account);
+    await enrollPatients([owner, foreign]);
     const id = crypto.randomUUID(), objectPath = `${owner.id}/${id}.jpg`;
     photoIds.push(id); storagePaths.push(objectPath);
     const original = await sharp({ create: { width: 1600, height: 1200, channels: 3, background: '#739586' } })

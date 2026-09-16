@@ -172,9 +172,5 @@ enum PhotoCaptureFailure: LocalizedError {
         }
     }
 
-    private static func isTransient(_ error: Error) -> Bool {
-        if error is URLError { return true }
-        if case AccountFailure.requestFailed(let status) = error { return status == 408 || status == 429 || status >= 500 }
-        return false
-    }
+    private static func isTransient(_ error: Error) -> Bool { AccountFailure.isTransient(error) }
 }

@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { createDatabaseProbe, createDependencyProbes, createReadiness, installHealthRoutes } from './services/readiness';
+import { enrollmentStartupLog } from './services/enrollmentRules';
 
 // Import routes
 import authRoutes from './routes/auth-supabase';
@@ -17,6 +18,9 @@ import photoRoutes from './routes/photos';
 import photoReviewRoutes from './routes/photo-reviews';
 import routineRoutes from './routes/routines';
 import careSupportRoutes from './routes/care-support';
+import careDecisionRoutes from './routes/care-decisions';
+import enrollmentRoutes from './routes/enrollment';
+import urgentReportRoutes from './routes/urgent-reports';
 import dashboardRoutes from './routes/dashboard';
 
 // Import middleware
@@ -25,6 +29,10 @@ import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
 dotenv.config();
+
+// Fail fast on invalid enrollment configuration (throws with a clear message) and record the
+// effective enforcement mode once. Rules are still read per request, so behaviour is unchanged.
+for (const line of enrollmentStartupLog()) console[line.level](line.text);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -69,6 +77,10 @@ app.use('/api/photos', authenticateToken, photoRoutes);
 app.use('/api/photo-reviews', authenticateToken, photoReviewRoutes);
 app.use('/api/routines', authenticateToken, routineRoutes);
 app.use('/api/care-support', authenticateToken, careSupportRoutes);
+app.use('/api/care-decisions', authenticateToken, careDecisionRoutes);
+app.use('/api/enrollment', authenticateToken, enrollmentRoutes);
+// Urgent reports are never enrollment-gated: a patient must always be able to flag something urgent.
+app.use('/api/urgent-reports', authenticateToken, urgentReportRoutes);
 app.use('/api/dashboard', authenticateToken, dashboardRoutes);
 
 // This MVP has no realtime socket service; reject upgrades explicitly.

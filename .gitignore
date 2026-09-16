@@ -120,3 +120,6 @@ CLAUDE.md
 # Generated local development configuration and recovery artifacts
 ClearAF/Config/Local.generated.xcconfig
 .local/
+
+# Playwright MCP snapshots/console logs written to the repository root
+/.playwright-mcp/
