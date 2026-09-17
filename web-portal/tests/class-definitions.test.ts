@@ -118,9 +118,54 @@ function classesFromFile(file: string): Set<string> {
   return tokens;
 }
 
-test("every class-like token in src/**/*.tsx compiles under Tailwind 3.4 (or is an explicit non-Tailwind hook)", () => {
-  const files = sourceFiles("src").filter((f) => f.endsWith(".tsx"));
-  assert.ok(files.length > 40, `only ${files.length} .tsx files found`);
+// src/lib helpers (like `dayBar` in worklist.ts, the bug behind fix 1) build Tailwind class strings
+// outside any cn()/cva() call, so there's no call-site to anchor the .tsx extraction on. Instead, every
+// string literal in the file is a *candidate*, kept only when it looks like an actual Tailwind class
+// list rather than prose, an identifier or a URL — the same trust a cn()/cva() call gets implicitly.
+//
+// "Looks like a class list" means: every whitespace-separated token is either one of a small set of
+// bare utilities that have no hyphen (block, border, …), or has a `prefix-value`/`prefix/value` shape
+// starting with a lowercase letter. Natural-language copy almost never satisfies this for an entire
+// literal — English sentences start with a capital letter, and even all-lowercase phrases carry short
+// filler words (a, of, to, is, no, …) that are neither hyphenated nor in the bare-utility set — but a
+// *single* hyphenated or slashed token (a filter key like "needs-review", an action like
+// "clear-search", a MIME type like "application/json") reads identically to a real one-word class, so
+// a lone token only counts when it is literally in the bare-utility set; the shape regex only applies
+// once there are 2+ tokens, i.e. an actual space-joined class list. This keeps the check to one simple,
+// literal-shape rule (see spec: "any literal whose every whitespace-separated token matches a class
+// pattern") rather than tracing which functions get used as classNames.
+const BARE_CLASS_KEYWORDS = new Set([
+  "block", "inline", "inline-block", "flex", "inline-flex", "grid", "inline-grid", "contents",
+  "table", "hidden", "static", "fixed", "absolute", "relative", "sticky", "border", "rounded",
+  "shadow", "truncate", "italic", "underline", "uppercase", "lowercase", "capitalize",
+  "container", "sr-only", "group", "peer",
+]);
+const CLASS_SHAPE = /^-?[a-z][\w.]*[-/][\w.%[\]/-]+$/;
+function looksLikeClassToken(token: string): boolean {
+  const base = token.replace(/^(?:[\w-]+:|\[[^\]]*\]:)+/, ""); // strip variant prefixes (hover:, data-[x]:, …)
+  return BARE_CLASS_KEYWORDS.has(base) || CLASS_SHAPE.test(base);
+}
+function isClassLikeLiteral(literal: string): boolean {
+  const tokens = literal.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return false;
+  if (tokens.length === 1) return BARE_CLASS_KEYWORDS.has(tokens[0]);
+  return tokens.every(looksLikeClassToken);
+}
+function classesFromLibFile(file: string): Set<string> {
+  const text = stripComments(read(file));
+  const tokens = new Set<string>();
+  for (const literal of stringLiterals(text)) {
+    if (!isClassLikeLiteral(literal)) continue;
+    for (const tok of literal.split(/\s+/).filter(Boolean)) tokens.add(tok);
+  }
+  return tokens;
+}
+
+test("every class-like token in src/**/*.tsx and src/lib/**/*.ts compiles under Tailwind 3.4 (or is an explicit non-Tailwind hook)", () => {
+  const tsxFiles = sourceFiles("src").filter((f) => f.endsWith(".tsx"));
+  assert.ok(tsxFiles.length > 40, `only ${tsxFiles.length} .tsx files found`);
+  const libFiles = sourceFiles("src/lib").filter((f) => f.endsWith(".ts"));
+  assert.ok(libFiles.length > 5, `only ${libFiles.length} src/lib .ts files found`);
 
   const allow = customLayerNames(read("src/app/globals.css"));
   const escaped = allow.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -133,8 +178,14 @@ test("every class-like token in src/**/*.tsx compiles under Tailwind 3.4 (or is 
 
   const perFile = new Map<string, Set<string>>();
   const allTokens = new Set<string>();
-  for (const file of files) {
+  for (const file of tsxFiles) {
     const tokens = classesFromFile(file);
+    perFile.set(file, tokens);
+    for (const t of tokens) if (!allowPattern.test(t)) allTokens.add(t);
+  }
+  for (const file of libFiles) {
+    const tokens = classesFromLibFile(file);
+    if (tokens.size === 0) continue;
     perFile.set(file, tokens);
     for (const t of tokens) if (!allowPattern.test(t)) allTokens.add(t);
   }

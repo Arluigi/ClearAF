@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { patientListContext, patientListQuery } from '../src/lib/patient-navigation';
 import { PatientListController } from '../src/lib/patient-list';
-test('workspace return context preserves search and page without allowing redirect destinations', () => {
-  const value = patientListContext(new URLSearchParams(patientListQuery(3, 'Ada & Ben')));
-  assert.deepEqual(value, { page: 3, search: 'Ada & Ben' });
-  assert.deepEqual(patientListContext(new URLSearchParams('page=-4&return=https://external.invalid')), { page: 1, search: '' });
+test('workspace return context preserves filter, search and page without allowing redirect destinations', () => {
+  assert.deepEqual(patientListContext(new URLSearchParams(patientListQuery(3, 'Ada & Ben'))), { page: 3, search: 'Ada & Ben', filter: 'needs-review' });
+  assert.deepEqual(patientListContext(new URLSearchParams(patientListQuery(2, '', 'flagged'))), { page: 2, search: '', filter: 'flagged' });
+  assert.equal(patientListQuery(1, ''), 'page=1');
+  assert.equal(patientListQuery(1, '', 'all'), 'page=1&filter=all');
+  assert.deepEqual(patientListContext(new URLSearchParams('page=-4&filter=https://external.invalid&return=https://external.invalid')), { page: 1, search: '', filter: 'needs-review' });
 });
 test('restoring a patient list loads the original search and page together', async () => {
   const calls: unknown[] = [];

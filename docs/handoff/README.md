@@ -4,6 +4,8 @@ September 13 update: PRs #1–5 are merged; T0–T4 are complete with the docume
 
 Prepared September 11, 2026. T2 implementation and verification are recorded in the [account reliability report](../accounts/README.md). No T2 production deployment occurred. See the [T2 plan](../superpowers/plans/2026-09-10-account-reliability.md), [baseline and recovery procedure](../baseline/README.md), and [security notes](../security/README.md).
 
+Worklist release (Letterpress PR 4): [verification](../features/letterpress-worklist-verification.md).
+
 Design update: Letterpress 1.0 replaces Care Journal ([design language](../design/design-language.md), [plan](../superpowers/plans/2026-09-17-letterpress-redesign.md)); it lands in eight PRs.
 
 Client expansion: see [client expansion](../features/client-expansion.md) for the September 2026 release plan (enrollment and safety, intake and orders, follow-up and renewal).

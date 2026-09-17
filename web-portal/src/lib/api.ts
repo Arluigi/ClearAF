@@ -22,6 +22,8 @@ import {
   RoutineSnapshot,
   RoutineTimeOfDay,
   SaveRoutineRevisionInput,
+  WorklistQuery,
+  WorklistResponse,
 } from '@/types/api';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -225,6 +227,12 @@ class APIService {
 
   async getPatient(id: string): Promise<User> {
     return this.request<User>(`/users/${id}`);
+  }
+
+  async getWorklist(query: WorklistQuery, limit = 20): Promise<WorklistResponse> {
+    const params = new URLSearchParams({ filter: query.filter, page: String(query.page), limit: String(limit), localDate: query.localDate });
+    if (query.search.trim()) params.set('search', query.search.trim());
+    return this.request<WorklistResponse>(`/worklist?${params}`);
   }
 
   async getPatientRoutines(patientId: string, localDate: string): Promise<RoutineSnapshot> {
