@@ -5,62 +5,48 @@
 @layer base {
   :root {
     color-scheme: light;
-    --canvas: 210.00 22.22% 96.47%;
-    --surface: 0.00 0.00% 100.00%;
-    --text-primary: 206.81 41.59% 22.16%;
-    --text-secondary: 208.42 18.63% 40.00%;
-    --action-primary: 206.02 52.20% 31.18%;
-    --action-on-primary: 0.00 0.00% 100.00%;
-    --accent-subtle: 206.67 47.37% 92.55%;
-    --separator: 208.70 26.44% 82.94%;
-    --error: 0.00 65.83% 39.02%;
-    --on-error: 0.00 0.00% 100.00%;
-    --background: var(--canvas);
-    --foreground: var(--text-primary);
-    --card: var(--surface);
-    --card-foreground: var(--text-primary);
-    --popover: var(--surface);
-    --popover-foreground: var(--text-primary);
-    --primary: var(--action-primary);
-    --primary-foreground: var(--action-on-primary);
-    --secondary: var(--accent-subtle);
-    --secondary-foreground: var(--text-primary);
-    --muted: var(--canvas);
-    --muted-foreground: var(--text-secondary);
-    --accent: var(--accent-subtle);
-    --accent-foreground: var(--text-primary);
-    --destructive: var(--error);
-    --destructive-foreground: var(--on-error);
-    --border: var(--separator);
-    --input: var(--text-secondary);
-    --ring: var(--action-primary);
-    --radius: 0.75rem;
+    --canvas: 242 239 231; --surface: 249 247 241; --rail: 237 234 225; --sunk: 232 227 214;
+    --ink: 18 19 18; --ink-secondary: 86 84 77; --ink-tertiary: 95 93 85; --ink-future: 100 98 90;
+    --attention-mark: 166 112 31; --attention-text: 110 71 9; --attention-wash: 240 230 210;
+    --error: 154 32 21;
+
+    --font-display: var(--font-newsreader), Georgia, serif;
+    --font-ui: var(--font-plex-sans), -apple-system, system-ui, sans-serif;
+    --font-data: var(--font-plex-mono), ui-monospace, monospace;
+    --radius: 4px;
+
+    /* shadcn role aliases, resolved to Letterpress. Removed as primitives migrate (PR 2). */
+    --background: var(--canvas);        --foreground: var(--ink);
+    --card: var(--surface);             --card-foreground: var(--ink);
+    --popover: var(--surface);          --popover-foreground: var(--ink);
+    --primary: var(--ink);              --primary-foreground: var(--canvas);
+    --secondary: var(--sunk);           --secondary-foreground: var(--ink);
+    --muted: var(--sunk);               --muted-foreground: var(--ink-secondary);
+    --accent: var(--rail);              --accent-foreground: var(--ink);
+    --destructive: var(--error);        --destructive-foreground: var(--canvas);
+    --ring: var(--ink);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       color-scheme: dark;
-      --canvas: 208.57 30.43% 13.53%;
-      --surface: 208.80 28.09% 17.45%;
-      --text-primary: 208.00 45.45% 93.53%;
-      --text-secondary: 207.27 25.58% 74.71%;
-      --action-primary: 206.36 71.74% 81.96%;
-      --action-on-primary: 206.84 45.24% 16.47%;
-      --accent-subtle: 206.51 33.33% 25.29%;
-      --separator: 207.27 19.76% 32.75%;
-      --error: 6.43 100.00% 83.53%;
-      --on-error: 0.00 62.62% 20.98%;
+      --canvas: 23 23 22; --surface: 31 32 30; --rail: 28 29 27; --sunk: 36 37 31;
+      --ink: 239 237 228; --ink-secondary: 168 166 156; --ink-tertiary: 143 141 132; --ink-future: 139 137 126;
+      --attention-mark: 217 166 74; --attention-text: 232 196 138; --attention-wash: 51 41 26;
+      --error: 255 179 166;
     }
   }
-  * { @apply border-border; }
+  * { @apply border-rule; }
   body {
-    @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    @apply bg-canvas text-ink;
+    font-family: var(--font-ui);
+    font-weight: 450;
     line-height: 1.5;
   }
-  :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+  :focus-visible { outline: 2px solid rgb(var(--ink)); outline-offset: 2px; }
 }
 @layer components {
-  .editorial-title { font-family: Georgia, serif; font-weight: 400; line-height: 1.2; }
+  .editorial-title { font-family: var(--font-display); font-weight: 300; line-height: 1.15; }
+  .font-data { font-variant-numeric: tabular-nums; }
   .portal-page { @apply mx-auto w-full max-w-7xl space-y-8 p-5 md:p-8; }
 }
 @media (prefers-reduced-motion: reduce) {

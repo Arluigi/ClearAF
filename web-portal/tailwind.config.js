@@ -8,74 +8,45 @@ module.exports = {
   ],
   theme: {
     extend: {
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)'
+      borderRadius: { lg: 'var(--radius)', md: 'var(--radius)', sm: '0px' },
+      fontFamily: {
+        display: ['var(--font-display)'],
+        ui: ['var(--font-ui)'],
+        data: ['var(--font-data)'],
       },
       colors: {
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
-        card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))'
+        canvas: 'rgb(var(--canvas) / <alpha-value>)',
+        surface: 'rgb(var(--surface) / <alpha-value>)',
+        rail: 'rgb(var(--rail) / <alpha-value>)',
+        sunk: 'rgb(var(--sunk) / <alpha-value>)',
+        ink: {
+          DEFAULT: 'rgb(var(--ink) / <alpha-value>)',
+          secondary: 'rgb(var(--ink-secondary) / <alpha-value>)',
+          tertiary: 'rgb(var(--ink-tertiary) / <alpha-value>)',
+          future: 'rgb(var(--ink-future) / <alpha-value>)',
         },
-        popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))'
+        attention: {
+          mark: 'rgb(var(--attention-mark) / <alpha-value>)',
+          text: 'rgb(var(--attention-text) / <alpha-value>)',
+          wash: 'rgb(var(--attention-wash) / <alpha-value>)',
         },
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))'
-        },
-        secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))'
-        },
-        muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))'
-        },
-        accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))'
-        },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))'
-        },
-        border: 'hsl(var(--border))',
-        input: 'hsl(var(--input))',
-        ring: 'hsl(var(--ring))',
-        chart: {
-          '1': 'hsl(var(--chart-1))',
-          '2': 'hsl(var(--chart-2))',
-          '3': 'hsl(var(--chart-3))',
-          '4': 'hsl(var(--chart-4))',
-          '5': 'hsl(var(--chart-5))'
-        },
-        // Clear AF Brand Colors
-        'clearaf': {
-          purple: '#8B5CF6',
-          teal: '#14B8A6',
-          blue: '#3B82F6',
-          green: '#10B981',
-          orange: '#F59E0B',
-          red: '#EF4444'
-        },
-        'gray-custom': {
-          900: '#000000',
-          800: '#1F1F1F',
-          700: '#2D2D2D',
-          600: '#71717A',
-          500: '#A1A1AA',
-          400: '#D4D4D8',
-          300: '#E4E4E7',
-          200: '#F4F4F5',
-          100: '#FAFAFA'
-        }
-      }
-    }
+        error: 'rgb(var(--error) / <alpha-value>)',
+        rule: { DEFAULT: 'rgb(var(--ink) / 0.13)', strong: 'rgb(var(--ink) / <alpha-value>)' },
+
+        background: 'rgb(var(--background) / <alpha-value>)',
+        foreground: 'rgb(var(--foreground) / <alpha-value>)',
+        card: { DEFAULT: 'rgb(var(--card) / <alpha-value>)', foreground: 'rgb(var(--card-foreground) / <alpha-value>)' },
+        popover: { DEFAULT: 'rgb(var(--popover) / <alpha-value>)', foreground: 'rgb(var(--popover-foreground) / <alpha-value>)' },
+        primary: { DEFAULT: 'rgb(var(--primary) / <alpha-value>)', foreground: 'rgb(var(--primary-foreground) / <alpha-value>)' },
+        secondary: { DEFAULT: 'rgb(var(--secondary) / <alpha-value>)', foreground: 'rgb(var(--secondary-foreground) / <alpha-value>)' },
+        muted: { DEFAULT: 'rgb(var(--muted) / <alpha-value>)', foreground: 'rgb(var(--muted-foreground) / <alpha-value>)' },
+        accent: { DEFAULT: 'rgb(var(--accent) / <alpha-value>)', foreground: 'rgb(var(--accent-foreground) / <alpha-value>)' },
+        destructive: { DEFAULT: 'rgb(var(--destructive) / <alpha-value>)', foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)' },
+        border: 'rgb(var(--ink) / 0.13)',
+        input: 'rgb(var(--ink) / 0.28)',
+        ring: 'rgb(var(--ring) / <alpha-value>)',
+      },
+    },
   },
   plugins: [require("tailwindcss-animate")],
 }
