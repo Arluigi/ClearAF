@@ -3,7 +3,6 @@ import CoreData
 
 struct ContentView: View {
     @StateObject private var apiService = APIService.shared
-    @State private var selectedTab = 0
     @State private var showingUrgent = false
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
@@ -35,32 +34,7 @@ struct ContentView: View {
                     }
                     .sheet(isPresented: $showingUrgent) { UrgentReportView() }
             case .ready:
-                TabView(selection: $selectedTab) {
-                    DashboardViewEnhanced(selectedTab: $selectedTab)
-                        .tabItem {
-                            Image(systemName: "house.fill")
-                            Text("Today")
-                        }
-                        .tag(0)
-                    
-                    ProgressView()
-                        .tabItem {
-                            Image(systemName: "photo.on.rectangle")
-                            Text("Photos")
-                        }
-                        .tag(1)
-                    
-                    RoutineView()
-                        .tabItem {
-                            Image(systemName: "list.bullet")
-                            Text("Routines")
-                        }
-                        .tag(2)
-                    MessagingView()
-                        .tabItem { Image(systemName: "message.fill"); Text("Messages") }
-                        .tag(3)
-                }
-                .tint(Letterpress.action)
+                ReadyTabs()
             }
         }
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)
@@ -102,11 +76,51 @@ struct ContentView: View {
     }
 }
 
+/// Native tab bar (spec §6): four destinations, capture fused in the centre as an action, ink tint, unread badge on Notes.
+private struct ReadyTabs: View {
+    @State private var selection: AppTab = .today
+    @State private var capturing = false
+    @ObservedObject private var messaging = APIService.shared.messaging
+
+    var body: some View {
+        TabView(selection: Binding(get: { selection }, set: { requested in
+            let route = AppTab.route(requested, from: selection)
+            selection = route.selection
+            if route.startsCapture { capturing = true }
+        })) {
+            Tab(AppTab.today.title, systemImage: AppTab.today.systemImage, value: AppTab.today) {
+                DashboardViewEnhanced(selectedTab: $selection)
+            }
+            Tab(AppTab.record.title, systemImage: AppTab.record.systemImage, value: AppTab.record) {
+                ProgressView()
+            }
+            Tab(AppTab.capture.title, systemImage: AppTab.capture.systemImage, value: AppTab.capture) {
+                Letterpress.canvas.ignoresSafeArea().accessibilityHidden(true)
+            }
+            .accessibilityHint("Opens the camera")
+            Tab(AppTab.plan.title, systemImage: AppTab.plan.systemImage, value: AppTab.plan) {
+                RoutineView()
+            }
+            Tab(AppTab.notes.title, systemImage: AppTab.notes.systemImage, value: AppTab.notes) {
+                MessagingView()
+            }
+            .badge(messaging.conversation?.unreadCount ?? 0)
+        }
+        .tint(Letterpress.ink)
+        .sheet(isPresented: $capturing) { DurablePhotoCaptureView() }
+    }
+}
+
 private struct PhotoPersistenceErrorView: View {
     @ObservedObject var repository: PhotoRepository
     var body: some View {
         if let error = repository.lastError {
-            Text(error).font(.callout).padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: Letterpress.Radius.sheet)).padding()
+            Text(error)
+                .font(.callout)
+                .padding()
+                .background(Letterpress.surface, in: RoundedRectangle(cornerRadius: Letterpress.Radius.sheet))
+                .overlay(RoundedRectangle(cornerRadius: Letterpress.Radius.sheet).strokeBorder(Letterpress.rule, lineWidth: 1))
+                .padding()
         }
     }
 }

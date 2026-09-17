@@ -42,8 +42,8 @@ final class AccountFlowUITests: XCTestCase {
         app.buttons["authSubmit"].tap()
         try await finishOnboarding(app)
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.tabBars.buttons["Photos"].exists)
-        XCTAssertTrue(app.tabBars.buttons["Routines"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Record"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Plan"].exists)
         XCTAssertFalse(app.tabBars.buttons["Care"].exists)
         XCTAssertFalse(app.tabBars.buttons["Shop"].exists)
         XCTAssertTrue(app.staticTexts["Synthetic UI Patient"].exists)
@@ -148,8 +148,8 @@ final class AccountFlowUITests: XCTestCase {
         if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
         _ = try await register(app, name: "Synthetic Photo Patient")
         try await finishOnboarding(app)
-        app.tabBars.buttons["Photos"].tap()
-        let capture = app.buttons["Capture photo"]
+        app.tabBars.buttons["Record"].tap()
+        let capture = app.tabBars.buttons["Capture"]
         XCTAssertTrue(capture.waitForExistence(timeout: 5))
         capture.tap()
         app.buttons["Choose from Library"].tap()
@@ -158,13 +158,15 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(image.exists)
         // The system Photos remote view exposes a visible image with no hittable flag.
         image.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["photoReviewSave"].waitForExistence(timeout: 10))
+        app.buttons["photoReviewSave"].tap()
         XCTAssertTrue(app.staticTexts["Shared"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.staticTexts["1 photos"].exists)
+        XCTAssertTrue(app.staticTexts["1 photo"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
-        app.tabBars.buttons["Photos"].tap()
+        app.tabBars.buttons["Record"].tap()
         XCTAssertTrue(app.staticTexts["Shared"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["1 photos"].exists)
+        XCTAssertTrue(app.staticTexts["1 photo"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.lifetime = .keepAlways; add(attachment)
         app.tabBars.buttons["Today"].tap()
@@ -184,7 +186,7 @@ final class AccountFlowUITests: XCTestCase {
         login(app, email: email, password: password)
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
-        let routinesTab = app.tabBars.buttons["Routines"]
+        let routinesTab = app.tabBars.buttons["Plan"]
         await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: routinesTab)], timeout: 10)
         routinesTab.tap()
         XCTAssertTrue(app.staticTexts["Synthetic Morning Routine"].waitForExistence(timeout: 15))
@@ -197,12 +199,12 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(record.isEnabled)
         record.tap()
         let status = app.staticTexts["routine-morning-status"]
-        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Recorded today'"), object: status)], timeout: 20)
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'Recorded at'"), object: status)], timeout: 20)
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
-        app.tabBars.buttons["Routines"].tap()
+        app.tabBars.buttons["Plan"].tap()
         XCTAssertTrue(app.staticTexts["Synthetic Morning Routine"].waitForExistence(timeout: 15))
-        XCTAssertEqual(app.staticTexts["routine-morning-status"].label, "Recorded today")
+        XCTAssertTrue(app.staticTexts["routine-morning-status"].label.hasPrefix("Recorded at"))
         app.buttons["Evening"].tap()
         XCTAssertTrue(app.staticTexts["Synthetic Evening Routine"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["routine-evening-status"].label, "Not recorded today")
@@ -240,13 +242,13 @@ final class AccountFlowUITests: XCTestCase {
         app.terminate()
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Photos"].waitForExistence(timeout: 15))
-        app.tabBars.buttons["Photos"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Record"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Record"].tap()
         let count = app.staticTexts["photoCount"]
         XCTAssertTrue(count.waitForExistence(timeout: 5))
         let originalCount = count.label
-        XCTAssertTrue(app.buttons["Capture photo"].isHittable)
-        app.buttons["Capture photo"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Capture"].isHittable)
+        app.tabBars.buttons["Capture"].tap()
         XCTAssertTrue(app.buttons["Take Photo"].waitForExistence(timeout: 5))
         app.buttons["Take Photo"].tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -273,11 +275,11 @@ final class AccountFlowUITests: XCTestCase {
         app.navigationBars["Camera"].buttons["Cancel"].tap()
         XCTAssertTrue(count.waitForExistence(timeout: 5))
         XCTAssertEqual(count.label, originalCount)
-        for _ in 0..<8 where app.buttons["Next"].frame.maxY > app.buttons["Capture photo"].frame.minY { app.swipeUp() }
-        XCTAssertLessThanOrEqual(app.buttons["Next"].frame.maxY, app.buttons["Capture photo"].frame.minY)
+        for _ in 0..<8 where app.buttons["Next"].frame.maxY > app.tabBars.buttons["Capture"].frame.minY { app.swipeUp() }
+        XCTAssertLessThanOrEqual(app.buttons["Next"].frame.maxY, app.tabBars.buttons["Capture"].frame.minY)
         XCTAssertTrue(app.buttons["Previous"].isHittable)
         XCTAssertTrue(app.buttons["Next"].isHittable)
-        XCTAssertTrue(app.buttons["Capture photo"].isHittable)
+        XCTAssertTrue(app.tabBars.buttons["Capture"].isHittable)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.lifetime = .keepAlways; add(attachment)
         app.terminate()

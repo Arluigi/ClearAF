@@ -311,3 +311,26 @@ import UIKit
         repository.cancel()
     }
 }
+
+@MainActor extension PhotoRepositoryTests {
+    @Test func reviewedCaptureKeepsItsCaptureTimeAndNote() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let access = AccountAccess(), transport = CaptureTransport()
+        let ticket = access.activate(UUID())
+        let store = try PersistenceController(accountID: ticket.accountID, directory: root)
+        defer { close(store) }
+        let repository = PhotoRepository(access: access, transport: transport)
+        repository.resume(context: store.container.viewContext, ticket: ticket)
+        defer { repository.cancel() }
+        let takenAt = Date(timeIntervalSince1970: 1_789_456_320)
+        let session = PhotoCaptureSession()
+        let completion = try session.capture(jpeg(), date: takenAt, notes: "Chin drier than last week",
+                                             repository: repository, ticket: ticket, onSaved: { _ in })
+        #expect(completion == .saved)
+        let saved = try #require(session.photo)
+        #expect(saved.captureDate == takenAt)
+        #expect(saved.notes == "Chin drier than last week")
+        #expect(saved.uploadState == "pending")
+    }
+}

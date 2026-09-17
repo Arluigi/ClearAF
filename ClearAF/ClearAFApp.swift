@@ -12,6 +12,7 @@ struct ClearAFApp: App {
     init() {
         Letterpress.registerFonts()
         Letterpress.applyControlAppearance()
+        Letterpress.applyChromeAppearance()
     }
 
     var body: some Scene {
