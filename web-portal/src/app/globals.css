@@ -22,7 +22,7 @@
     --primary: var(--ink);              --primary-foreground: var(--canvas);
     --secondary: var(--sunk);           --secondary-foreground: var(--ink);
     --muted: var(--sunk);               --muted-foreground: var(--ink-secondary);
-    --accent: var(--rail);              --accent-foreground: var(--ink);
+    --accent-foreground: var(--ink);
     --destructive: var(--error);        --destructive-foreground: var(--canvas);
     --ring: var(--ink);
   }

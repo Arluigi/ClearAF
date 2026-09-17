@@ -39,6 +39,19 @@ for (const [theme, block] of [['light', lightBlock], ['dark', darkBlock]]) {
     for (const [bg, texts] of Object.entries(PAIRS)) for (const fg of texts)
       assert.ok(contrast(t[fg], t[bg]) >= 4.5, `${fg} on ${bg}: ${contrast(t[fg], t[bg]).toFixed(2)}`);
   });
+  test(`${theme} input boundary meets 3:1 against canvas and surface`, () => {
+    const m = tailwind.match(/input:\s*'rgb\(var\(--ink\)\s*\/\s*([\d.]+)\)'/);
+    assert.ok(m, 'input token not found in tailwind.config.js');
+    const alpha = Number(m[1]);
+    const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const toHex = (arr) => '#' + arr.map((n) => Math.round(n).toString(16).padStart(2, '0')).join('').toUpperCase();
+    const inkRgb = rgbOf(t.ink);
+    for (const bg of ['canvas', 'surface']) {
+      const bgRgb = rgbOf(t[bg]);
+      const composite = toHex(inkRgb.map((c, i) => alpha * c + (1 - alpha) * bgRgb[i]));
+      assert.ok(contrast(composite, t[bg]) >= 3.0, `input boundary vs ${bg}: ${contrast(composite, t[bg]).toFixed(2)}`);
+    }
+  });
 }
 
 test('retired Care Journal and wellness values are gone', () => {

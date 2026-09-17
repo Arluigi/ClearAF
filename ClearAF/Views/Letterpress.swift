@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreText
+import UIKit
 
 /// Letterpress 1.0 tokens (docs/design/letterpress/spec.md §1). Ink is the action colour; ochre is only for unread and prescription.
 enum Letterpress {
@@ -74,5 +75,8 @@ enum Letterpress {
     private static let fontRegistration: Void = {
         let urls = Bundle.main.urls(forResourcesWithExtension: "ttf", subdirectory: nil) ?? []
         CTFontManagerRegisterFontURLs(urls as CFArray, .process, true, nil)
+        #if DEBUG
+        for name in fontNames { assert(UIFont(name: name, size: 12) != nil, "Letterpress font \(name) failed to register") }
+        #endif
     }()
 }

@@ -52,6 +52,16 @@
 
 Each PR ends with: focused tests green, the §8 acceptance checklist run for the screens touched, `/code-review`, the required agents (`api-contract-checker` for API shapes, `care-access-reviewer` for data/photo/auth code), and one bounded integration pass (Playwright for portal, Simulator light + dark + largest text size for iOS).
 
+### PR 2 carry-ins (from PR 1 review)
+- Remove the shadcn alias layer in both places: the CSS `--background…--ring` aliases in globals.css and the alias colour groups in tailwind.config.js.
+- Give selection and focus cues that don't rely on colour: spec §4.5 inset ink outline or an ink rule for selected rows/days/nav, plus a visible 2px ink outline on Select and DropdownMenu items (they use `outline-none`).
+- Fields: move to the persistent mono label + 1.5px baseline rule (spec §4.2) and keep a ≥3:1 boundary test.
+- Delete unused `components/ui/chart.tsx`.
+- `Button variant="link"`: always underlined (`text-underline-offset: 3px`).
+- Point iOS `AccentColor.colorset` at the ink values so views outside explicit tints stop showing system blue.
+- Design toggles properly (replace the interim `inkSecondary` tint).
+- Accepted, not changing: `next/font/google` build-time dependency on Google Fonts.
+
 ---
 
 ## PR 1 file map
