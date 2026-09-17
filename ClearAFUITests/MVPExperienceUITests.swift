@@ -167,6 +167,9 @@ final class MVPExperienceUITests: XCTestCase {
         let use = app.buttons["Use Photo"]
         guard use.waitForExistence(timeout: 10) else { throw fixtureFailure() }
         use.tap()
+        let save = app.buttons["photoReviewSave"]
+        guard save.waitForExistence(timeout: 10) else { throw fixtureFailure() }
+        save.tap()
         guard app.staticTexts["Couldn't share"].waitForExistence(timeout: 45) else { throw fixtureFailure() }
         XCTAssertTrue(app.buttons["Retry"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -256,6 +259,8 @@ final class MVPExperienceUITests: XCTestCase {
         let before = try XCTUnwrap(Int(app.staticTexts["photoCount"].label.filter(\.isNumber)))
         app.tabBars.buttons["Capture"].tap(); app.buttons["Choose from Library"].tap()
         print("MVP READY_FOR_SYNTHETIC_SELECTION: user selects only the prepared prepared synthetic photo")
+        guard app.buttons["photoReviewSave"].waitForExistence(timeout: 120) else { throw fixtureFailure() }
+        app.buttons["photoReviewSave"].tap()
         let expected = String(before + 1)
         let saved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             app.staticTexts["photoCount"].exists && app.staticTexts["photoCount"].label.filter(\.isNumber) == expected

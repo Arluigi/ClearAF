@@ -60,7 +60,7 @@ struct PhotoCaptureView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text(title).font(.largeTitle).bold().multilineTextAlignment(.center)
+                    Text(title).font(Letterpress.display(34, relativeTo: .largeTitle)).foregroundStyle(Letterpress.ink).multilineTextAlignment(.center)
                     Text(subtitle).foregroundStyle(Letterpress.inkSecondary).multilineTextAlignment(.center)
                     Button(action: requestCamera) {
                         Label("Take Photo", systemImage: "camera")
@@ -128,7 +128,8 @@ struct PhotoCaptureView: View {
     }
 }
 
-// Every retained entry point uses the same durable account-bound capture.
+// Every retained entry point uses the same durable account-bound capture. The picked photo is reviewed first;
+// Save to record commits it on the device and the existing upload worker shares it.
 struct DurablePhotoCaptureView: View {
     var onSaved: (SkinPhoto) throws -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
@@ -136,27 +137,52 @@ struct DurablePhotoCaptureView: View {
     @State private var attachmentFailed = false
     @State private var session = PhotoCaptureSession()
     @State private var captureTicket = APIService.shared.access.snapshot()
+    @State private var review: PhotoReviewDraft?
+    @State private var saving = false
+
     var body: some View {
-        PhotoCaptureView(title: "Add a dated photo", subtitle: "Your photo is saved on this device, then shared with your care team.") { bytes in
-            do {
-                let completion = try session.capture(bytes, repository: APIService.shared.photos,
-                    ticket: captureTicket, onSaved: onSaved)
-                if completion == .saved {
-                    HapticManager.success()
-                    dismiss()
-                } else {
-                    attachmentFailed = true
-                    errorMessage = "Your photo is saved in Photos, but could not be attached here."
+        Group {
+            if review != nil {
+                PhotoReviewSheet(
+                    draft: Binding(get: { review ?? PhotoReviewDraft(bytes: Data(), capturedAt: Date()) }, set: { review = $0 }),
+                    saving: saving,
+                    onRetake: { review = nil },
+                    onDiscard: { review = nil; dismiss() },
+                    onSave: save)
+            } else {
+                PhotoCaptureView(title: "Add a dated photo", subtitle: "Your photo is saved on this device, then shared with your care team.") { bytes in
+                    review = PhotoReviewDraft(bytes: bytes, capturedAt: Date())
                 }
-            } catch {
-                attachmentFailed = false
-                errorMessage = error.localizedDescription
             }
         }
+        // An unsaved photo is never dropped by a swipe; Discard asks first.
+        .interactiveDismissDisabled(review != nil)
+        .letterpressSheetBackground()
         .alert(attachmentFailed ? "Photo saved" : "Unable to save photo",
                isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { finishAlert() } })) {
             Button(attachmentFailed ? "Done" : "OK") { finishAlert() }
         } message: { Text(errorMessage ?? "") }
+    }
+
+    private func save() {
+        guard let draft = review, draft.canSave, !saving else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            let completion = try session.capture(draft.bytes, date: draft.capturedAt, notes: draft.trimmedNote,
+                repository: APIService.shared.photos, ticket: captureTicket, onSaved: onSaved)
+            if completion == .saved {
+                HapticManager.success()
+                dismiss()
+            } else {
+                attachmentFailed = true
+                errorMessage = "Your photo is saved in Photos, but could not be attached here."
+            }
+        } catch {
+            // The draft stays on screen so Save repeats the same action.
+            attachmentFailed = false
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func finishAlert() {
@@ -245,10 +271,10 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
     private(set) var photo: SkinPhoto?
     private var completion = Completion.savedWithoutAttachment
 
-    func capture(_ bytes: Data, repository: PhotoRepository, ticket: AccountAccess.Ticket?,
-                 onSaved: (SkinPhoto) throws -> Void) throws -> Completion {
+    func capture(_ bytes: Data, date: Date = Date(), notes: String = "", repository: PhotoRepository,
+                 ticket: AccountAccess.Ticket?, onSaved: (SkinPhoto) throws -> Void) throws -> Completion {
         guard photo == nil else { return completion }
-        let photo = try repository.capture(bytes, ticket: ticket)
+        let photo = try repository.capture(bytes, date: date, notes: notes, ticket: ticket)
         self.photo = photo
         do {
             try onSaved(photo)

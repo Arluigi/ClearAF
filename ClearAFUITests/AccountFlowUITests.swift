@@ -158,6 +158,8 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(image.exists)
         // The system Photos remote view exposes a visible image with no hittable flag.
         image.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["photoReviewSave"].waitForExistence(timeout: 10))
+        app.buttons["photoReviewSave"].tap()
         XCTAssertTrue(app.staticTexts["Shared"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.staticTexts["1 photo"].exists)
         app.terminate(); app.launch()

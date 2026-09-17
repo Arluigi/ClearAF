@@ -97,6 +97,7 @@ private struct ReadyTabs: View {
             Tab(AppTab.capture.title, systemImage: AppTab.capture.systemImage, value: AppTab.capture) {
                 Letterpress.canvas.ignoresSafeArea().accessibilityHidden(true)
             }
+            .accessibilityHint("Opens the camera")
             Tab(AppTab.plan.title, systemImage: AppTab.plan.systemImage, value: AppTab.plan) {
                 RoutineView()
             }
