@@ -217,6 +217,14 @@ export class RoutineCareController {
     });
   }
 
+  /** Restores the saved revision into the draft. Refused while a save for this slot is unresolved. */
+  discard(slot: RoutineTimeOfDay) {
+    if (this.assignmentLoads > 0 || this.pending[slot] || this.saves[slot]) return;
+    this.updateSlot(slot, current => current.routine
+      ? { ...current, draft: draftFrom(current.routine), dirty: false, status: 'ready', error: '' }
+      : emptyEditor());
+  }
+
   save(slot: RoutineTimeOfDay): Promise<void> {
     if (this.assignmentLoads > 0) return Promise.resolve();
     if (this.saves[slot]) return this.saves[slot]!;
@@ -388,6 +396,57 @@ export async function loadRevisionHistory(
     if (cause instanceof APIError && cause.status === 404 && !cause.code) return { status: 'unsupported' };
     throw cause;
   }
+}
+
+export type StepChange = { kind: 'same' } | { kind: 'new' } | { kind: 'edited'; was: string };
+export interface DraftChanges {
+  /** The saved name when the draft renamed the routine. */
+  name: string | null;
+  /** The saved active state when the draft changed it. */
+  active: boolean | null;
+  steps: StepChange[];
+  removed: number;
+  count: number;
+}
+const clip = (text: string) => {
+  const value = text.trim();
+  return value.length > 48 ? `${value.slice(0, 47)}…` : value;
+};
+
+/** Positional diff against the saved revision, so each edited step can say what it was. */
+export function draftChanges(routine: RoutineRevision | null, draft: RoutineDraft): DraftChanges {
+  const saved = routine?.steps ?? [];
+  const steps: StepChange[] = draft.steps.map((step, index) => {
+    const before = saved[index];
+    if (!routine || !before) return { kind: 'new' };
+    if (before.title !== step.title) return { kind: 'edited', was: clip(before.title) };
+    if (before.instructions !== step.instructions) return { kind: 'edited', was: before.instructions.trim() ? clip(before.instructions) : 'no instructions' };
+    return { kind: 'same' };
+  });
+  const name = routine && routine.name !== draft.name ? routine.name : null;
+  const active = routine && routine.isActive !== draft.isActive ? routine.isActive : null;
+  const removed = Math.max(0, saved.length - draft.steps.length);
+  const count = (name === null ? 0 : 1) + (active === null ? 0 : 1) + steps.filter(step => step.kind !== 'same').length + removed;
+  return { name, active, steps, removed, count };
+}
+
+export function slotBadges(editor: RoutineEditorState): { label: string; variant: 'outline' | 'secondary' }[] {
+  const routine = editor.routine;
+  const badges: { label: string; variant: 'outline' | 'secondary' }[] = [
+    routine ? { label: `V${routine.version} ${routine.isActive ? 'active' : 'archived'}`, variant: 'outline' } : { label: 'Not assigned', variant: 'secondary' },
+  ];
+  if (editor.dirty || editor.hasPendingSave) badges.push({ label: `Draft v${(routine?.version ?? 0) + 1}`, variant: 'secondary' });
+  return badges;
+}
+
+/** Says plainly that saving is what changes the patient's routine. */
+export function draftNotice(patientFirstName: string, editor: RoutineEditorState): string {
+  const routine = editor.routine;
+  const next = (routine?.version ?? 0) + 1;
+  if (!routine) return `Nothing is assigned to ${patientFirstName || 'the patient'} until v1 is saved.`;
+  const who = patientFirstName || 'The patient';
+  if (!routine.isActive) return `${who} has no active routine in this slot until v${next} is saved.`;
+  return `${who} keeps following v${routine.version} until v${next} is saved.`;
 }
 
 function validateDraft(draft: RoutineDraft): string {

@@ -72,7 +72,7 @@ function Workspace() {
         <Tabs value={tab} onValueChange={value => openTab(value as WorkspaceTab)} activationMode="manual">
           <TabsList variant="underline" aria-label="Patient record">{WORKSPACE_TABS.map(value => <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>)}</TabsList>
           {panel('photos', <PatientPhotoHistory key={'photos-' + id} patientId={id} patientName={patient.name} onCareDecision={() => setCareRefresh(value => value + 1)} rail={<CareRail patientId={id} routine={routine.state} onOpen={openTab} />} />)}
-          {panel('routine', <PatientRoutineCare controller={routine.controller} state={routine.state} />)}
+          {panel('routine', <PatientRoutineCare patientId={id} patientName={patient.name} controller={routine.controller} state={routine.state} onFeedback={revisionId => openTab('messages', { referenceType: 'routineRevision', referenceId: revisionId })} />)}
           {panel('check-ins', <PatientCheckIns key={'check-ins-' + id} patientId={id} />)}
           {panel('messages', user ? <ConversationView key={'messages-' + id + '-' + user.id} patientId={id} clinicianId={user.id} initialReference={reference} onConversationChange={ignoreConversation} /> : null)}
           {panel('history', <div className="space-y-12">
