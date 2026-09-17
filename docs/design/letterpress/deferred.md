@@ -24,3 +24,5 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | Portal Workspace · Check-ins | Response rate ("6 / 8") | Without a schedule there is no expected-response count to divide by |
 | Portal Messages | Search patients | The inbox API has no search |
 | Portal Templates | "In use" column ("9 patients") | No link from a patient routine to the template it was copied from |
+| Portal Sign in | "HIPAA-aligned handling · sessions expire after 30 min idle" | No verified compliance claim and no idle timeout; the page states the real session behaviour instead |
+| Portal Account | Save profile (display name, credentials shown to patients) | The portal has never edited clinician profiles; adding a write flow is outside the redesign |
