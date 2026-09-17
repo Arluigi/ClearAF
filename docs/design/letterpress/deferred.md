@@ -31,3 +31,10 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | Portal Templates | "In use" column ("9 patients") | No link from a patient routine to the template it was copied from |
 | Portal Sign in | "HIPAA-aligned handling · sessions expire after 30 min idle" | No verified compliance claim and no idle timeout; the page states the real session behaviour instead |
 | Portal Account | Save profile (display name, credentials shown to patients) | The portal has never edited clinician profiles; adding a write flow is outside the redesign |
+| iOS Check-in | "due today" in the eyebrow | No check-in schedule; forms carry no due date |
+| iOS Check-in | "Save draft" button | Not needed: the draft file is written on every answer; the header says "Draft saved on this device" |
+| iOS Sign in | "Use a magic link" | `SupabaseService` exchanges callback codes (confirmation, recovery) but has no send side (`signInWithOTP`); adding one is an auth-flow change (spec §0) |
+| iOS Sign in | "Invited by a practice?" line | No invitation flow; patients create their own account |
+| iOS Onboarding | Clinician credentials ("MD · Medical & cosmetic dermatology") | No credentials field; only the assigned clinician's name is available |
+| iOS Onboarding | "We hold the last one up as a guide" | No capture overlay (spec §6 #4: native camera, no ghost) |
+| iOS Onboarding | "Everything you record is private until you share it" | Photos share with the assigned clinician after upload; the copy says so |

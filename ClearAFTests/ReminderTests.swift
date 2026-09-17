@@ -36,6 +36,25 @@ import Testing
         repo.cancel()
         #expect(scheduler.requests.isEmpty)
     }
+    /// Guards `OnboardingView.advance()`'s reminders step: `apply` returns early, touching neither `state` nor
+    /// `preferences`, when the ticket has gone stale (the account changed underneath it) before the save runs.
+    /// `state` alone can't detect this no-op — it stays whatever it was, never `.failed` — so callers must also
+    /// compare `preferences` against what they tried to save to know whether it was actually applied.
+    @Test func saveWithAStaleTicketIsASilentNoOp() async throws {
+        let folder=root(); defer { try? FileManager.default.removeItem(at:folder) }
+        let access=AccountAccess(), scheduler=FakeReminderScheduler()
+        let repo=ReminderRepository(access:access,scheduler:scheduler,directory:folder)
+        let staleTicket = access.activate(UUID())
+        await repo.resume(ticket:staleTicket)
+        _ = access.activate(UUID()) // a different account becomes current; staleTicket no longer matches
+        var draft=ReminderPreferences();draft.morning.enabled=true
+        let stateBefore = repo.state
+        await repo.save(draft,ticket:staleTicket)
+        #expect(repo.state == stateBefore)
+        #expect(repo.state != .failed)
+        #expect(repo.preferences != draft)
+        #expect(scheduler.requests.isEmpty)
+    }
     @Test func lateSchedulingCannotSurviveSignOut() async throws {
         let folder=root(); defer { try? FileManager.default.removeItem(at:folder) }
         let access=AccountAccess(), ticket=access.activate(UUID()), scheduler=FakeReminderScheduler()

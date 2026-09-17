@@ -36,7 +36,6 @@ enum TodayCopy {
 /// Today (spec §6 #3): greeting → photo rail → checklist → unread note → check-in row, rule-separated.
 struct DashboardViewEnhanced: View {
     @Binding var selectedTab: AppTab
-    @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
         entity: User.entity(),
         sortDescriptors: [NSSortDescriptor(keyPath: \User.joinDate, ascending: false)],
@@ -77,10 +76,7 @@ struct DashboardViewEnhanced: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active && selectedTab == .today { Task { await refresh() } }
             }
-            .sheet(isPresented: $showingProfile) {
-                ProfileView()
-                    .environment(\.managedObjectContext, viewContext)
-            }
+            .navigationDestination(isPresented: $showingProfile) { ProfileView() }
         }
     }
 

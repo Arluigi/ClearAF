@@ -193,13 +193,14 @@ final class MVPExperienceUITests: XCTestCase {
         let a = XCTAttachment(screenshot: app.screenshot())
         a.name = "Physical A generated local history"; a.lifetime = .keepAlways; add(a)
         try tapTab("Today", in: app); app.buttons["Profile"].tap()
+        for _ in 0..<8 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
         app.buttons["Sign out"].tap()
         guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
         let env = ProcessInfo.processInfo.environment
         let email = try XCTUnwrap(env["CLEARAF_MVP_OTHER_EMAIL"])
         let password = try XCTUnwrap(env["CLEARAF_MVP_OTHER_PASSWORD"])
-        app.textFields["Enter your email"].tap(); app.textFields["Enter your email"].typeText(email)
-        app.secureTextFields["Enter your password"].tap(); app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.textFields["authEmail"].tap(); app.textFields["authEmail"].typeText(email)
+        app.secureTextFields["authPassword"].tap(); app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
         if app.staticTexts["Save Password?"].waitForExistence(timeout: 3), app.buttons["Not Now"].isHittable { app.buttons["Not Now"].tap() }
@@ -215,7 +216,9 @@ final class MVPExperienceUITests: XCTestCase {
         }
         let b = XCTAttachment(screenshot: app.screenshot())
         b.name = "Physical B empty history after cold launch"; b.lifetime = .keepAlways; add(b)
-        try tapTab("Today", in: app); app.buttons["Profile"].tap(); app.buttons["Sign out"].tap()
+        try tapTab("Today", in: app); app.buttons["Profile"].tap()
+        for _ in 0..<8 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+        app.buttons["Sign out"].tap()
         guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
         app.terminate()
     }
@@ -244,8 +247,8 @@ final class MVPExperienceUITests: XCTestCase {
         let email = try XCTUnwrap(env["CLEARAF_MVP_OTHER_EMAIL"])
         let password = try XCTUnwrap(env["CLEARAF_MVP_OTHER_PASSWORD"])
         guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
-        app.textFields["Enter your email"].tap(); app.textFields["Enter your email"].typeText(email)
-        app.secureTextFields["Enter your password"].tap(); app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.textFields["authEmail"].tap(); app.textFields["authEmail"].typeText(email)
+        app.secureTextFields["authPassword"].tap(); app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
         if app.staticTexts["Save Password?"].waitForExistence(timeout: 3), app.buttons["Not Now"].isHittable { app.buttons["Not Now"].tap() }
@@ -345,8 +348,8 @@ final class MVPExperienceUITests: XCTestCase {
             app.buttons["Sign out"].tap()
         }
         guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
-        app.textFields["Enter your email"].tap(); app.textFields["Enter your email"].typeText(email)
-        app.secureTextFields["Enter your password"].tap(); app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.textFields["authEmail"].tap(); app.textFields["authEmail"].typeText(email)
+        app.secureTextFields["authPassword"].tap(); app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
         if app.staticTexts["Save Password?"].waitForExistence(timeout: 3), app.buttons["Not Now"].isHittable { app.buttons["Not Now"].tap() }

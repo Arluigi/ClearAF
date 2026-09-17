@@ -7,21 +7,24 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         let suffix = UUID().uuidString.lowercased()
         let email = "clearaf-ui-\(suffix)@example.invalid"
         let password = "Synthetic-\(suffix)-A!"
         print("Synthetic account created for local UI verification: \(email)")
         app.buttons["authMode"].tap()
-        XCTAssertTrue(app.textFields["Enter your full name"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["authName"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Skin Type"].exists)
-        app.textFields["Enter your full name"].tap()
-        app.textFields["Enter your full name"].typeText("Synthetic UI Patient")
-        app.textFields["Enter your email"].tap()
-        app.textFields["Enter your email"].typeText(email)
-        app.secureTextFields["Enter your password"].tap()
-        app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.textFields["authName"].tap()
+        app.textFields["authName"].typeText("Synthetic UI Patient")
+        app.textFields["authEmail"].tap()
+        app.textFields["authEmail"].typeText(email)
+        app.secureTextFields["authPassword"].tap()
+        app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         let confirmed = app.staticTexts["authInformation"].waitForExistence(timeout: 15)
         if !confirmed {
@@ -37,8 +40,8 @@ final class AccountFlowUITests: XCTestCase {
         let session = URLSession(configuration: .ephemeral, delegate: NoRedirect(), delegateQueue: nil)
         let (_, response) = try await session.data(from: link)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 303)
-        app.secureTextFields["Enter your password"].tap()
-        app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.secureTextFields["authPassword"].tap()
+        app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         try await finishOnboarding(app)
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
@@ -82,7 +85,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         let a = try await register(app, name: "Synthetic Alpha")
         try await finishOnboarding(app)
@@ -101,7 +107,7 @@ final class AccountFlowUITests: XCTestCase {
         nameField.clearAndEnterText("Synthetic Beta Updated")
         app.buttons["profileSaveName"].tap()
         XCTAssertTrue(app.staticTexts["Name saved"].waitForExistence(timeout: 10))
-        app.buttons["Close profile"].tap()
+        app.navigationBars["Profile"].buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["Synthetic Beta Updated"].waitForExistence(timeout: 5))
         signOut(app)
         login(app, email: a.email, password: a.password)
@@ -110,9 +116,9 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertFalse(app.buttons["onboardingContinue"].exists)
         signOut(app)
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
-        app.textFields["Enter your email"].tap()
-        app.textFields["Enter your email"].typeText(a.email + "\n")
-        app.buttons["Forgot password?"].tap()
+        app.textFields["authEmail"].tap()
+        app.textFields["authEmail"].typeText(a.email + "\n")
+        app.buttons["authForgotPassword"].tap()
         XCTAssertTrue(app.staticTexts["authInformation"].waitForExistence(timeout: 10))
         // A deliberately initiated PKCE reset must survive a process restart.
         app.terminate(); app.launch()
@@ -127,11 +133,11 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Choose a new password"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.tabBars.buttons["Today"].exists)
         let replacement = "Updated-\(UUID().uuidString)-A!"
-        app.secureTextFields["New password (at least 8 characters)"].tap()
-        app.secureTextFields["New password (at least 8 characters)"].typeText(replacement)
-        app.secureTextFields["Confirm new password"].tap()
-        app.secureTextFields["Confirm new password"].typeText(replacement + "\n")
-        app.buttons["Update password"].tap()
+        app.secureTextFields["recoveryPassword"].tap()
+        app.secureTextFields["recoveryPassword"].typeText(replacement)
+        app.secureTextFields["recoveryConfirmation"].tap()
+        app.secureTextFields["recoveryConfirmation"].typeText(replacement + "\n")
+        app.buttons["recoverySubmit"].tap()
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         login(app, email: a.email, password: replacement)
         XCTAssertTrue(app.staticTexts["Synthetic Alpha"].waitForExistence(timeout: 15))
@@ -145,7 +151,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         _ = try await register(app, name: "Synthetic Photo Patient")
         try await finishOnboarding(app)
         app.tabBars.buttons["Record"].tap()
@@ -182,7 +191,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         login(app, email: email, password: password)
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
@@ -231,7 +243,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         login(app, email: email, password: password)
         guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else {
             let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -291,14 +306,14 @@ final class AccountFlowUITests: XCTestCase {
         let password = "Synthetic-\(suffix)-A!"
         print("Synthetic account created for local UI verification: \(email)")
         app.buttons["authMode"].tap()
-        XCTAssertTrue(app.textFields["Enter your full name"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["authName"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Skin Type"].exists)
-        app.textFields["Enter your full name"].tap()
-        app.textFields["Enter your full name"].typeText(name)
-        app.textFields["Enter your email"].tap()
-        app.textFields["Enter your email"].typeText(email)
-        app.secureTextFields["Enter your password"].tap()
-        app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.textFields["authName"].tap()
+        app.textFields["authName"].typeText(name)
+        app.textFields["authEmail"].tap()
+        app.textFields["authEmail"].typeText(email)
+        app.secureTextFields["authPassword"].tap()
+        app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         XCTAssertTrue(app.staticTexts["authInformation"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.tabBars.buttons["Today"].exists)
@@ -306,8 +321,8 @@ final class AccountFlowUITests: XCTestCase {
         let session = URLSession(configuration: .ephemeral, delegate: NoRedirect(), delegateQueue: nil)
         let (_, response) = try await session.data(from: link)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 303)
-        app.secureTextFields["Enter your password"].tap()
-        app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.secureTextFields["authPassword"].tap()
+        app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
         return (email, password)
     }
@@ -354,17 +369,21 @@ final class AccountFlowUITests: XCTestCase {
         let button = app.buttons["onboardingContinue"]
         XCTAssertTrue(button.waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
-        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)], timeout: 5)
-        button.tap()
+        // Five steps; reminders stay unchanged (no permission prompt) and the last step saves the prefilled name.
+        for _ in 0..<5 where !app.tabBars.buttons["Today"].exists {
+            await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)], timeout: 5)
+            button.tap()
+            _ = app.tabBars.buttons["Today"].waitForExistence(timeout: 0.5)
+        }
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
     }
 
     @MainActor private func login(_ app: XCUIApplication, email: String, password: String) {
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 10))
-        app.textFields["Enter your email"].tap()
-        app.textFields["Enter your email"].typeText(email)
-        app.secureTextFields["Enter your password"].tap()
-        app.secureTextFields["Enter your password"].typeText(password + "\n")
+        app.textFields["authEmail"].tap()
+        app.textFields["authEmail"].typeText(email)
+        app.secureTextFields["authPassword"].tap()
+        app.secureTextFields["authPassword"].typeText(password + "\n")
         app.buttons["authSubmit"].tap()
     }
 
