@@ -1,4 +1,6 @@
 import { day } from './worklist';
+import type { PhotoSummary } from '../types/api';
+import type { PhotoReview } from './photo-review';
 
 export const WORKSPACE_TABS = ['photos', 'routine', 'check-ins', 'messages', 'history'] as const;
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
@@ -30,3 +32,25 @@ export function sinceLabel(iso: string | undefined) {
 }
 
 export const firstName = (name: string | null | undefined) => (name ?? '').trim().split(/\s+/)[0] ?? '';
+
+const byCapture = (a: PhotoSummary, b: PhotoSummary) => Date.parse(a.captureDate) - Date.parse(b.captureDate) || a.id.localeCompare(b.id);
+
+/** Default comparison: the newest photo on the page and the one before it. */
+export function defaultPair(photos: PhotoSummary[]) {
+  return [...photos].sort(byCapture).slice(-2).map(photo => photo.id);
+}
+
+/** Selected photos in capture order, older on the left. */
+export function comparePanes(photos: PhotoSummary[], selected: string[]) {
+  return photos.filter(photo => selected.includes(photo.id)).sort(byCapture);
+}
+
+/** A reply is about the newer photo in the comparison. */
+export function replyTarget(photos: PhotoSummary[], selected: string[]): PhotoSummary | null {
+  const panes = comparePanes(photos, selected);
+  return panes[panes.length - 1] ?? null;
+}
+
+export function reviewWords(review?: PhotoReview) {
+  return review ? `Reviewed · ${review.reviewerName} · ${day(review.reviewedAt)}` : 'Not reviewed';
+}

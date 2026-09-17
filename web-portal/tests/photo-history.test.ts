@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PhotoHistoryController, photoDetailState } from '../src/lib/photo-history';
+import { PhotoHistoryController } from '../src/lib/photo-history';
 import type { Photo, PaginatedResponse } from '../src/types/api';
 const photo = (id: string): Photo => ({id,userId:'synthetic',photoUrl:`http://localhost/${id}.jpg`,skinScore:0,captureDate:'2026-09-01T12:00:00Z',createdAt:'2026-09-01T12:00:00Z',updatedAt:'2026-09-01T12:00:00Z'});
 const page = (number: number, id: string): PaginatedResponse<Photo> => ({data:[photo(id)],pagination:{page:number,limit:12,total:14,totalPages:2}});
@@ -32,25 +32,4 @@ test('empty history and failed refresh do not leave old photos visible',async()=
  let response: PaginatedResponse<Photo>|Error=page(1,'old');const controller=new PhotoHistoryController(async()=>{if(response instanceof Error)throw response;return response});
  await controller.load(1); response=new Error('offline');await controller.load(1);assert.deepEqual(controller.snapshot().photos,[]);assert.equal(controller.snapshot().status,'error');
  response={data:[],pagination:{page:1,limit:12,total:0,totalPages:0}};await controller.load(1);assert.equal(controller.snapshot().status,'ready');assert.equal(controller.snapshot().totalPages,1);
-});
-
-
-test('successful original with failed or missing refreshed summary reaches a terminal dialog state', async () => {
-  let response: PaginatedResponse<Photo> | Error = page(1, 'selected');
-  const controller = new PhotoHistoryController(async () => {
-    if (response instanceof Error) throw response;
-    return response;
-  });
-  await controller.load(1);
-  const original = { id: 'selected', url: 'https://synthetic.invalid/original' };
-  assert.equal(photoDetailState(controller.snapshot(), 'selected', original).status, 'ready');
-  response = new Error('offline');
-  const refresh = controller.load(1);
-  assert.equal(photoDetailState(controller.snapshot(), 'selected', original).status, 'loading');
-  await refresh;
-  assert.equal(photoDetailState(controller.snapshot(), 'selected', original).status, 'error');
-  response = page(1, 'newly-inserted');
-  await controller.load(1);
-  assert.equal(photoDetailState(controller.snapshot(), 'selected', original).status, 'unavailable');
-  assert.equal(photoDetailState(controller.snapshot(), 'newly-inserted', original).status, 'loading');
 });

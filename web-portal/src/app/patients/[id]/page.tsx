@@ -13,6 +13,7 @@ import PatientRoutineCare from '@/components/patients/PatientRoutineCare';
 import PatientUrgentReports from '@/components/patients/PatientUrgentReports';
 import RoutineCompletionHistory from '@/components/patients/RoutineCompletionHistory';
 import { useRoutineCare } from '@/components/patients/useRoutineCare';
+import CareRail from '@/components/patients/workspace/CareRail';
 import WorkspaceHeader from '@/components/patients/workspace/WorkspaceHeader';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -70,7 +71,7 @@ function Workspace() {
         <PatientUrgentReports key={'urgent-' + id} patientId={id} />
         <Tabs value={tab} onValueChange={value => openTab(value as WorkspaceTab)} activationMode="manual">
           <TabsList variant="underline" aria-label="Patient record">{WORKSPACE_TABS.map(value => <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>)}</TabsList>
-          {panel('photos', <PatientPhotoHistory key={'photos-' + id} patientId={id} onCareDecision={() => setCareRefresh(value => value + 1)} />)}
+          {panel('photos', <PatientPhotoHistory key={'photos-' + id} patientId={id} patientName={patient.name} onCareDecision={() => setCareRefresh(value => value + 1)} rail={<CareRail patientId={id} routine={routine.state} onOpen={openTab} />} />)}
           {panel('routine', <PatientRoutineCare controller={routine.controller} state={routine.state} />)}
           {panel('check-ins', <PatientCheckIns key={'check-ins-' + id} patientId={id} />)}
           {panel('messages', user ? <ConversationView key={'messages-' + id + '-' + user.id} patientId={id} clinicianId={user.id} initialReference={reference} onConversationChange={ignoreConversation} /> : null)}

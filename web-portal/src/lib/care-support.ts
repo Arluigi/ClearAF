@@ -197,3 +197,10 @@ export class RevisionEditor<D extends object> extends Observable<{
     }
   }
 }
+
+/** An answer as the patient gave it: their text, the chosen option's label, or "Not answered". */
+export function answerText(question: Question, response: CheckInResponse): string {
+  const answer = response.answers.find((a) => a.questionId === question.id);
+  if (question.type === "text") return answer?.text?.trim() ? answer.text : "Not answered";
+  return question.options.find((o) => o.id === answer?.optionId)?.label ?? "Not answered";
+}

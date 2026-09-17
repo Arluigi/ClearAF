@@ -16,3 +16,6 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | Portal nav rail | Worklist count, Messages unread dot, "Check-in forms" item | The rail loads no worklist or inbox data; there is no standalone forms page |
 | Portal Workspace header | Age, sex and diagnosis line | No such patient fields |
 | Portal Workspace header | "Adherence 79% / 14d", "2 of 4" position, tab counts | Worklist-only data; the workspace does not load the worklist or every tab's totals |
+| Portal Workspace · Photos | Overlay and Grid compare modes | Not built; side-by-side comparison with zoom ships first |
+| Portal Workspace · Photos | "Mark 3 reviewed" header action | Reviews are recorded one photo at a time; a bulk action would be a new flow |
+| Portal Workspace · Photos | "Save draft" for a photo reply | Replies are not stored until sent |

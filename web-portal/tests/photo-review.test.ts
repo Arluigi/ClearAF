@@ -37,3 +37,21 @@ test('changing photo pages clears selection and ignores stale status', async () 
  const first=controller.load(['a']); controller.toggle('a'); await controller.load(['b']); resolve({reviews:[review]}); await first;
  assert.deepEqual(controller.snapshot().selected,[]); assert.deepEqual(controller.snapshot().reviews,{}); assert.deepEqual(controller.snapshot().ids,['b']);
 });
+
+test('a page load preselects only ids on that page, compares one or two photos, and a toggle while comparing starts over', async () => {
+ const fetched: string[] = [];
+ const controller = new PhotoReviewController(async () => ({reviews:[]}), async () => ({review}), async id => { fetched.push(id); return {photoUrl:`private-${id}`}; });
+ await controller.load(['a','b','c'], ['b','c','foreign']);
+ assert.deepEqual(controller.snapshot().selected, ['b','c']);
+ await controller.compare();
+ assert.deepEqual(controller.snapshot().originals, { b: { url: 'private-b' }, c: { url: 'private-c' } });
+ controller.toggle('c');
+ assert.deepEqual([controller.snapshot().selected, controller.snapshot().comparing, controller.snapshot().originals], [['b'], false, {}]);
+ await controller.compare();
+ assert.deepEqual(controller.snapshot().originals, { b: { url: 'private-b' } });
+ controller.toggle('b');
+ await controller.compare();
+ assert.deepEqual(fetched, ['b','c','b']);
+ controller.toggle('a'); controller.toggle('b'); controller.toggle('c');
+ assert.deepEqual(controller.snapshot().selected, ['a','b']);
+});
