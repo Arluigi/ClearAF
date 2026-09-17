@@ -22,6 +22,8 @@ import Testing
         #expect(ReminderCopy.status(.enabled) == "Reminders are scheduled on this device. Times follow your device's time zone.")
         #expect(ReminderCopy.status(.failed) == "Couldn't update reminders. Check your settings and try again.")
         #expect(ReminderCopy.status(.disabled) == "Reminders are off.")
+        #expect(ReminderCopy.status(.paused) == "Saved preferences. Save to turn reminders on.")
+        #expect(ReminderCopy.status(.denied) == "Notification permission is off. Reminders aren't scheduled.")
     }
 
     @Test func profileCopyUsesRealAccountData() {

@@ -36,7 +36,6 @@ enum TodayCopy {
 /// Today (spec §6 #3): greeting → photo rail → checklist → unread note → check-in row, rule-separated.
 struct DashboardViewEnhanced: View {
     @Binding var selectedTab: AppTab
-    @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
         entity: User.entity(),
         sortDescriptors: [NSSortDescriptor(keyPath: \User.joinDate, ascending: false)],

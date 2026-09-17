@@ -129,9 +129,9 @@ final class AccountFlowUITests: XCTestCase {
         let replacement = "Updated-\(UUID().uuidString)-A!"
         app.secureTextFields["recoveryPassword"].tap()
         app.secureTextFields["recoveryPassword"].typeText(replacement)
-        app.secureTextFields["Confirm new password"].tap()
-        app.secureTextFields["Confirm new password"].typeText(replacement + "\n")
-        app.buttons["Update password"].tap()
+        app.secureTextFields["recoveryConfirmation"].tap()
+        app.secureTextFields["recoveryConfirmation"].typeText(replacement + "\n")
+        app.buttons["recoverySubmit"].tap()
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         login(app, email: a.email, password: replacement)
         XCTAssertTrue(app.staticTexts["Synthetic Alpha"].waitForExistence(timeout: 15))
