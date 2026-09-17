@@ -29,11 +29,14 @@ struct LetterpressSweepTests {
     }
 
     @Test func sweepReadsTheSourceTree() throws {
+        for folder in ["ClearAF", "ClearAFTests", "ClearAFUITests"] {
+            #expect(try Self.sources(in: [folder]).count > 0, "\(folder) yielded no Swift files")
+        }
         #expect(try Self.sources(in: ["ClearAF"]).count > 30)
     }
 
     @Test func appHasNoHardcodedHuesOrSystemControlStyles() throws {
-        let hues = #"\.(red|blue|green|orange|purple|pink|yellow|teal|mint|cyan|indigo|brown|gray|white|black)\b|Color\((red|hue|white):|UIColor\((red|white|hue):|Color\(\.system|UIColor\.system|\.foreground(Style|Color)\(\.(primary|secondary|tertiary)\)|LinearGradient|RadialGradient|AngularGradient"#
+        let hues = #"\.(red|blue|green|orange|purple|pink|yellow|teal|mint|cyan|indigo|brown|gray|white|black)\b|Color\((red|hue|white):|UIColor\((red|white|hue):|Color\(\.system|UIColor\.system|\.foreground(Style|Color)\(\.(primary|secondary|tertiary)\)|LinearGradient|RadialGradient|AngularGradient|\.shadow\(|accentColor"#
         let controls = #"\.buttonStyle\(\.bordered(Prominent)?\)|\.textFieldStyle\(\.roundedBorder\)|\.cornerRadius\(|cornerRadius:\s*[0-9.]|PrimaryButtonStyle|SecondaryButtonStyle|GhostButtonStyle|standardTextField|design:\s*\.serif|\.tint\(Letterpress\.inkSecondary\)|CareJournalPicker"#
         #expect(try Self.offences(hues, in: ["ClearAF"]) == [])
         #expect(try Self.offences(controls, in: ["ClearAF"]) == [])

@@ -50,7 +50,24 @@ private struct LetterpressButtonBody: View {
                 }
             }
             .contentShape(shape)
+            .modifier(UnderlineHitArea(isActive: variant == .underline))
             .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+/// Expands the underline variant's tap target to the spec's 44×44pt minimum without adding
+/// visible padding: the frame grows around the already-drawn (unpadded) label, centred, and only
+/// the hit-testing shape follows — filled/outlined keep their own rounded-rect content shape.
+private struct UnderlineHitArea: ViewModifier {
+    let isActive: Bool
+    func body(content: Content) -> some View {
+        if isActive {
+            content
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        } else {
+            content
+        }
     }
 }
 

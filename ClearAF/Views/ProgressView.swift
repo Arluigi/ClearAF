@@ -64,10 +64,10 @@ struct ProgressView: View {
             ? AnyLayout(VStackLayout(spacing: Letterpress.Space.s14))
             : AnyLayout(HStackLayout(spacing: Letterpress.Space.s14))
         return layout {
-            Button { store.previous() } label: { Text("Previous").foregroundStyle(Letterpress.ink) }
+            Button { store.previous() } label: { Text("Previous") }
                 .frame(maxWidth: .infinity).disabled(!store.hasPrevious)
             Text("Page \(store.page + 1)").font(.caption)
-            Button { store.next() } label: { Text("Next").foregroundStyle(Letterpress.ink) }
+            Button { store.next() } label: { Text("Next") }
                 .frame(maxWidth: .infinity).disabled(!store.hasNext)
         }
         .buttonStyle(.letterpress(.outlined, fullWidth: true))

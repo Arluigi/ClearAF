@@ -31,6 +31,13 @@ import UIKit
         #expect(LetterpressButtonStyle.minHeight == 44)
     }
 
+    @Test func underlineButtonHasA44PointMinimumHitArea() {
+        let size = UIHostingController(rootView: Button("OK") {}.buttonStyle(.letterpress(.underline)).environment(\.dynamicTypeSize, .xSmall))
+            .sizeThatFits(in: CGSize(width: 320, height: 1000))
+        #expect(size.width >= 44, "underline width measured \(size.width)")
+        #expect(size.height >= 44, "underline height measured \(size.height)")
+    }
+
     @Test func buttonTextMeetsContrastEnabledAndDisabledInBothAppearances() {
         for style in styles {
             let canvas = LetterpressTests.resolved("lp.canvas", style)
