@@ -5,6 +5,13 @@ extension Letterpress {
     static let tabLabelSize: CGFloat = 11
     static let screenTitleSize: CGFloat = 34
 
+    /// Unread tab badge colour (spec §1: ochre is reserved for unread/prescription). The graphics-only
+    /// `attentionMark` clears only ~3.7:1 against the badge's white numeral in light mode — under the 4.5:1
+    /// minimum — so the badge falls back to the darker `attentionText`, which clears 4.5:1 in both
+    /// appearances (7.1:1 light, ~10.9:1 dark). `UIColor(named:)` (not `UIColor(Letterpress.attentionText)`)
+    /// because this feeds UIKit appearance proxies, matching the rest of this file.
+    static var unreadBadgeColor: UIColor { UIColor(named: "lp.attention.text")! }
+
     /// Native bars (spec §2, §4.8, §6 tab bar): Newsreader screen titles, Plex inline titles, mono tab labels,
     /// ink selection, unread badge in attention.text. The system keeps its own materials and geometry.
     ///
@@ -26,7 +33,7 @@ extension Letterpress {
         let tabFont = UIFont(name: DataWeight.medium.fontName, size: tabLabelSize) ?? .preferredFont(forTextStyle: .caption2)
         let normal: [NSAttributedString.Key: Any] = [.font: tabFont, .foregroundColor: tertiary]
         let selected: [NSAttributedString.Key: Any] = [.font: tabFont, .foregroundColor: ink]
-        let badge = UIColor(named: "lp.attention.text")!
+        let badge = Letterpress.unreadBadgeColor
         let badgeText: [NSAttributedString.Key: Any] = [.foregroundColor: UIColor(named: "lp.canvas")!]
         let item = UITabBarItem.appearance()
         item.setTitleTextAttributes(normal, for: .normal)
@@ -35,7 +42,18 @@ extension Letterpress {
         item.setBadgeTextAttributes(badgeText, for: .normal)
 
         if #available(iOS 26, *) {
-            // Liquid Glass tab bar: leave the system appearance object alone so the material stays native.
+            // Liquid Glass tab bar: leave the background/material alone so it stays native, but the
+            // UITabBarItem badge proxy above isn't honoured by the Liquid Glass badge, so force the same
+            // colour through an *unconfigured* UITabBarAppearance — only its badge slots are touched
+            // (no configureWithDefaultBackground/OpaqueBackground call), so the system still draws its own
+            // glass background rather than a second, manually simulated one (spec §4.8).
+            let badgesOnly = UITabBarAppearance()
+            for layout in [badgesOnly.stackedLayoutAppearance, badgesOnly.inlineLayoutAppearance, badgesOnly.compactInlineLayoutAppearance] {
+                layout.normal.badgeBackgroundColor = badge
+                layout.normal.badgeTextAttributes = badgeText
+            }
+            UITabBar.appearance().standardAppearance = badgesOnly
+            UITabBar.appearance().scrollEdgeAppearance = badgesOnly
         } else {
             let appearance = UITabBarAppearance()
             appearance.configureWithDefaultBackground()

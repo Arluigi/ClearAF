@@ -48,14 +48,34 @@ struct LetterpressFormatTests {
         }
     }
 
+    /// Notes' unread badge is the app's only badge, and unread is the one thing ochre is reserved for
+    /// (spec §1). `applyChromeAppearance` sets the badge colour two ways because the `UITabBarItem`
+    /// appearance proxy alone isn't honoured by the Liquid Glass tab bar's badge (iOS 26+) — so this checks
+    /// both the item-level proxy (older tab bars) and the `UITabBarAppearance` layout objects
+    /// `applyChromeAppearance` now also configures on the iOS 26+ path, and that both agree on the same
+    /// token via the shared `Letterpress.unreadBadgeColor` helper.
     @Test func unreadBadgeTextMeetsContrastInBothAppearances() throws {
         Letterpress.applyChromeAppearance()
         let fill = try #require(UITabBarItem.appearance().badgeColor)
         let text = try #require(UITabBarItem.appearance().badgeTextAttributes(for: .normal)?[.foregroundColor] as? UIColor)
+        let tabBar = UITabBar.appearance().standardAppearance
         for style in [UIUserInterfaceStyle.light, .dark] {
             let traits = UITraitCollection(userInterfaceStyle: style)
-            #expect(LetterpressTests.hex(fill.resolvedColor(with: traits)) == LetterpressTests.hex(LetterpressTests.resolved("lp.attention.text", style)))
+            let expected = LetterpressTests.resolved("lp.attention.text", style)
+            #expect(LetterpressTests.hex(fill.resolvedColor(with: traits)) == LetterpressTests.hex(expected))
             #expect(LetterpressTests.contrast(text.resolvedColor(with: traits), fill.resolvedColor(with: traits)) >= 4.5, "\(style.rawValue)")
+            #expect(LetterpressTests.hex(Letterpress.unreadBadgeColor.resolvedColor(with: traits)) == LetterpressTests.hex(expected))
+
+            for layout in [tabBar.stackedLayoutAppearance, tabBar.inlineLayoutAppearance, tabBar.compactInlineLayoutAppearance] {
+                let layoutFill = try #require(layout.normal.badgeBackgroundColor).resolvedColor(with: traits)
+                let layoutText = try #require(layout.normal.badgeTextAttributes[.foregroundColor] as? UIColor).resolvedColor(with: traits)
+                #expect(LetterpressTests.hex(layoutFill) == LetterpressTests.hex(expected), "layout badge \(style.rawValue)")
+                #expect(LetterpressTests.contrast(layoutText, layoutFill) >= 4.5, "layout badge text \(style.rawValue)")
+            }
         }
+
+        // Control: attentionMark (the graphics-only ochre) is why the badge uses attentionText instead —
+        // it fails 4.5:1 against the badge's white numeral in light mode.
+        #expect(LetterpressTests.contrast(LetterpressTests.resolved("lp.attention.mark", .light), LetterpressTests.resolved("lp.canvas", .light)) < 4.5)
     }
 }
