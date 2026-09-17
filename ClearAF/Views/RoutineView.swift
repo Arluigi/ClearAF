@@ -5,7 +5,7 @@ struct RoutineView: View {
     @ObservedObject private var repository = APIService.shared.routines
     @State private var selectedSlot: RoutineTimeOfDay = .morning
     @State private var actionError: String?
-    @State private var ticked: [UUID: Set<Int>] = [:]
+    @State private var tickBook = RoutineTickBook()
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
@@ -111,7 +111,9 @@ struct RoutineView: View {
                     .font(Letterpress.ui(13, relativeTo: .footnote))
                     .foregroundStyle(Letterpress.inkSecondary)
             }
-            RoutineChecklist(steps: routine.steps, ticked: Binding(get: { ticked[routine.id] ?? [] }, set: { ticked[routine.id] = $0 }))
+            RoutineChecklist(steps: routine.steps, ticked: Binding(
+                get: { tickBook.ticked(revisionID: routine.id, localDate: repository.localDate) },
+                set: { tickBook.setTicked($0, revisionID: routine.id, localDate: repository.localDate) }))
             RoutineRecordPanel(routine: routine, repository: repository,
                                identifierPrefix: "routine-\(routine.timeOfDay.rawValue)", actionError: $actionError)
                 .padding(.top, Letterpress.Space.s4)

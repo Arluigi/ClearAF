@@ -78,30 +78,39 @@ struct AdherenceStripRow: View {
     @State private var failed = false
 
     var body: some View {
-        NavigationLink { CompletionCalendarView() } label: {
-            HStack(spacing: Letterpress.Space.s10) {
-                VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                    Text("Completion history")
-                        .font(Letterpress.ui(15, weight: .medium, relativeTo: .subheadline))
-                        .foregroundStyle(Letterpress.ink)
-                    Text(detail)
-                        .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
-                        .foregroundStyle(failed ? Letterpress.error : Letterpress.inkTertiary)
+        VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+            NavigationLink { CompletionCalendarView() } label: {
+                HStack(spacing: Letterpress.Space.s10) {
+                    VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
+                        Text("Completion history")
+                            .font(Letterpress.ui(15, weight: .medium, relativeTo: .subheadline))
+                            .foregroundStyle(Letterpress.ink)
+                        Text(detail)
+                            .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
+                            .foregroundStyle(failed ? Letterpress.error : Letterpress.inkTertiary)
+                    }
+                    Spacer(minLength: Letterpress.Space.s10)
+                    if let window { AdherenceBars(window: window) }
+                    Image(systemName: "chevron.right")
+                        .font(Letterpress.ui(13, relativeTo: .footnote))
+                        .foregroundStyle(Letterpress.inkTertiary)
+                        .accessibilityHidden(true)
                 }
-                Spacer(minLength: Letterpress.Space.s10)
-                if let window { AdherenceBars(window: window) }
-                Image(systemName: "chevron.right")
-                    .font(Letterpress.ui(13, relativeTo: .footnote))
-                    .foregroundStyle(Letterpress.inkTertiary)
-                    .accessibilityHidden(true)
+                .frame(minHeight: Letterpress.minTouch)
+                .contentShape(Rectangle())
             }
-            .frame(minHeight: Letterpress.minTouch)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Completion history, \(detail)")
+            // A sibling of the NavigationLink, not nested inside it: spec §5's error state needs its own
+            // 44pt Retry target, and a Button inside a NavigationLink's label fights it for the tap.
+            if failed {
+                Button("Retry") { Task { await load() } }
+                    .buttonStyle(.letterpress(.outlined))
+                    .accessibilityIdentifier("routine-adherence-retry")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel("Completion history, \(detail)")
         .task(id: "\(repository.localDate)-\(repository.snapshot?.completions.count ?? 0)") { await load() }
     }
 

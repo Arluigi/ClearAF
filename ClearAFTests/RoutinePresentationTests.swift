@@ -86,4 +86,18 @@ struct RoutinePresentationTests {
         #expect(window.summary == "11 of the last 14 days")
         #expect(!window.summary.contains("%"))
     }
+
+    @Test func ticksResetWhenTheLocalDateChanges() {
+        var book = RoutineTickBook()
+        let revision = UUID()
+        book.setTicked([0, 1], revisionID: revision, localDate: "2026-09-15")
+        #expect(book.ticked(revisionID: revision, localDate: "2026-09-15") == [0, 1])
+        // Midnight rolls the local date forward; yesterday's ticks must not carry over onto the same
+        // still-active revision (spec §4.4).
+        #expect(book.ticked(revisionID: revision, localDate: "2026-09-16") == [])
+        // Ticking today does not disturb what was recorded for yesterday.
+        book.setTicked([2], revisionID: revision, localDate: "2026-09-16")
+        #expect(book.ticked(revisionID: revision, localDate: "2026-09-15") == [0, 1])
+        #expect(book.ticked(revisionID: revision, localDate: "2026-09-16") == [2])
+    }
 }

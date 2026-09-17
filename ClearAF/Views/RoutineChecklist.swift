@@ -77,6 +77,21 @@ enum RoutineRecordCopy {
     }
 }
 
+/// Per-day tick state (spec §4.4). Keyed by (revision, local date) so a step ticked yesterday never shows
+/// ticked again after midnight, even while the same revision stays active.
+struct RoutineTickBook: Equatable {
+    private struct Key: Hashable { let revisionID: UUID; let localDate: String }
+    private var ticks: [Key: Set<Int>] = [:]
+
+    func ticked(revisionID: UUID, localDate: String) -> Set<Int> {
+        ticks[Key(revisionID: revisionID, localDate: localDate)] ?? []
+    }
+
+    mutating func setTicked(_ value: Set<Int>, revisionID: UUID, localDate: String) {
+        ticks[Key(revisionID: revisionID, localDate: localDate)] = value
+    }
+}
+
 /// Ruled checklist (spec §4.4). Ticks are local and reversible; recording is the filled button.
 struct RoutineChecklist: View {
     let steps: [CareRoutineStep]
