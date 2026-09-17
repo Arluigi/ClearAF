@@ -31,7 +31,12 @@ module.exports = {
           wash: 'rgb(var(--attention-wash) / <alpha-value>)',
         },
         error: 'rgb(var(--error) / <alpha-value>)',
-        rule: { DEFAULT: 'rgb(var(--ink) / 0.13)', strong: 'rgb(var(--ink) / <alpha-value>)' },
+        rule: {
+          DEFAULT: 'rgb(var(--ink) / 0.13)',
+          strong: 'rgb(var(--ink) / <alpha-value>)',
+          // Field boundary: ink at 50% is the lightest value that keeps 3:1 on every paper tone in both modes.
+          field: 'rgb(var(--ink) / 0.5)',
+        },
 
         background: 'rgb(var(--background) / <alpha-value>)',
         foreground: 'rgb(var(--foreground) / <alpha-value>)',
