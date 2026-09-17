@@ -12,7 +12,7 @@ import CoreData
 import Combine
 
 struct DashboardViewEnhanced: View {
-    @Binding var selectedTab: Int
+    @Binding var selectedTab: AppTab
     @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
         entity: User.entity(),
@@ -109,7 +109,7 @@ struct DashboardViewEnhanced: View {
 }
 
 struct DailyPhotoCardEnhanced: View {
-    @Binding var selectedTab: Int
+    @Binding var selectedTab: AppTab
     @FetchRequest(fetchRequest: Self.latestPhotoRequest(), animation: .default)
     private var photos: FetchedResults<SkinPhoto>
     @State private var showingCamera = false
@@ -127,7 +127,7 @@ struct DailyPhotoCardEnhanced: View {
             HStack {
                 Text("Your photos").font(Letterpress.ui(15, weight: .medium, relativeTo: .subheadline))
                 Spacer()
-                Button("View all") { selectedTab = 1 }
+                Button("View all") { selectedTab = .record }
             }
             PhotoDisplaySection(todayPhoto: photos.first, images: images, showingCamera: $showingCamera)
         }
@@ -139,14 +139,14 @@ struct DailyPhotoCardEnhanced: View {
 }
 
 struct DailyTasksCardEnhanced: View {
-    @Binding var selectedTab: Int
+    @Binding var selectedTab: AppTab
     @ObservedObject private var repository = APIService.shared.routines
     var body: some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
             Text("Assigned routines").font(Letterpress.ui(17, weight: .medium, relativeTo: .headline))
             Text(Date.now, format: .dateTime.weekday().month().day()).font(.caption).foregroundStyle(Letterpress.inkSecondary)
             ForEach(RoutineTimeOfDay.allCases, id: \.self) { slot in
-                Button { selectedTab = 2 } label: {
+                Button { selectedTab = .plan } label: {
                     HStack(spacing: Letterpress.Space.s14) {
                         Image(systemName: slot == .morning ? "sun.max" : "moon")
                         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
@@ -232,6 +232,6 @@ private struct DashboardPhotoPreview: View {
 }
 
 #Preview {
-    DashboardViewEnhanced(selectedTab: .constant(0))
+    DashboardViewEnhanced(selectedTab: .constant(.today))
         .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
 }
