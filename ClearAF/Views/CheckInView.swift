@@ -12,7 +12,7 @@ struct CheckInView: View {
             if let error = error ?? repository.error { Section { Text(error); Button("Refresh") { Task { await load(ticket) } } } }
             if let draft = repository.draft {
                 Section {
-                    Text(draft.form.title).font(.system(.title2, design: .serif))
+                    Text(draft.form.title).font(Letterpress.display(22, relativeTo: .title2))
                     Text("Version \(draft.form.version)")
                     Text(statusText)
                     if form?.id != draft.form.id, loaded { Text("This response keeps the form you started. A newer assignment does not change it.") }
@@ -45,7 +45,7 @@ struct CheckInView: View {
                 Section { Text(form?.isActive == false ? "Your clinician archived this check-in." : "No check-in assigned"); Text("Questions from your clinician will appear here.") }
             } else { SwiftUI.ProgressView("Loading check-in…") }
         }
-        .navigationTitle("Check-in").tint(CareJournal.actionPrimary)
+        .navigationTitle("Check-in").tint(Letterpress.action)
         .task { await load(ticket) }
         .refreshable { await load(ticket) }
     }

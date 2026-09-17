@@ -16,7 +16,7 @@ struct AuthenticationView: View {
 
     var body: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+            Letterpress.canvas.ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 32) {
@@ -24,16 +24,16 @@ struct AuthenticationView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "cross.case.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(.blue)
+                            .foregroundColor(Letterpress.ink)
 
                         Text("Clear AF")
                             .font(.largeTitle)
                             .fontWeight(.bold)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Letterpress.ink)
 
                         Text(isRegistering ? "Create your account" : "Welcome back")
                             .font(.title2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Letterpress.inkSecondary)
                     }
                     .padding(.top, 50)
 
@@ -75,21 +75,13 @@ struct AuthenticationView: View {
                         HStack {
                             if isLoading {
                                 SwiftUI.ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
+                                    .tint(Letterpress.inkTertiary)
                             } else {
                                 Text(isRegistering ? "Create Account" : "Sign In")
-                                    .fontWeight(.semibold)
                             }
                         }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(
-                            (isFormValid && !isLoading) ? Color.blue : Color.gray
-                        )
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
                     }
+                    .buttonStyle(.letterpress(.filled, fullWidth: true))
                     .accessibilityIdentifier("authSubmit")
                     .disabled(!isFormValid || isLoading)
                     .padding(.horizontal, 24)
@@ -109,10 +101,11 @@ struct AuthenticationView: View {
                     }) {
                         HStack(spacing: 4) {
                             Text(isRegistering ? "Already have an account?" : "Don't have an account?")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Letterpress.inkSecondary)
                             Text(isRegistering ? "Sign In" : "Sign Up")
-                                .foregroundColor(.blue)
+                                .foregroundColor(Letterpress.ink)
                                 .fontWeight(.semibold)
+                                .underline()
                         }
                     }
 
@@ -197,8 +190,7 @@ struct CustomTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.headline)
-                .foregroundColor(.primary)
+                .letterpressEyebrow()
 
             Group {
                 if isSecure {
@@ -209,13 +201,7 @@ struct CustomTextField: View {
                         .textInputAutocapitalization(autocapitalization)
                 }
             }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-            )
+            .letterpressField(isEmpty: text.isEmpty)
         }
     }
 }

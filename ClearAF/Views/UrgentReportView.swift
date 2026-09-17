@@ -19,26 +19,26 @@ struct UrgentReportEntry: View {
     @State private var showing = false
     var body: some View {
         Button { showing = true } label: {
-            HStack(spacing: .spaceMD) {
+            HStack(spacing: Letterpress.Space.s14) {
                 Label {
-                    VStack(alignment: .leading, spacing: .spaceXS) {
+                    VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                         Text("Something's wrong?").font(.headline)
                         Text("Tell your care team about a reaction or sudden change")
                             .font(.subheadline)
-                            .foregroundStyle(CareJournal.textSecondary)
+                            .foregroundStyle(Letterpress.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } icon: {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(Letterpress.error)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").foregroundStyle(CareJournal.textSecondary).accessibilityHidden(true)
+                Image(systemName: "chevron.right").foregroundStyle(Letterpress.inkSecondary).accessibilityHidden(true)
             }
-            .foregroundStyle(CareJournal.textPrimary)
+            .foregroundStyle(Letterpress.ink)
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .careJournalSurface()
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .letterpressSurface()
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.horizontal, horizontalPadding)
@@ -53,9 +53,9 @@ struct UrgentReportButton: View {
     var body: some View {
         Button { isPresented = true } label: {
             Label {
-                Text("Something's wrong?").foregroundStyle(Color.retainedErrorText)
+                Text("Something's wrong?").foregroundStyle(Letterpress.error)
             } icon: {
-                Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(Letterpress.error)
             }
             .labelStyle(.titleAndIcon)
         }
@@ -76,11 +76,11 @@ struct UrgentReportView: View {
                     Label {
                         Text(UrgentReportCopy.emergency).font(.callout.weight(.semibold))
                     } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Letterpress.error)
                     }
                     .accessibilityIdentifier("urgentEmergencyNotice")
                 }
-                .listRowBackground(Color.red.opacity(0.12))
+                .listRowBackground(Letterpress.sunk)
                 if repository.sent != nil {
                     Section {
                         Label(UrgentReportCopy.sent, systemImage: "checkmark.circle")
@@ -135,24 +135,22 @@ struct UrgentReportView: View {
                 .disabled(frozen)
             Text("\(count)/2000")
                 .font(.caption)
-                .foregroundStyle(count > 2000 ? Color.retainedErrorText : CareJournal.textSecondary)
+                .foregroundStyle(count > 2000 ? Letterpress.error : Letterpress.inkSecondary)
         } header: { Text("Details").textCase(nil) }
         Section {
             Button(action: send) {
-                HStack(spacing: .spaceSM) {
-                    if repository.sending { SwiftUI.ProgressView().tint(CareJournal.onPrimary) }
+                HStack(spacing: Letterpress.Space.s10) {
+                    if repository.sending { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                     Text(frozen ? "Retry" : "Send")
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(CareJournal.actionPrimary)
-            .foregroundStyle(CareJournal.onPrimary)
+            .buttonStyle(.letterpress(.filled))
             .disabled(!canSend)
             .accessibilityIdentifier("urgentSend")
             if let error = repository.error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Color.retainedErrorText)
+                    .foregroundStyle(Letterpress.error)
                     .accessibilityIdentifier("urgentError")
             }
         }
@@ -176,9 +174,9 @@ struct UrgentReportView: View {
 private struct UrgentReportRow: View {
     let report: UrgentReport
     var body: some View {
-        VStack(alignment: .leading, spacing: .spaceXS) {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
             Text(UrgentCategory(rawValue: report.category)?.title ?? UrgentCategory.other.title).font(.headline)
-            HStack(spacing: .spaceXS) {
+            HStack(spacing: Letterpress.Space.s4) {
                 if let date = RoutineDates.instant(report.createdAt) {
                     Text(date, format: .dateTime.month().day().hour().minute())
                     Text("·").accessibilityHidden(true)
@@ -186,7 +184,7 @@ private struct UrgentReportRow: View {
                 Text(UrgentReportCopy.status(report.status))
             }
             .font(.caption)
-            .foregroundStyle(CareJournal.textSecondary)
+            .foregroundStyle(Letterpress.inkSecondary)
             if let note = report.resolutionNote, !note.isEmpty {
                 Text(note).font(.callout).fixedSize(horizontal: false, vertical: true)
             }

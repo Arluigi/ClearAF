@@ -25,7 +25,7 @@ final class MVPExperienceUITests: XCTestCase {
                     app.segmentedControls.buttons["Morning"].tap()
                 }
                 let shot = XCTAttachment(screenshot: app.screenshot())
-                shot.name = "CareJournal-\(screen)-\(theme)-\(size)"
+                shot.name = "Letterpress-\(screen)-\(theme)-\(size)"
                 shot.lifetime = .keepAlways
                 add(shot)
             }
