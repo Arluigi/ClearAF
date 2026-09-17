@@ -235,13 +235,11 @@ struct PhotoSharingStatusView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("photoSharingStatus")
             if let action = state.action(compact: compact) {
-                // Compact grid tiles keep the pinned 44pt underline button from growing the tile: the compact
-                // button size keeps the same 44×44 hit area (contentShape only) without reserving the space.
                 Button(action) {
                     do { try APIService.shared.photos.share(photo) }
                     catch { errorMessage = error.localizedDescription }
                 }
-                .buttonStyle(.letterpress(.underline, size: compact ? .compact : .regular))
+                .buttonStyle(.letterpress(.underline))
             }
         }
         .alert("Unable to share photo", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
@@ -269,6 +267,11 @@ struct PhotoDetailView: View {
                             .font(Letterpress.data(12, relativeTo: .footnote))
                             .foregroundStyle(Letterpress.ink)
                     }
+                    // `reviewed` is the page's batch PhotoReviewIndex lookup (fail-closed: any error clears it back
+                    // to "Shared"); PhotoReviewStatusView below does its own live, per-photo lookup. The two can
+                    // transiently disagree — e.g. a batch failure hides "Reviewed" here while the live check still
+                    // succeeds below — by design: the label above never claims more than the fail-closed batch can
+                    // back up, and the live section underneath is the authoritative answer for this one photo.
                     PhotoSharingStatusView(photo: photo, reviewed: reviewed)
                     LetterpressRule()
                     PhotoReviewStatusView(photo: photo)

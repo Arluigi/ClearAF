@@ -38,17 +38,6 @@ import UIKit
         #expect(size.height >= 44, "underline height measured \(size.height)")
     }
 
-    @Test func compactButtonKeepsA44PointHitAreaWithoutGrowingVisibleHeight() {
-        for variant in LetterpressButtonStyle.Variant.allCases {
-            let size = UIHostingController(rootView: Button("Retry") {}.buttonStyle(.letterpress(variant, size: .compact)).environment(\.dynamicTypeSize, .xSmall))
-                .sizeThatFits(in: CGSize(width: 320, height: 1000))
-            #expect(size.height < 44, "\(variant) compact visible height measured \(size.height), a compact tile control must not reserve the pinned 44pt row")
-        }
-        // The hit-testing shape is expanded independently of layout (contentShape, not frame): whatever the
-        // compact content's own rendered size, the claimed shape is always at least 44×44.
-        let path = Rectangle().inset(by: -LetterpressButtonStyle.compactHitAreaInset).path(in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        #expect(path.boundingRect.width >= 44 && path.boundingRect.height >= 44)
-    }
 
     @Test func buttonTextMeetsContrastEnabledAndDisabledInBothAppearances() {
         for style in styles {

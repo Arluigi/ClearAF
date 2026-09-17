@@ -88,6 +88,12 @@ extension Letterpress {
         control.setTitleTextAttributes([.font: font(.medium), .foregroundColor: UIColor(named: "lp.ink")!], for: .selected)
     }
 
+    /// `NSObjectProtocol` observer tokens aren't `Sendable`, so a plain `static var` holding one fails Swift's
+    /// strict-concurrency check even though every read and write here happens on the main actor: `Letterpress`
+    /// is an enum, not an actor, so the compiler can't see that `applyControlAppearance`/this initializer being
+    /// `@MainActor` is enough to serialize access to it. `nonisolated(unsafe)` is the escape hatch for exactly
+    /// that case — it's safe because the only writer is the `guard ... else { return }` below (set once, never
+    /// reassigned) and the only reader is that same guard, both always on the main actor.
     nonisolated(unsafe) private static var contentSizeObserver: NSObjectProtocol?
 
     /// Registered once: re-resolves the segmented appearance's fonts whenever the system content size category

@@ -14,10 +14,11 @@ import Testing
         #expect(PhotoTileState.couldNotShare.label == "Couldn't share")
     }
 
-    @Test func tilesOfferOnlyRetryWhileRowsKeepShareAndRetry() {
-        #expect(PhotoTileState.couldNotShare.action(compact: true) == "Retry")
-        for state in [PhotoTileState.onDevice, .waitingToShare, .shared, .reviewed] {
-            #expect(state.action(compact: true) == nil)
+    @Test func tilesNeverOfferAnActionWhileRowsKeepShareAndRetry() {
+        // A compact grid tile is a tap target for the whole photo, never a button host: a 44pt hit area inside a
+        // 3-column tile would reach into a neighbouring tile's own control across the 6pt gutter.
+        for state in [PhotoTileState.onDevice, .waitingToShare, .couldNotShare, .shared, .reviewed] {
+            #expect(state.action(compact: true) == nil, "\(state) offered an action in a compact grid tile")
         }
         #expect(PhotoTileState.onDevice.action(compact: false) == "Share")
         #expect(PhotoTileState.waitingToShare.action(compact: false) == "Retry")

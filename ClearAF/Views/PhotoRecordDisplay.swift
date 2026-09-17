@@ -32,13 +32,16 @@ enum PhotoTileState: Equatable {
         }
     }
 
-    /// Tiles show only the error recovery; list rows and the detail sheet keep the existing Share and Retry actions.
+    /// Compact grid tiles are state-in-words only and never offer an action (a 44pt hit area inside a 3-column
+    /// tile, only ~6pt from its neighbours' own controls, would reach into the next tile — spec §4.5's tile is a
+    /// tap target for the whole photo, not a button host). List rows and the detail sheet keep Share and Retry
+    /// at their full pinned size.
     func action(compact: Bool) -> String? {
+        guard !compact else { return nil }
         switch self {
-        case .couldNotShare: "Retry"
-        case .onDevice: compact ? nil : "Share"
-        case .waitingToShare: compact ? nil : "Retry"
-        case .shared, .reviewed: nil
+        case .couldNotShare, .waitingToShare: return "Retry"
+        case .onDevice: return "Share"
+        case .shared, .reviewed: return nil
         }
     }
 }
