@@ -133,3 +133,47 @@ export interface PaginatedResponse<T> {
 
 // Summary grids never receive an original Storage URL.
 export type PhotoSummary = Omit<Photo, 'photoUrl'>;
+
+// Clinician worklist (GET /worklist). Read-only; every figure covers currently assigned patients only.
+export type WorklistFilter = 'needs-review' | 'all' | 'flagged';
+/** Routines completed that day (clamped to 2); null = the day does not count. */
+export type WorklistDayState = 0 | 1 | 2 | null;
+
+export interface WorklistAdherence {
+  percent: number | null;
+  completedDays: number;
+  countedDays: number;
+  days: { localDate: string; routines: WorklistDayState }[];
+}
+
+export interface WorklistRow {
+  patientId: string;
+  name: string | null;
+  joinedAt: string;
+  photos: { unreviewedCount: number; oldestUploadAt: string | null };
+  unreadMessages: number;
+  latestCheckInAt: string | null;
+  urgent: { open: number; acknowledged: number; oldestAt: string | null };
+  adherence: WorklistAdherence | null;
+}
+
+export interface WorklistSummary {
+  assignedPatients: number;
+  photosToReview: { count: number; oldestUploadAt: string | null };
+  unreadMessages: { count: number; patients: number };
+  checkInsSubmitted: { count: number; since: string; days: number };
+  adherenceUnderThreshold: { count: number; threshold: number; windowDays: number };
+}
+
+export interface WorklistResponse extends PaginatedResponse<WorklistRow> {
+  filter: WorklistFilter;
+  localDate: string;
+  summary: WorklistSummary;
+}
+
+export interface WorklistQuery {
+  filter: WorklistFilter;
+  page: number;
+  search: string;
+  localDate: string;
+}
