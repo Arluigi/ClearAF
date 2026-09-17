@@ -2,16 +2,14 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// Square surface block, no border (no nested bordered boxes) and no elevation. Prefer rules; PRs 4–5 remove most cards.
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "rounded-xl bg-card text-card-foreground",
-      className
-    )}
+    className={cn("rounded-none bg-surface text-ink", className)}
     {...props}
   />
 ))
@@ -35,7 +33,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("font-semibold leading-none tracking-tight", className)}
+    className={cn("text-base font-medium leading-snug", className)}
     {...props}
   />
 ))
@@ -47,7 +45,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm text-ink-secondary", className)}
     {...props}
   />
 ))

@@ -2,6 +2,10 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// Letterpress §4.9: 2px ink rule under the head, 1px rules between rows, no zebra, no card-per-row.
+// `numeric` cells use mono tabular figures. Rows: data-state="selected" → rail + 2px ink rule;
+// data-attention="true" → rail + 4px attention.mark bar (waiting). Rules sit on the first cell because
+// box-shadow on <tr> is unreliable across browsers.
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
@@ -20,7 +24,7 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+  <thead ref={ref} className={cn("[&_tr]:border-b-2 [&_tr]:border-ink", className)} {...props} />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -43,7 +47,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
+      "border-t-2 border-ink font-medium [&>tr]:last:border-b-0",
       className
     )}
     {...props}
@@ -58,7 +62,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      "border-b border-rule transition-colors hover:bg-rail/60 data-[state=selected]:bg-rail data-[state=selected]:[&>td:first-child]:shadow-[inset_2px_0_0_rgb(var(--ink))] data-[attention=true]:bg-rail data-[attention=true]:[&>td:first-child]:shadow-[inset_4px_0_0_rgb(var(--attention-mark))]",
       className
     )}
     {...props}
@@ -73,7 +77,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-9 px-2 pb-2 text-left align-bottom font-data text-[10px] font-medium uppercase tracking-[0.16em] text-ink-tertiary [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}
@@ -83,12 +87,13 @@ TableHead.displayName = "TableHead"
 
 const TableCell = React.forwardRef<
   HTMLTableCellElement,
-  React.TdHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
+  React.TdHTMLAttributes<HTMLTableCellElement> & { numeric?: boolean }
+>(({ className, numeric = false, ...props }, ref) => (
   <td
     ref={ref}
     className={cn(
-      "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "px-2 py-3 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      numeric && "font-data text-xs font-medium tabular-nums",
       className
     )}
     {...props}
@@ -102,7 +107,7 @@ const TableCaption = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <caption
     ref={ref}
-    className={cn("mt-4 text-sm text-muted-foreground", className)}
+    className={cn("mt-4 text-sm text-ink-secondary", className)}
     {...props}
   />
 ))
