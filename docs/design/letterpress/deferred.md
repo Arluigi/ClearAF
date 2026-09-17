@@ -20,3 +20,5 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | Portal Workspace · Photos | "Mark 3 reviewed" header action | Reviews are recorded one photo at a time; a bulk action would be a new flow |
 | Portal Workspace · Photos | "Save draft" for a photo reply | Replies are not stored until sent |
 | Portal Workspace · Routine | One-line change summary per version ("Adapalene reduced to 3 nights") | Revisions store no change note |
+| Portal Workspace · Check-ins | Form schedule ("sent Sundays 18:00") and "Send now" | Forms have no schedule or send action |
+| Portal Workspace · Check-ins | Response rate ("6 / 8") | Without a schedule there is no expected-response count to divide by |

@@ -1,4 +1,5 @@
 import type { RoutineStep } from "../types/api";
+import { plural } from "./worklist";
 export interface Template {
   id: string;
   revisionId: string;
@@ -203,4 +204,40 @@ export function answerText(question: Question, response: CheckInResponse): strin
   const answer = response.answers.find((a) => a.questionId === question.id);
   if (question.type === "text") return answer?.text?.trim() ? answer.text : "Not answered";
   return question.options.find((o) => o.id === answer?.optionId)?.label ?? "Not answered";
+}
+
+export const choiceQuestions = (form: Form) => form.questions.filter((q) => q.type === "choice");
+
+export interface AnswerPoint {
+  responseId: string;
+  submittedAt: string;
+  formVersion: number;
+  /** Option labels of this response's own form version, in the order the clinician wrote them. */
+  options: string[];
+  index: number | null;
+  label: string;
+}
+
+/** Ordered-choice answers exactly as given, oldest first. Never averaged or scored. */
+export function answerSeries(responses: CheckInResponse[], questionId: string): AnswerPoint[] {
+  return responses
+    .flatMap((response) => {
+      const question = response.form.questions.find((q) => q.id === questionId && q.type === "choice");
+      if (!question) return [];
+      const answer = response.answers.find((a) => a.questionId === questionId);
+      const index = question.options.findIndex((o) => o.id === answer?.optionId);
+      return [{
+        responseId: response.id,
+        submittedAt: response.submittedAt,
+        formVersion: response.form.version,
+        options: question.options.map((o) => o.label),
+        index: index < 0 ? null : index,
+        label: index < 0 ? "Not answered" : question.options[index].label,
+      }];
+    })
+    .sort((a, b) => Date.parse(a.submittedAt) - Date.parse(b.submittedAt));
+}
+
+export function formSummary(form: Form) {
+  return `${plural(form.questions.length, "question")} · ${form.questions.filter((q) => q.required).length} required`;
 }
