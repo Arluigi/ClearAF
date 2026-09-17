@@ -91,6 +91,22 @@ enum PhotoRecordCounts {
     }
 }
 
+/// Compare is Record's third segment (spec §4.3). It opens full screen only with two photos and never over the camera.
+extension PhotoRecordLayout {
+    static func presentsCompare(_ layout: PhotoRecordLayout, total: Int, capturing: Bool) -> Bool {
+        layout == .compare && total >= 2 && !capturing
+    }
+
+    static func showsCompareEmpty(_ layout: PhotoRecordLayout, total: Int) -> Bool {
+        layout == .compare && total < 2
+    }
+
+    /// The Grid or List layout drawn under Compare.
+    func browsing(fallback: PhotoRecordLayout) -> PhotoRecordLayout {
+        self == .compare ? fallback : self
+    }
+}
+
 /// 4:5 neutral mat, square corners; the photo is fitted, never cropped or tinted (spec §4.5).
 struct PhotoFrame: View {
     @ObservedObject var photo: SkinPhoto

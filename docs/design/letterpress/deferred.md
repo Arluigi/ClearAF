@@ -38,3 +38,5 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | iOS Onboarding | Clinician credentials ("MD · Medical & cosmetic dermatology") | No credentials field; only the assigned clinician's name is available |
 | iOS Onboarding | "We hold the last one up as a guide" | No capture overlay (spec §6 #4: native camera, no ghost) |
 | iOS Onboarding | "Everything you record is private until you share it" | Photos share with the assigned clinician after upload; the copy says so |
+| iOS Compare | "Share" | No way to share clinical photos outside the record; adding one is a data-handling change |
+| iOS Compare | "by Dr. Om" on routine changes | Revisions store the author's ID, not a name |

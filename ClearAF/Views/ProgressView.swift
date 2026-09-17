@@ -2,15 +2,16 @@ import SwiftUI
 import UIKit
 import CoreData
 
-enum PhotoRecordLayout: Hashable { case grid, list }
+enum PhotoRecordLayout: Hashable { case grid, list, compare }
 
-/// Record (spec §6 #5): month rules over the existing 24-photo pages, 4:5 tiles with named states, native Grid/List.
+/// Record (spec §6 #5): month rules over the existing 24-photo pages, 4:5 tiles with named states, native Grid/List/Compare.
 struct ProgressView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var store = PhotoPageStore()
     @StateObject private var reviews = PhotoReviewIndex(access: APIService.shared.access, transport: APIService.shared)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var layout = PhotoRecordLayout.grid
+    @State private var browsingLayout = PhotoRecordLayout.grid
     @State private var sharedCount: Int?
     @State private var capturing = false
 
@@ -22,11 +23,12 @@ struct ProgressView: View {
                     LetterpressPicker(title: "Photo layout", selection: $layout) {
                         Text("Grid").tag(PhotoRecordLayout.grid)
                         Text("List").tag(PhotoRecordLayout.list)
+                        Text("Compare").tag(PhotoRecordLayout.compare)
                     }
                     .padding(.top, Letterpress.Space.s14)
                     content
                         .padding(.top, Letterpress.Space.s18)
-                    if !store.photos.isEmpty {
+                    if !store.photos.isEmpty && !PhotoRecordLayout.showsCompareEmpty(layout, total: store.total) {
                         pagination.padding(.top, Letterpress.Space.s22)
                     }
                 }
@@ -37,7 +39,13 @@ struct ProgressView: View {
             .background(Letterpress.canvas.ignoresSafeArea())
             .navigationTitle("Record")
             .refreshable { store.refresh() }
-            .sheet(isPresented: $capturing) { DurablePhotoCaptureView() }
+            .sheet(isPresented: $capturing, onDismiss: { if layout == .compare { layout = browsingLayout } }) { DurablePhotoCaptureView() }
+            .fullScreenCover(isPresented: comparing) {
+                ComparePhotosView().environment(\.managedObjectContext, viewContext)
+            }
+            .onChange(of: layout) { _, next in
+                if next != .compare { browsingLayout = next }
+            }
             .onAppear { store.bind(context: viewContext) }
             .onDisappear { store.dispose(); reviews.cancel() }
             .task(id: reviewKey) { await loadReviews() }
@@ -66,6 +74,8 @@ struct ProgressView: View {
                 Text(error).font(Letterpress.ui(15, relativeTo: .body)).foregroundStyle(Letterpress.error)
                 Button("Try again") { store.refresh() }.buttonStyle(.letterpress(.outlined))
             }
+        } else if PhotoRecordLayout.showsCompareEmpty(layout, total: store.total) {
+            CompareEmptyState(total: store.total) { capturing = true }
         } else if store.photos.isEmpty {
             VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                 Text("No photos yet")
@@ -83,7 +93,7 @@ struct ProgressView: View {
             let groups = PhotoMonthGroup<SkinPhoto>.group(store.photos, date: { $0.captureDate })
             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 monthRule(group.title, first: index == 0)
-                if layout == .grid {
+                if layout.browsing(fallback: browsingLayout) == .grid {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: Letterpress.Space.s14) {
                         ForEach(group.items, id: \.objectID) { photo in
                             PhotoGridCell(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
@@ -103,6 +113,12 @@ struct ProgressView: View {
     private var columns: [GridItem] {
         let count = dynamicTypeSize.isAccessibilitySize ? 1 : 3
         return Array(repeating: GridItem(.flexible(), spacing: Letterpress.Space.s6, alignment: .top), count: count)
+    }
+
+    /// Compare is presented while its segment is selected; closing it returns the segment to Grid or List.
+    private var comparing: Binding<Bool> {
+        Binding(get: { PhotoRecordLayout.presentsCompare(layout, total: store.total, capturing: capturing) },
+                set: { if !$0 { layout = browsingLayout } })
     }
 
     private func monthRule(_ title: String, first: Bool) -> some View {
