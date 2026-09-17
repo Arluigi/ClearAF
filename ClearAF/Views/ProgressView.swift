@@ -2,17 +2,22 @@ import SwiftUI
 import UIKit
 import CoreData
 
-enum PhotoRecordLayout: Hashable { case grid, list }
+enum PhotoRecordLayout: Hashable { case grid, list, compare }
 
-/// Record (spec §6 #5): month rules over the existing 24-photo pages, 4:5 tiles with named states, native Grid/List.
+/// Record (spec §6 #5): month rules over the existing 24-photo pages, 4:5 tiles with named states, native Grid/List/Compare.
 struct ProgressView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var store = PhotoPageStore()
     @StateObject private var reviews = PhotoReviewIndex(access: APIService.shared.access, transport: APIService.shared)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var layout = PhotoRecordLayout.grid
+    @State private var browsingLayout = PhotoRecordLayout.grid
     @State private var sharedCount: Int?
     @State private var capturing = false
+    /// Latched when the Compare segment is selected, from `store.total` at that instant — never read live
+    /// from `store.total` afterwards, so `store.dispose()` (fired on `onDisappear`, including the one SwiftUI
+    /// fires on the presenting view when a full-screen cover appears) can't flip presentation back off.
+    @State private var comparePresentable = false
 
     var body: some View {
         NavigationStack {
@@ -22,11 +27,12 @@ struct ProgressView: View {
                     LetterpressPicker(title: "Photo layout", selection: $layout) {
                         Text("Grid").tag(PhotoRecordLayout.grid)
                         Text("List").tag(PhotoRecordLayout.list)
+                        Text("Compare").tag(PhotoRecordLayout.compare)
                     }
                     .padding(.top, Letterpress.Space.s14)
                     content
                         .padding(.top, Letterpress.Space.s18)
-                    if !store.photos.isEmpty {
+                    if !store.photos.isEmpty && !PhotoRecordLayout.showsCompareEmpty(layout, total: store.total) {
                         pagination.padding(.top, Letterpress.Space.s22)
                     }
                 }
@@ -37,7 +43,14 @@ struct ProgressView: View {
             .background(Letterpress.canvas.ignoresSafeArea())
             .navigationTitle("Record")
             .refreshable { store.refresh() }
-            .sheet(isPresented: $capturing) { DurablePhotoCaptureView() }
+            .sheet(isPresented: $capturing, onDismiss: { if layout == .compare { layout = browsingLayout } }) { DurablePhotoCaptureView() }
+            .fullScreenCover(isPresented: comparing) {
+                ComparePhotosView().environment(\.managedObjectContext, viewContext)
+            }
+            .onChange(of: layout) { _, next in
+                if next != .compare { browsingLayout = next }
+                if next == .compare { comparePresentable = store.total >= 2 }
+            }
             .onAppear { store.bind(context: viewContext) }
             .onDisappear { store.dispose(); reviews.cancel() }
             .task(id: reviewKey) { await loadReviews() }
@@ -66,6 +79,9 @@ struct ProgressView: View {
                 Text(error).font(Letterpress.ui(15, relativeTo: .body)).foregroundStyle(Letterpress.error)
                 Button("Try again") { store.refresh() }.buttonStyle(.letterpress(.outlined))
             }
+        } else if PhotoRecordLayout.showsCompareEmpty(layout, total: store.total) {
+            CompareEmptyState(total: store.total) { capturing = true }
+                .padding(.bottom, emptyStateBottomInset)
         } else if store.photos.isEmpty {
             VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                 Text("No photos yet")
@@ -79,11 +95,12 @@ struct ProgressView: View {
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
                     .padding(.top, Letterpress.Space.s6)
             }
+            .padding(.bottom, emptyStateBottomInset)
         } else {
             let groups = PhotoMonthGroup<SkinPhoto>.group(store.photos, date: { $0.captureDate })
             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 monthRule(group.title, first: index == 0)
-                if layout == .grid {
+                if layout.browsing(fallback: browsingLayout) == .grid {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: Letterpress.Space.s14) {
                         ForEach(group.items, id: \.objectID) { photo in
                             PhotoGridCell(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
@@ -100,9 +117,25 @@ struct ProgressView: View {
         }
     }
 
+    /// Extra room below the empty states' filled button so it clears the floating tab bar at the largest
+    /// accessibility text sizes: the button's own content can grow tall enough that it lands in the gap
+    /// between the safe area this screen is given and the taller tab bar actually drawn there (screenshots
+    /// in the PR7 verification report). Standard sizes need none — the tab bar's normal safe area is enough.
+    private var emptyStateBottomInset: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? Letterpress.Space.s44 : 0
+    }
+
     private var columns: [GridItem] {
         let count = dynamicTypeSize.isAccessibilitySize ? 1 : 3
         return Array(repeating: GridItem(.flexible(), spacing: Letterpress.Space.s6, alignment: .top), count: count)
+    }
+
+    /// Compare is presented while its segment is selected; closing it returns the segment to Grid or List.
+    /// `comparePresentable` (not `store.total`) decides whether it can present, so `store.dispose()` never
+    /// dismisses the cover on its own — see the comment on `comparePresentable`.
+    private var comparing: Binding<Bool> {
+        Binding(get: { PhotoRecordLayout.presentsCompare(layout, capturing: capturing, presentable: comparePresentable) },
+                set: { if !$0 { layout = browsingLayout } })
     }
 
     private func monthRule(_ title: String, first: Bool) -> some View {

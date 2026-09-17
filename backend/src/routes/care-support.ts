@@ -3,7 +3,7 @@ import {z,ZodError} from 'zod';
 import {requirePatient,requireDermatologist} from '../middleware/auth';
 import {requireEnrolledPatient} from '../middleware/enrollmentGate';
 import {careError,revisionInput,uuid} from '../services/routineCare';
-import {dayInput,monthInput,formInput,responseInput} from '../services/careSupportValidation';
+import {dayInput,monthInput,formInput,responseInput,timelineQuery} from '../services/careSupportValidation';
 import * as care from '../services/careSupport';
 const router=express.Router();
 const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{await handler(req,res,next)}catch(error){next(error instanceof ZodError||(error as {statusCode?:number}).statusCode?error:careError(500,'Care support operation failed'))}};
@@ -14,6 +14,7 @@ router.get('/templates',requireDermatologist,route(async(req,res)=>{const {page,
 router.put('/templates/:templateId/revisions/:revisionId',requireDermatologist,route(async(req,res)=>{const r=await care.saveTemplate(req.user!.id,uuid.parse(req.params.templateId),uuid.parse(req.params.revisionId),revisionInput.parse(req.body));res.status(r.created?201:200).json({template:r.template})}));
 router.put('/patients/:patientId/forms/:revisionId',requireDermatologist,route(async(req,res)=>{const r=await care.saveForm(uuid.parse(req.params.patientId),req.user!.id,uuid.parse(req.params.revisionId),formInput.parse(req.body));res.status(r.created?201:200).json({form:r.form})}));
 router.put('/responses/:responseId',requirePatient,requireEnrolledPatient,route(async(req,res)=>{const r=await care.saveResponse(req.user!.id,uuid.parse(req.params.responseId),responseInput.parse(req.body));res.status(r.created?201:200).json({response:r.response})}));
+router.get('/timeline',requirePatient,route(async(req,res)=>{res.json(await care.timeline(req.user!.id,timelineQuery.parse(req.query)))}));
 for(const clinician of [false,true]){const prefix=clinician?'/patients/:patientId':'';const auth=clinician?requireDermatologist:requirePatient;const identity=(req:express.Request)=>({patient:clinician?uuid.parse(req.params.patientId):req.user!.id,clinician:clinician?req.user!.id:undefined});
  router.get(prefix+'/form',auth,route(async(req,res)=>{z.object({}).strict().parse(req.query);const i=identity(req);res.json(await care.currentForm(i.patient,i.clinician))}));
  router.get(prefix+'/responses',auth,route(async(req,res)=>{const i=identity(req),{page,limit}=pagination.parse(req.query);res.json(await care.responses(i.patient,page,limit,i.clinician))}));

@@ -559,3 +559,15 @@ extension APIService {
         return data
     }
 }
+
+
+extension APIService: CompareTimelineTransport {
+    @MainActor func fetchCompareTimeline(from: Date, to: Date, timeZone: TimeZone, ticket: AccountAccess.Ticket) async throws -> CompareTimelineResponse {
+        try access.require(ticket)
+        let response: CompareTimelineResponse = try await request(
+            endpoint: CompareTimelineQuery.endpoint(from: from, to: to, zoneIdentifier: timeZone.identifier),
+            method: "GET", body: Optional<String>.none, ticket: ticket)
+        try access.require(ticket)
+        return response
+    }
+}
