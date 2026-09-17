@@ -22,3 +22,6 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | iOS Check-in | "Save draft" button | Not needed: the draft file is written on every answer; the header says "Draft saved on this device" |
 | iOS Sign in | "Use a magic link" | `SupabaseService` exchanges callback codes (confirmation, recovery) but has no send side (`signInWithOTP`); adding one is an auth-flow change (spec §0) |
 | iOS Sign in | "Invited by a practice?" line | No invitation flow; patients create their own account |
+| iOS Onboarding | Clinician credentials ("MD · Medical & cosmetic dermatology") | No credentials field; only the assigned clinician's name is available |
+| iOS Onboarding | "We hold the last one up as a guide" | No capture overlay (spec §6 #4: native camera, no ghost) |
+| iOS Onboarding | "Everything you record is private until you share it" | Photos share with the assigned clinician after upload; the copy says so |

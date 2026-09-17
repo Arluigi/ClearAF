@@ -55,17 +55,6 @@ struct UrgentReportEntry: View {
     }
 }
 
-/// Compact entry for the onboarding overlay, so an urgent report is possible in every signed-in phase.
-struct UrgentReportButton: View {
-    @Binding var isPresented: Bool
-    var body: some View {
-        Button("Something's wrong?") { isPresented = true }
-            .buttonStyle(.letterpress(.underline))
-            .accessibilityIdentifier("urgentEntry")
-            .accessibilityHint("Tell your care team about a reaction or sudden change")
-    }
-}
-
 struct UrgentReportView: View {
     @ObservedObject private var repository = APIService.shared.urgentReports
     @Environment(\.dismiss) private var dismiss

@@ -3,7 +3,6 @@ import CoreData
 
 struct ContentView: View {
     @StateObject private var apiService = APIService.shared
-    @State private var showingUrgent = false
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         Group {
@@ -25,14 +24,6 @@ struct ContentView: View {
                 EnrollmentView()
             case .onboarding:
                 OnboardingView {}
-                    .overlay(alignment: .topTrailing) {
-                        HStack(spacing: Letterpress.Space.s18) {
-                            UrgentReportButton(isPresented: $showingUrgent)
-                            Button("Sign out") { apiService.logout() }
-                        }
-                        .padding()
-                    }
-                    .sheet(isPresented: $showingUrgent) { UrgentReportView() }
             case .ready:
                 ReadyTabs()
             }
@@ -41,8 +32,6 @@ struct ContentView: View {
         .id(apiService.access.snapshot()?.generation)
         .task { apiService.start(); resumeRepositories() }
         .onChange(of: apiService.phase) { _, _ in
-            // The onboarding urgent sheet belongs to one phase and one login; never carry it into the next.
-            showingUrgent = false
             resumeRepositories()
         }
         .onChange(of: scenePhase) { _, phase in

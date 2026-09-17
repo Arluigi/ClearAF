@@ -354,8 +354,12 @@ final class AccountFlowUITests: XCTestCase {
         let button = app.buttons["onboardingContinue"]
         XCTAssertTrue(button.waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
-        await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)], timeout: 5)
-        button.tap()
+        // Five steps; reminders stay unchanged (no permission prompt) and the last step saves the prefilled name.
+        for _ in 0..<5 where !app.tabBars.buttons["Today"].exists {
+            await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)], timeout: 5)
+            button.tap()
+            _ = app.tabBars.buttons["Today"].waitForExistence(timeout: 2)
+        }
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
     }
 

@@ -163,3 +163,12 @@ import Testing
         return .enrolled
     }
 }
+
+struct EnrollmentCopyTests {
+    @Test func stepsExplainThemselvesInWords() {
+        #expect(EnrollmentCopy.continueReason == "Answer all three questions to continue.")
+        #expect(EnrollmentCopy.notCharged == "You have not been charged.")
+        #expect(EnrollmentCopy.waitlisted == "We'll keep your request on file.")
+        #expect(EnrollmentCopy.consentEyebrow(version: 3) == "Consent · V3")
+    }
+}
