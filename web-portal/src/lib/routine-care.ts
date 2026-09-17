@@ -7,6 +7,7 @@ import type {
   RoutineCompletionRecord,
   SaveRoutineRevisionInput,
 } from '../types/api';
+import { APIError } from '../types/api';
 
 export interface RoutineDraft {
   name: string;
@@ -370,6 +371,22 @@ export class RoutineCareController {
         hasPendingSave: true,
       }));
     }
+  }
+}
+
+export type RevisionHistory =
+  | { status: 'ready'; page: PaginatedResponse<RoutineRevision> }
+  | { status: 'unsupported' };
+
+/** An API deployed before the revisions route answers its catch-all 404, which carries no code. */
+export async function loadRevisionHistory(
+  fetch: () => Promise<PaginatedResponse<RoutineRevision>>,
+): Promise<RevisionHistory> {
+  try {
+    return { status: 'ready', page: await fetch() };
+  } catch (cause) {
+    if (cause instanceof APIError && cause.status === 404 && !cause.code) return { status: 'unsupported' };
+    throw cause;
   }
 }
 
