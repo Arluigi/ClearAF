@@ -38,7 +38,6 @@ import UIKit
         #expect(size.height >= 44, "underline height measured \(size.height)")
     }
 
-
     @Test func buttonTextMeetsContrastEnabledAndDisabledInBothAppearances() {
         for style in styles {
             let canvas = LetterpressTests.resolved("lp.canvas", style)

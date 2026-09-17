@@ -75,7 +75,7 @@ struct DashboardViewEnhanced: View {
             .toolbar(.hidden, for: .navigationBar)
             .task { await refresh() }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await refresh() } }
+                if phase == .active && selectedTab == .today { Task { await refresh() } }
             }
             .sheet(isPresented: $showingProfile) {
                 ProfileView()
@@ -221,7 +221,7 @@ private struct TodayPhotoRail: View {
 private struct TodayRoutineSection: View {
     @Binding var selectedTab: AppTab
     @ObservedObject private var repository = APIService.shared.routines
-    @State private var ticked: [UUID: Set<Int>] = [:]
+    @State private var tickBook = RoutineTickBook()
     @State private var actionError: String?
 
     var body: some View {
@@ -238,7 +238,9 @@ private struct TodayRoutineSection: View {
                         .foregroundStyle(Letterpress.inkTertiary)
                 }
                 .padding(.top, Letterpress.Space.s10)
-                RoutineChecklist(steps: routine.steps, ticked: Binding(get: { ticked[routine.id] ?? [] }, set: { ticked[routine.id] = $0 }))
+                RoutineChecklist(steps: routine.steps, ticked: Binding(
+                    get: { tickBook.ticked(revisionID: routine.id, localDate: repository.localDate) },
+                    set: { tickBook.setTicked($0, revisionID: routine.id, localDate: repository.localDate) }))
                 RoutineRecordPanel(routine: routine, repository: repository, identifierPrefix: "today-routine",
                                    showsVersionNote: false, actionError: $actionError)
                     .padding(.top, Letterpress.Space.s6)
@@ -266,7 +268,7 @@ private struct TodayUnreadNote: View {
         if let pair = messaging.conversation, let message = TodayCopy.latestUnread(messaging.messages) {
             Button { selectedTab = .notes } label: {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
-                    Text("Unread · \(pair.clinicianName)").letterpressEyebrow(color: Letterpress.attentionText)
+                    Text(NotesCopy.unreadEyebrow(clinicianName: pair.clinicianName)).letterpressEyebrow(color: Letterpress.attentionText)
                     Text(message.content)
                         .font(Letterpress.display(17, relativeTo: .body))
                         .foregroundStyle(Letterpress.ink)
@@ -275,7 +277,8 @@ private struct TodayUnreadNote: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, Letterpress.Space.s14)
-                .overlay(alignment: .leading) { Rectangle().fill(Letterpress.attentionMark).frame(width: 3) }
+                .overlay(alignment: .leading) { Rectangle().fill(Letterpress.attentionMark).frame(width: 2) }
+                .frame(minHeight: Letterpress.minTouch, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

@@ -171,6 +171,9 @@ final class MVPExperienceUITests: XCTestCase {
         guard save.waitForExistence(timeout: 10) else { throw fixtureFailure() }
         save.tap()
         guard app.staticTexts["Couldn't share"].waitForExistence(timeout: 45) else { throw fixtureFailure() }
+        // Grid tiles show state in words only, with no Retry action; switch to List for the full-size button.
+        if app.segmentedControls.buttons["List"].waitForExistence(timeout: 5) { app.segmentedControls.buttons["List"].tap() }
+        guard app.buttons["Retry"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
         XCTAssertTrue(app.buttons["Retry"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Synthetic camera capture recoverable offline share failure"
@@ -222,6 +225,9 @@ final class MVPExperienceUITests: XCTestCase {
         let app = XCUIApplication(); app.launch()
         guard app.tabBars.buttons["Record"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
         try tapTab("Record", in: app)
+        // Grid tiles show state in words only, with no Retry action; switch to List so an existing error
+        // state's Retry is actually reachable and this branch is never silently skipped.
+        if app.segmentedControls.buttons["List"].waitForExistence(timeout: 5) { app.segmentedControls.buttons["List"].tap() }
         if app.buttons["Retry"].firstMatch.waitForExistence(timeout: 3) {
             app.buttons["Retry"].firstMatch.tap()
             print("MVP explicit Retry used")

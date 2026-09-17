@@ -44,7 +44,7 @@ struct RoutineView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Letterpress.canvas.ignoresSafeArea())
-            .navigationTitle("Routine")
+            .navigationTitle("Plan")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {

@@ -3,7 +3,8 @@ import UIKit
 
 /// A picked photo that has not been saved yet.
 struct PhotoReviewDraft: Equatable {
-    static let noteLimit = 10_000
+    /// Mirrors `PhotoRepository`'s validation limit, kept as one constant so the two can't drift.
+    static let noteLimit = PhotoRepository.noteLimit
     let bytes: Data
     let capturedAt: Date
     var note = ""
@@ -56,6 +57,7 @@ struct PhotoReviewSheet: View {
                             .letterpressField(isEmpty: draft.note.isEmpty)
                             .disabled(saving)
                             .accessibilityIdentifier("photoReviewNote")
+                            .accessibilityLabel(PhotoReviewCopy.noteLabel)
                         if let problem = draft.noteProblem {
                             Text(problem)
                                 .font(Letterpress.ui(13, relativeTo: .footnote))

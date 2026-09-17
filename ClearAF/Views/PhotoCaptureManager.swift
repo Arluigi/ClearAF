@@ -192,10 +192,6 @@ struct DurablePhotoCaptureView: View {
     }
 }
 
-struct DailyPhotoCaptureView: View {
-    var body: some View { DurablePhotoCaptureView() }
-}
-
 // The camera picker is presented only after availability and authorization checks.
 struct CameraImagePicker: UIViewControllerRepresentable {
     let onResult: (PhotoPickerResult) -> Void

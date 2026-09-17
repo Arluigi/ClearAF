@@ -260,7 +260,15 @@ struct PhotoDetailView: View {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
                     if let bytes = photo.photoData,
                        let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 1600) {
-                        Image(uiImage: image).resizable().scaledToFit().accessibilityLabel("Full photo")
+                        // Sits on the same `sunk` mat as `PhotoFrame` (spec §4.5) instead of the reading-surface
+                        // canvas behind it, and keeps the photo's own aspect ratio since this is the uncropped view.
+                        Rectangle()
+                            .fill(Letterpress.sunk)
+                            .aspectRatio(image.size, contentMode: .fit)
+                            .overlay { Image(uiImage: image).resizable().scaledToFit() }
+                            .accessibilityElement()
+                            .accessibilityLabel("Full photo")
+                            .accessibilityAddTraits(.isImage)
                     }
                     if let date = photo.captureDate {
                         Text(LetterpressFormat.stampYearTime(date))

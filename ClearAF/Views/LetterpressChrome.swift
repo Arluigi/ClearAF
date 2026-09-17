@@ -7,6 +7,12 @@ extension Letterpress {
 
     /// Native bars (spec §2, §4.8, §6 tab bar): Newsreader screen titles, Plex inline titles, mono tab labels,
     /// ink selection, unread badge in attention.text. The system keeps its own materials and geometry.
+    ///
+    /// Like `applyControlAppearance`'s segmented fonts, these `UIFontMetrics.scaledFont(for:)` results are
+    /// resolved once at launch (see `ClearAFApp.swift`) and baked into plain `UIFont`s — a live Dynamic Type
+    /// change doesn't rescale them until the app relaunches. Unlike the control appearance, there's no
+    /// `observeContentSizeChanges` hook here re-running this: bars and titles are rarer to catch mid-change and
+    /// SwiftUI's own `Text` within them still scales, so this is accepted as the same cosmetic gap.
     @MainActor static func applyChromeAppearance() {
         let ink = UIColor(named: "lp.ink")!
         let tertiary = UIColor(named: "lp.ink.tertiary")!

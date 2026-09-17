@@ -17,10 +17,14 @@ enum NotesCopy {
         return reference.type == "photo" ? "Photo feedback" : "Routine feedback"
     }
 
-    static func referenceMeta(clinicianName: String) -> String { "Referenced by \(clinicianName)" }
+    static func referenceMeta(clinicianName: String, fromPatient: Bool) -> String {
+        fromPatient ? "You referenced this" : "Referenced by \(clinicianName)"
+    }
     static func count(_ characters: Int) -> String { "\(characters) / 4000" }
     static func sendLabel(sending: Bool, attempted: Bool) -> String { sending ? "Sending…" : attempted ? "Retry message" : "Send" }
     static func unreadHeader(_ count: Int) -> String? { count > 0 ? "\(count) unread" : nil }
+    static let disabledSendReason = "Write a note to send"
+    static func unreadEyebrow(clinicianName: String) -> String { "Unread · \(clinicianName)" }
 }
 
 /// Notes (spec §6 #10, §4.7): clinician words in the display serif with a 2pt ink rule, own replies in a sunk block,
@@ -31,6 +35,7 @@ struct MessagingView: View {
     @State private var visible: Set<UUID> = []
     @State private var active = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
@@ -108,9 +113,13 @@ struct MessagingView: View {
             .task {
                 active = true
                 guard let ticket = APIService.shared.access.snapshot() else { return }
-                do { try repository.resume(ticket); await repository.openCurrent() } catch { }
+                do {
+                    try repository.resume(ticket)
+                    await repository.openCurrent()
+                    if scenePhase == .active && selected == nil { await repository.acknowledgeVisible(visible) }
+                } catch { }
             }
-            .onDisappear { active = false; visible = [] }
+            .onDisappear { active = false }
             .onChange(of: selected?.id) { _, id in
                 if id == nil && active && scenePhase == .active { Task { await repository.acknowledgeVisible(visible) } }
             }
@@ -136,9 +145,13 @@ struct MessagingView: View {
 
     private var composer: some View {
         let content = repository.draft?.content ?? ""
+        let isEmpty = content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let stack = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Letterpress.Space.s10))
+            : AnyLayout(HStackLayout(alignment: .bottom, spacing: Letterpress.Space.s10))
         return VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
             LetterpressRule()
-            HStack(alignment: .bottom, spacing: Letterpress.Space.s10) {
+            stack {
                 TextField("Write a note", text: Binding(get: { repository.draft?.content ?? "" }, set: { try? repository.edit($0) }), axis: .vertical)
                     .lineLimit(1...5)
                     .letterpressField(isEmpty: content.isEmpty)
@@ -147,7 +160,12 @@ struct MessagingView: View {
                     Task { await repository.send() }
                 }
                 .buttonStyle(.letterpress(.filled))
-                .disabled(repository.sending || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(repository.sending || isEmpty)
+            }
+            if isEmpty && !repository.sending {
+                Text(NotesCopy.disabledSendReason)
+                    .font(Letterpress.ui(12, relativeTo: .caption))
+                    .foregroundStyle(Letterpress.inkSecondary)
             }
             HStack(alignment: .firstTextBaseline) {
                 Text(NotesCopy.emergency)
@@ -202,7 +220,7 @@ private struct NoteTurn: View {
 
     private var clinician: some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
-            if message.unreadForMe { Text("Unread").letterpressEyebrow(color: Letterpress.attentionText) }
+            if message.unreadForMe { Text(NotesCopy.unreadEyebrow(clinicianName: clinicianName)).letterpressEyebrow(color: Letterpress.attentionText) }
             stamp
             Text(message.content)
                 .font(Letterpress.display(17, relativeTo: .body))
@@ -216,7 +234,7 @@ private struct NoteTurn: View {
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(message.unreadForMe ? Letterpress.attentionMark : Letterpress.ink)
-                .frame(width: message.unreadForMe ? 3 : 2)
+                .frame(width: 2)
         }
     }
 
@@ -251,7 +269,7 @@ private struct NoteTurn: View {
                     Text(NotesCopy.referenceTitle(reference))
                         .font(Letterpress.ui(13, weight: .medium, relativeTo: .footnote))
                         .foregroundStyle(Letterpress.ink)
-                    Text(NotesCopy.referenceMeta(clinicianName: clinicianName))
+                    Text(NotesCopy.referenceMeta(clinicianName: clinicianName, fromPatient: message.senderType == "patient"))
                         .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
                         .foregroundStyle(Letterpress.inkTertiary)
                 }

@@ -29,7 +29,9 @@ struct NotesPresentationTests {
         #expect(NotesCopy.referenceTitle(labelled, locale: Self.us, timeZone: Self.utc) == "Friday photo")
         #expect(NotesCopy.referenceTitle(dated, locale: Self.us, timeZone: Self.utc) == "Photo · 12 Sep")
         #expect(NotesCopy.referenceTitle(routine, locale: Self.us, timeZone: Self.utc) == "Routine feedback")
-        #expect(NotesCopy.referenceMeta(clinicianName: "Synthetic Clinician") == "Referenced by Synthetic Clinician")
+        #expect(NotesCopy.referenceMeta(clinicianName: "Synthetic Clinician", fromPatient: false) == "Referenced by Synthetic Clinician")
+        // A patient's own turn references the record from the patient's side, not the clinician's.
+        #expect(NotesCopy.referenceMeta(clinicianName: "Synthetic Clinician", fromPatient: true) == "You referenced this")
     }
 
     @Test func composerCopyCoversEachState() {
@@ -40,5 +42,7 @@ struct NotesPresentationTests {
         #expect(NotesCopy.unreadHeader(0) == nil)
         #expect(NotesCopy.unreadHeader(2) == "2 unread")
         #expect(NotesCopy.emergency == "Not for emergencies. Use Something's wrong? on Today.")
+        #expect(NotesCopy.disabledSendReason == "Write a note to send")
+        #expect(NotesCopy.unreadEyebrow(clinicianName: "Synthetic Clinician") == "Unread · Synthetic Clinician")
     }
 }
