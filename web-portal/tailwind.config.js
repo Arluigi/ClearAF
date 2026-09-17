@@ -1,14 +1,18 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-    darkMode: 'media',
-    content: [
+  darkMode: 'media',
+  content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // Helpers like `dayBar` in src/lib build Tailwind class strings too; without this glob those
+    // classes are never in the generated CSS even though the guard below says they're valid syntax.
+    './src/lib/**/*.{ts,tsx}',
   ],
   theme: {
+    // Letterpress radii (spec §3): 0 · 4 · 26 · 999. Replaces Tailwind's scale so nothing in between can be used.
+    borderRadius: { none: '0px', DEFAULT: 'var(--radius)', sheet: '26px', full: '9999px' },
     extend: {
-      borderRadius: { lg: 'var(--radius)', md: 'var(--radius)', sm: '0px' },
       fontFamily: {
         display: ['var(--font-display)'],
         ui: ['var(--font-ui)'],
@@ -31,20 +35,12 @@ module.exports = {
           wash: 'rgb(var(--attention-wash) / <alpha-value>)',
         },
         error: 'rgb(var(--error) / <alpha-value>)',
-        rule: { DEFAULT: 'rgb(var(--ink) / 0.13)', strong: 'rgb(var(--ink) / <alpha-value>)' },
-
-        background: 'rgb(var(--background) / <alpha-value>)',
-        foreground: 'rgb(var(--foreground) / <alpha-value>)',
-        card: { DEFAULT: 'rgb(var(--card) / <alpha-value>)', foreground: 'rgb(var(--card-foreground) / <alpha-value>)' },
-        popover: { DEFAULT: 'rgb(var(--popover) / <alpha-value>)', foreground: 'rgb(var(--popover-foreground) / <alpha-value>)' },
-        primary: { DEFAULT: 'rgb(var(--primary) / <alpha-value>)', foreground: 'rgb(var(--primary-foreground) / <alpha-value>)' },
-        secondary: { DEFAULT: 'rgb(var(--secondary) / <alpha-value>)', foreground: 'rgb(var(--secondary-foreground) / <alpha-value>)' },
-        muted: { DEFAULT: 'rgb(var(--muted) / <alpha-value>)', foreground: 'rgb(var(--muted-foreground) / <alpha-value>)' },
-        accent: { DEFAULT: 'rgb(var(--ink) / 0.08)', foreground: 'rgb(var(--accent-foreground) / <alpha-value>)' },
-        destructive: { DEFAULT: 'rgb(var(--destructive) / <alpha-value>)', foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)' },
-        border: 'rgb(var(--ink) / 0.13)',
-        input: 'rgb(var(--ink) / 0.5)',
-        ring: 'rgb(var(--ring) / <alpha-value>)',
+        rule: {
+          DEFAULT: 'rgb(var(--ink) / 0.13)',
+          strong: 'rgb(var(--ink) / <alpha-value>)',
+          // Field boundary: ink at 50% is the lightest value that keeps 3:1 on every paper tone in both modes.
+          field: 'rgb(var(--ink) / 0.5)',
+        },
       },
     },
   },

@@ -19,11 +19,11 @@ export default function EnrollmentStatus({ patientId }: { patientId: string }) {
             <li key={index}>
               <span
                 className={
-                  'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-sm' +
-                  (line.tone === 'alert' ? ' border-destructive/60' : '')
+                  'inline-flex items-center gap-1 rounded-none border px-2 py-1 text-sm' +
+                  (line.tone === 'alert' ? ' border-error' : '')
                 }
               >
-                {line.tone === 'alert' && <AlertTriangle aria-hidden className="h-3.5 w-3.5 text-destructive" />}
+                {line.tone === 'alert' && <AlertTriangle aria-hidden className="h-3.5 w-3.5 text-error" />}
                 {line.text}
               </span>
             </li>

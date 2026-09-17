@@ -43,7 +43,7 @@ export default function FormEditor({
     editor.edit({ ...draft, ...change });
   return (
     <form
-      className="space-y-4 rounded-lg border bg-card p-5"
+      className="space-y-4 rounded-none border bg-surface p-5"
       onSubmit={(e) => {
         e.preventDefault();
         setError("");
@@ -68,7 +68,7 @@ export default function FormEditor({
           ? `· Version ${state.savedVersion ?? form?.version}`
           : "· Not assigned"}
       </h3>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-ink-secondary">
         Write your own questions. Saving creates a new form version; earlier
         responses keep their original questions.
       </p>

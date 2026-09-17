@@ -32,7 +32,7 @@ export default function QuestionFields({
       <label className="block">
         Answer type
         <select
-          className="ml-3 rounded-md border bg-background p-2"
+          className="ml-3 rounded-none border border-rule-field bg-surface p-2"
           value={question.type}
           onChange={(e) =>
             onChange({

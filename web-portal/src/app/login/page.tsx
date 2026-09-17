@@ -52,18 +52,18 @@ export default function LoginPage() {
   const isFormValid = email.trim() !== '' && password.length >= 6;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-canvas">
       <div className="w-full max-w-md space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-3">
-            <div className="p-3 rounded-full bg-primary/10 border border-primary/20">
-              <Stethoscope className="h-8 w-8 text-primary" />
+            <div className="p-3 rounded-full bg-sunk border border-rule">
+              <Stethoscope className="h-8 w-8 text-ink" />
             </div>
           </div>
           <div>
             <h1 className="editorial-title text-4xl">Clear AF</h1>
-            <p className="text-muted-foreground">Clinician portal</p>
+            <p className="text-ink-secondary">Clinician portal</p>
           </div>
         </div>
 
@@ -120,9 +120,9 @@ export default function LoginPage() {
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        <EyeOff className="h-4 w-4 text-ink-secondary" />
                       ) : (
-                        <Eye className="h-4 w-4 text-muted-foreground" />
+                        <Eye className="h-4 w-4 text-ink-secondary" />
                       )}
                     </Button>
                   </div>
@@ -131,7 +131,8 @@ export default function LoginPage() {
 
               <Button
                 type="submit"
-                className="w-full h-11"
+                size="lg"
+                className="w-full"
                 disabled={!isFormValid || isLoading}
               >
                 {isLoading ? (
@@ -148,18 +149,18 @@ export default function LoginPage() {
                 <Button
                   type="button"
                   variant="link"
-                  className="text-sm text-muted-foreground hover:text-primary"
+                  className="text-sm text-ink-secondary hover:text-ink"
                   onClick={() => router.push('/forgot-password')}
                 >
                   Forgot your password?
                 </Button>
 
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-ink-secondary">
                   Don&apos;t have an account?{' '}
                   <Button
                     type="button"
                     variant="link"
-                    className="p-0 h-auto font-semibold text-primary hover:underline"
+                    className="p-0 h-auto font-semibold text-ink hover:underline"
                     onClick={() => router.push('/register')}
                   >
                     Request practice access
@@ -171,7 +172,7 @@ export default function LoginPage() {
         </Card>
 
         {/* Footer */}
-        <div className="text-center text-sm text-muted-foreground">
+        <div className="text-center text-sm text-ink-secondary">
           <p>Professional dermatology platform</p>
           <p className="mt-1">For dermatology care teams</p>
         </div>

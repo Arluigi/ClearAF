@@ -6,8 +6,9 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Letterpress §4.2 persistent field label (mockup `.lbl`): mono 500, 10px, .16em, uppercase, ink.tertiary.
 const labelVariants = cva(
-  "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+  "font-data text-[10px] font-medium uppercase leading-none tracking-[0.16em] text-ink-tertiary peer-disabled:cursor-not-allowed"
 )
 
 const Label = React.forwardRef<
