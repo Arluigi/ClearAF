@@ -241,3 +241,14 @@ export function answerSeries(responses: CheckInResponse[], questionId: string): 
 export function formSummary(form: Form) {
   return `${plural(form.questions.length, "question")} · ${form.questions.filter((q) => q.required).length} required`;
 }
+
+export function templateSummary(template: Pick<Template, "steps">) {
+  if (!template.steps.length) return "No steps";
+  const text = template.steps.map((step) => step.title).join(" · ");
+  return text.length > 60 ? `${text.slice(0, 59)}…` : text;
+}
+
+export function templateVersionNote(version: number | null, isActive: boolean) {
+  if (version === null) return "New · saving creates v1";
+  return `V${version}${isActive ? "" : " · archived"} · editing creates v${version + 1}`;
+}
