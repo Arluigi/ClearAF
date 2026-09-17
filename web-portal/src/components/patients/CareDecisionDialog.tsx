@@ -133,15 +133,15 @@ export default function CareDecisionDialog({
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-ink-secondary">
                 {message.length}/{MAX_MESSAGE}
               </p>
-              <p className="text-sm text-muted-foreground">Shown to the patient with next steps. A refund will be marked pending.</p>
+              <p className="text-sm text-ink-secondary">Shown to the patient with next steps. A refund will be marked pending.</p>
             </div>
           )}
           {state.status === 'error' && (
             <p role="alert" className="flex items-center gap-1 text-sm">
-              <AlertTriangle aria-hidden className="h-4 w-4 text-destructive" />
+              <AlertTriangle aria-hidden className="h-4 w-4 text-error" />
               {state.error}
             </p>
           )}

@@ -112,7 +112,7 @@ export default function PatientPhotoHistory({ patientId, onCareDecision }: { pat
   return (
     <section ref={historySection} tabIndex={-1} aria-label="Patient photo history" className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-2">
-        <div><h2 className="text-lg font-semibold">Shared photos</h2><p className="text-sm text-muted-foreground">Capture times shown in your local timezone</p></div>
+        <div><h2 className="text-lg font-semibold">Shared photos</h2><p className="text-sm text-ink-secondary">Capture times shown in your local timezone</p></div>
         <Button variant="outline" size="sm" onClick={refresh} disabled={state.status === 'loading'}>Refresh images</Button>
       </div>
       <div className="flex flex-wrap items-center gap-3">
@@ -130,12 +130,12 @@ export default function PatientPhotoHistory({ patientId, onCareDecision }: { pat
         {state.photos.length === 0 ? <p>No shared photos on this page.</p> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {state.photos.map(photo => (
-              <div key={photo.id} className="rounded-xl bg-card p-3 space-y-3"><button type="button"
-                className="rounded-xl bg-card p-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              <div key={photo.id} className="rounded-none bg-surface p-3 space-y-3"><button type="button"
+                className="rounded-none bg-surface p-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                 aria-label={`Open photo from ${captureDate(photo)}`} onClick={event => { photoTrigger.current = event.currentTarget; setSelected(photo.id); }}>
                 <Thumbnail photo={photo} state={previews[photo.id]} />
                 <p className="mt-2 text-sm font-medium">{captureDate(photo)}</p>
-                {photo.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">{photo.notes}</p>}
+                {photo.notes && <p className="text-sm text-ink-secondary whitespace-pre-wrap break-words">{photo.notes}</p>}
               </button>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={reviewState.selected.includes(photo.id)} disabled={!reviewState.selected.includes(photo.id) && reviewState.selected.length >= 2} onChange={() => reviews.toggle(photo.id)} />Select photo from {captureDate(photo)} for comparison</label>
               {reviewState.status === 'loading' ? <p role="status" className="text-sm">Loading review status…</p> : reviewState.status === 'ready' && (reviewState.reviews[photo.id] ? <p className="text-sm">Reviewed by {reviewState.reviews[photo.id].reviewerName} · {new Date(reviewState.reviews[photo.id].reviewedAt).toLocaleString()}</p> : <div className="space-y-2"><p className="text-sm">Not reviewed</p>{reviewState.errors[photo.id] && <p role="alert" className="text-sm">Review could not be saved. Try again.</p>}<Button size="sm" variant="outline" disabled={reviewState.pending[photo.id]} onClick={() => void reviews.mark(photo.id)}>{reviewState.pending[photo.id] ? 'Saving review…' : reviewState.errors[photo.id] ? 'Retry marking reviewed' : 'Mark reviewed'}</Button></div>)}
@@ -157,7 +157,7 @@ export default function PatientPhotoHistory({ patientId, onCareDecision }: { pat
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{reviewState.selected.map(id => {
             const photo = state.photos.find(item => item.id === id);
             const original = reviewState.originals[id];
-            return photo && <figure key={id} className="min-w-0"><figcaption className="text-sm mb-2">{captureDate(photo)}</figcaption><div tabIndex={0} role="region" aria-label={`Scrollable photo from ${captureDate(photo)}`} className="h-[40vh] overflow-auto rounded-xl bg-muted">{original?.url ? <ComparisonImage key={original.url} url={original.url} photo={photo} zoom={zoom} /> : <p role={original?.error ? 'alert' : 'status'} className="p-4">{original?.error ? 'Photo unavailable. Retry comparison.' : 'Loading photo…'}</p>}</div></figure>;
+            return photo && <figure key={id} className="min-w-0"><figcaption className="text-sm mb-2">{captureDate(photo)}</figcaption><div tabIndex={0} role="region" aria-label={`Scrollable photo from ${captureDate(photo)}`} className="h-[40vh] overflow-auto rounded-none bg-sunk">{original?.url ? <ComparisonImage key={original.url} url={original.url} photo={photo} zoom={zoom} /> : <p role={original?.error ? 'alert' : 'status'} className="p-4">{original?.error ? 'Photo unavailable. Retry comparison.' : 'Loading photo…'}</p>}</div></figure>;
           })}</div>
           <Button variant="outline" onClick={() => void reviews.compare()}>Retry comparison</Button>
         </DialogContent>

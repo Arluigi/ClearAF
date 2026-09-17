@@ -70,7 +70,7 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
       ) : (
         <ul className="space-y-3">
           {rows.map((report) => (
-            <li key={report.id} className="space-y-2 rounded-md border p-4">
+            <li key={report.id} className="space-y-2 rounded-none border p-4">
               <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                 <span>{categoryLabel(report.category)}</span>
                 <Badge variant={report.status === 'open' ? 'destructive' : 'secondary'} className="gap-1">
@@ -78,9 +78,9 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
                   {statusLabel(report.status)}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground">{new Date(report.createdAt).toLocaleString()}</p>
+              <p className="text-sm text-ink-secondary">{new Date(report.createdAt).toLocaleString()}</p>
               <p className="whitespace-pre-wrap break-words text-sm">{report.description}</p>
-              {report.resolutionNote && <p className="text-sm text-muted-foreground">Note to patient: {report.resolutionNote}</p>}
+              {report.resolutionNote && <p className="text-sm text-ink-secondary">Note to patient: {report.resolutionNote}</p>}
               {errors[report.id] && <p role="alert" className="text-sm">Not saved. Showing the latest state; try again if still needed.</p>}
               {report.status !== 'resolved' && (
                 <div className="flex flex-wrap items-start gap-2">

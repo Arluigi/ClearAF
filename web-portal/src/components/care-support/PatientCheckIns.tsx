@@ -26,13 +26,13 @@ function Responses({ patientId }: { patientId: string }) {
           )}
           {result.data.data.map((response) => (
             <article
-              className="space-y-3 rounded-md border p-5"
+              className="space-y-3 rounded-none border p-5"
               key={response.id}
             >
               <h4 className="font-medium">
                 {response.form.title} · Version {response.form.version}
               </h4>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-ink-secondary">
                 Submitted {new Date(response.submittedAt).toLocaleString()} ·
                 Received {new Date(response.receivedAt).toLocaleString()}
               </p>

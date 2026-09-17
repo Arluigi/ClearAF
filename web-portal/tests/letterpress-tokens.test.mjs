@@ -39,17 +39,17 @@ for (const [theme, block] of [['light', lightBlock], ['dark', darkBlock]]) {
     for (const [bg, texts] of Object.entries(PAIRS)) for (const fg of texts)
       assert.ok(contrast(t[fg], t[bg]) >= 4.5, `${fg} on ${bg}: ${contrast(t[fg], t[bg]).toFixed(2)}`);
   });
-  test(`${theme} input boundary meets 3:1 against canvas and surface`, () => {
-    const m = tailwind.match(/input:\s*'rgb\(var\(--ink\)\s*\/\s*([\d.]+)\)'/);
-    assert.ok(m, 'input token not found in tailwind.config.js');
+  test(`${theme} field boundary meets 3:1 on every paper tone`, () => {
+    const m = tailwind.match(/field:\s*'rgb\(var\(--ink\)\s*\/\s*([\d.]+)\)'/);
+    assert.ok(m, 'rule.field token not found in tailwind.config.js');
     const alpha = Number(m[1]);
     const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
     const toHex = (arr) => '#' + arr.map((n) => Math.round(n).toString(16).padStart(2, '0')).join('').toUpperCase();
     const inkRgb = rgbOf(t.ink);
-    for (const bg of ['canvas', 'surface']) {
+    for (const bg of ['canvas', 'surface', 'rail', 'sunk']) {
       const bgRgb = rgbOf(t[bg]);
       const composite = toHex(inkRgb.map((c, i) => alpha * c + (1 - alpha) * bgRgb[i]));
-      assert.ok(contrast(composite, t[bg]) >= 3.0, `input boundary vs ${bg}: ${contrast(composite, t[bg]).toFixed(2)}`);
+      assert.ok(contrast(composite, t[bg]) >= 3.0, `field boundary vs ${bg}: ${contrast(composite, t[bg]).toFixed(2)}`);
     }
   });
 }
@@ -60,8 +60,8 @@ test('retired Care Journal and wellness values are gone', () => {
 });
 
 test('Tailwind colours keep opacity modifiers working', () => {
-  assert.match(tailwind, /primary:\s*{\s*DEFAULT:\s*'rgb\(var\(--primary\) \/ <alpha-value>\)'/);
   assert.match(tailwind, /ink:\s*{\s*DEFAULT:\s*'rgb\(var\(--ink\) \/ <alpha-value>\)'/);
+  assert.match(tailwind, /canvas:\s*'rgb\(var\(--canvas\) \/ <alpha-value>\)'/);
 });
 
 test('fonts load through next/font with swap', () => {
@@ -73,4 +73,8 @@ test('fonts load through next/font with swap', () => {
 test('focus ring is a 2px ink outline and radius is 4px', () => {
   assert.match(css, /:focus-visible\s*{\s*outline:\s*2px solid rgb\(var\(--ink\)\)/);
   assert.match(css, /--radius:\s*4px/);
+});
+
+test('native controls (checkbox, radio, range) tint from ink, not browser blue', () => {
+  assert.match(css, /accent-color:\s*rgb\(var\(--ink\)\);/);
 });

@@ -2,39 +2,72 @@
 
 import * as React from "react"
 import * as TabsPrimitive from "@radix-ui/react-tabs"
+import { cva } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Letterpress §4.3. `segmented` (default) for 2–3 way filters: square sunk track, surface thumb carrying the
+// spec elevation. `underline` for workspace sections: a 2px ink rule under the list; the active tab adds its
+// own 2px ink rule. The segmented thumb is 1.2:1 against sunk, so the active trigger also changes weight and
+// draws an inset ink hairline.
+type TabsVariant = "segmented" | "underline"
+
+const TabsVariantContext = React.createContext<TabsVariant>("segmented")
+
 const Tabs = TabsPrimitive.Root
+
+const tabsListVariants = cva("inline-flex items-center text-ink-secondary", {
+  variants: {
+    variant: {
+      segmented: "gap-0.5 rounded-none bg-sunk p-0.5",
+      underline: "w-full gap-6 border-b-2 border-ink",
+    },
+  },
+  defaultVariants: { variant: "segmented" },
+})
+
+const tabsTriggerVariants = cva(
+  "inline-flex items-center justify-center whitespace-nowrap text-[13px] font-[450] transition-colors disabled:pointer-events-none disabled:text-ink-tertiary data-[state=active]:font-medium data-[state=active]:text-ink",
+  {
+    variants: {
+      variant: {
+        segmented:
+          "min-h-8 rounded-none px-3 data-[state=active]:bg-surface data-[state=active]:shadow-[0_1px_2px_rgba(18,19,18,.14),inset_0_0_0_1px_rgb(var(--ink)/0.5)]",
+        underline: "border-b-2 border-transparent pb-2.5 text-sm data-[state=active]:border-ink",
+      },
+    },
+    defaultVariants: { variant: "segmented" },
+  }
+)
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
-      className
-    )}
-    {...props}
-  />
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & { variant?: TabsVariant }
+>(({ className, variant = "segmented", ...props }, ref) => (
+  <TabsVariantContext.Provider value={variant}>
+    <TabsPrimitive.List
+      ref={ref}
+      data-variant={variant}
+      className={cn(tabsListVariants({ variant }), className)}
+      {...props}
+    />
+  </TabsVariantContext.Provider>
 ))
 TabsList.displayName = TabsPrimitive.List.displayName
 
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow",
-      className
-    )}
-    {...props}
-  />
-))
+>(({ className, ...props }, ref) => {
+  const variant = React.useContext(TabsVariantContext)
+  return (
+    <TabsPrimitive.Trigger
+      ref={ref}
+      className={cn(tabsTriggerVariants({ variant }), className)}
+      {...props}
+    />
+  )
+})
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName
 
 const TabsContent = React.forwardRef<
@@ -43,10 +76,7 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn(
-      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-      className
-    )}
+    className={cn("mt-4", className)}
     {...props}
   />
 ))

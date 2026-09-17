@@ -26,8 +26,8 @@ function DecisionMeta({ decision }: { decision: CareDecision }) {
           </Badge>
         )}
       </div>
-      <p className="text-muted-foreground">{decision.clinicianName} · {new Date(decision.createdAt).toLocaleString()}</p>
-      {decision.patientMessage && <p className="whitespace-pre-wrap break-words text-foreground">{decision.patientMessage}</p>}
+      <p className="text-ink-secondary">{decision.clinicianName} · {new Date(decision.createdAt).toLocaleString()}</p>
+      {decision.patientMessage && <p className="whitespace-pre-wrap break-words text-ink">{decision.patientMessage}</p>}
     </div>
   );
 }
@@ -93,12 +93,12 @@ export default function CareStatusCard({ patientId, refresh }: { patientId: stri
   return (
     <section aria-label="Care status" className="space-y-4 border-t pt-6">
       <h2 className="text-lg font-semibold">Care status</h2>
-      <div className="space-y-3 rounded-md border p-4">
+      <div className="space-y-3 rounded-none border p-4">
         <LoadState {...currentResult} />
         {currentResult.data && (current ? (
           <DecisionMeta decision={current} />
         ) : (
-          <p className="text-sm text-muted-foreground">No care decision recorded. Online care is the current default.</p>
+          <p className="text-sm text-ink-secondary">No care decision recorded. Online care is the current default.</p>
         ))}
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => setDialogDecision('refer_out')}>Refer out</Button>

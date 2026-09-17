@@ -57,13 +57,13 @@ function MessageRow({
     <article
       ref={element}
       className={
-        "max-w-2xl space-y-2 rounded-lg border p-4 " +
+        "max-w-2xl space-y-2 rounded-none border p-4 " +
         (message.senderType === "dermatologist"
-          ? "ml-auto bg-accent"
-          : "mr-auto bg-card")
+          ? "ml-auto bg-surface"
+          : "mr-auto bg-sunk")
       }
     >
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap gap-3 text-xs text-ink-secondary">
         <span>
           {message.senderType === "dermatologist" ? "Care team" : "Patient"}
         </span>
@@ -239,7 +239,7 @@ export default function ConversationView({
           <h2 className="text-2xl font-medium">
             {state.conversation?.patientName || "Patient conversation"}
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-secondary">
             {state.conversation
               ? `${state.conversation.unreadCount} unread · `
               : ""}
@@ -311,14 +311,14 @@ export default function ConversationView({
         <label className="block">
           Message
           <textarea
-            className="mt-2 block min-h-28 w-full rounded-md border bg-background p-3"
+            className="mt-2 block min-h-28 w-full rounded-none border border-rule-field bg-surface p-3"
             maxLength={4000}
             value={state.text}
             disabled={controller.frozen}
             onChange={(event) => controller.edit(event.target.value)}
           />
         </label>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-secondary">
           Text only · {state.text.length}/4,000 characters. A sent message has
           been accepted by ClearAF.
         </p>
@@ -339,7 +339,7 @@ export default function ConversationView({
         </Button>
         {state.sendStatus === "failed" && (
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-secondary">
               A previous attempt may already have been sent. Refresh before
               composing another message.
             </p>

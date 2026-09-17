@@ -27,7 +27,7 @@ export default function TemplatePicker({
           <label className="block">
             Active template
             <select
-              className="mt-2 block w-full rounded-md border bg-background p-2"
+              className="mt-2 block w-full rounded-none border border-rule-field bg-surface p-2"
               disabled={disabled}
               value={selected}
               onChange={(e) => setSelected(e.target.value)}
@@ -59,7 +59,7 @@ export default function TemplatePicker({
           >
             Copy into draft
           </Button>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-secondary">
             Replaces the current draft. Review and explicitly save the patient
             routine.
           </p>

@@ -62,7 +62,7 @@ export default function TemplateEditor({
   };
   return (
     <form
-      className="space-y-5 rounded-lg border bg-card p-5"
+      className="space-y-5 rounded-none border bg-surface p-5"
       onSubmit={(event) => {
         event.preventDefault();
         if (
@@ -82,7 +82,7 @@ export default function TemplateEditor({
       <h2 className="text-xl font-medium">
         {template || state.savedVersion ? "Edit template" : "New template"}
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-ink-secondary">
         Changes create an immutable version. Patient routines already copied
         from this template keep their own versions.
       </p>
