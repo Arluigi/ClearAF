@@ -14,6 +14,10 @@
     --font-ui: var(--font-plex-sans), -apple-system, system-ui, sans-serif;
     --font-data: var(--font-plex-mono), ui-monospace, monospace;
     --radius: 4px;
+
+    /* Native controls (checkbox, radio, range) paint from UA chrome, not Tailwind utilities — without
+       this they render browser blue instead of the Letterpress ink accent. */
+    accent-color: rgb(var(--ink));
   }
   @media (prefers-color-scheme: dark) {
     :root {

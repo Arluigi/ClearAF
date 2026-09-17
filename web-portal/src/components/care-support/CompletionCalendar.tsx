@@ -128,7 +128,12 @@ export default function CompletionCalendar({
                 key={date}
                 aria-label={`${date}: ${record ? `Morning ${record.morning}, evening ${record.evening}` : "Not recorded"}`}
                 aria-pressed={day === date}
-                className="min-h-24 min-w-0 rounded-none border p-2 text-left focus-visible:outline focus-visible:outline-ink aria-pressed:bg-rail aria-pressed:selected-outline"
+                // `.selected-outline` (aria-pressed) sits inset at -2px; without a stacked override,
+                // `focus-visible:outline-offset-2` alone ties it on specificity (class+attribute vs
+                // class+pseudo) and can compile either order, so a pressed day that gains keyboard
+                // focus can look identical to pressed-only. `aria-pressed:focus-visible:` adds a third
+                // selector, which always outranks both and keeps the outward focus ring visible.
+                className="min-h-24 min-w-0 rounded-none border p-2 text-left focus-visible:outline focus-visible:outline-ink focus-visible:outline-offset-2 aria-pressed:bg-rail aria-pressed:selected-outline aria-pressed:focus-visible:outline-offset-2"
                 onClick={() => setDay(date)}
               >
                 <span className="block font-medium">

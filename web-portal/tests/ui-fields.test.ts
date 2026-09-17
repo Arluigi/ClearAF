@@ -6,7 +6,7 @@ import { Input } from "../src/components/ui/input";
 import { Textarea } from "../src/components/ui/textarea";
 import { Label } from "../src/components/ui/label";
 import { Switch } from "../src/components/ui/switch";
-import { ALIAS_CLASS, DIMMING_OPACITY, REMOVED_FOCUS, RETIRED_RADIUS, SHADOW_UTILITY, classesOf, has, read } from "./letterpress-rules";
+import { ALIAS_CLASS, DIMMING_OPACITY, REMOVED_FOCUS, RETIRED_RADIUS, SHADOW_UTILITY, allClasses, classesOf, has, read } from "./letterpress-rules";
 
 const noop = () => {};
 
@@ -36,6 +36,23 @@ test("switch signals state by position and fill, never hue", () => {
   const html = renderToStaticMarkup(h(Switch, { checked: true }));
   has(classesOf(html), "h-6", "w-11", "rounded-full", "border-[1.5px]", "data-[state=checked]:bg-ink", "data-[state=unchecked]:border-rule-field", "data-[state=unchecked]:bg-transparent");
   assert.match(html, /data-\[state=checked\]:bg-canvas/);
+});
+
+test("disabled switch shows sunk + ink.tertiary, outranking the checked/unchecked state classes", () => {
+  const c = allClasses(renderToStaticMarkup(h(Switch, { checked: true, disabled: true })));
+  // Stacked disabled:data-[state=*]: variants (3 simple selectors) must exist so they outrank the
+  // 2-selector data-[state=*]: rules regardless of Tailwind's compiled output order.
+  // The thumb's disabled fill must come from a selector that also outranks the state classes —
+  // group-disabled compiles to `.group:disabled <descendant>`, three simple selectors.
+  has(
+    c,
+    "disabled:data-[state=checked]:bg-sunk",
+    "disabled:data-[state=checked]:border-rule",
+    "disabled:data-[state=unchecked]:bg-sunk",
+    "disabled:data-[state=unchecked]:border-rule",
+    "group-disabled:bg-ink-tertiary",
+    "group",
+  );
 });
 
 test("select trigger is a baseline field; highlighted items get a 2px ink outline", () => {

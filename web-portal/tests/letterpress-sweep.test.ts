@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { ALIAS_CLASS, DIMMING_OPACITY, HEX_COLOUR, HUE_CLASS, REMOVED_FOCUS, RETIRED_RADIUS, SHADOW_UTILITY, offences, read, sourceFiles } from "./letterpress-rules";
 
 const SOURCES = sourceFiles("src");
@@ -31,17 +33,23 @@ test("primitives keep the visible focus outline and never dim to show state", ()
   assert.deepEqual(offences(DIMMING_OPACITY, PRIMITIVES), []);
 });
 
-test("the alias layer is gone from globals.css and tailwind.config.js", () => {
+test("the alias layer is gone from globals.css and tailwind.config.js", async () => {
   const css = read("src/app/globals.css");
-  const tailwind = read("tailwind.config.js");
   assert.doesNotMatch(css, /--(?:background|foreground|card|popover|primary|secondary|muted|accent|destructive|ring|input)(?:-foreground)?\s*:/);
-  // Matches a shadcn alias key only when it points at its own bare CSS var (how every alias was
-  // originally declared, e.g. `secondary: 'rgb(var(--secondary)...)'`), not a Letterpress sub-key
-  // that happens to share a word, e.g. `ink: { secondary: 'rgb(var(--ink-secondary)...)' }`.
-  assert.doesNotMatch(
-    tailwind,
-    /(?<![\w-])(background|foreground|card|popover|primary|secondary|muted|accent|destructive|input|ring|border):\s*(?:\{\s*DEFAULT:\s*)?'rgb\(var\(--\1\)/,
-  );
+  // Read the config object itself rather than pattern-matching its source text: a regex tied to how
+  // an alias key happens to be spelled (e.g. requiring it to reference its own bare CSS var) can miss
+  // a key that's merely present with some other value. `accent`, `border` and `input` all slipped past
+  // the old regex this way. theme.extend.colors is the actual surface Tailwind generates bg-*/text-*/…
+  // utilities from, so checking its keys directly is authoritative.
+  const configPath = join(process.cwd(), "tailwind.config.js");
+  const config = (await import(pathToFileURL(configPath).href)).default;
+  const RETIRED_ALIAS_KEYS = [
+    "background", "foreground", "card", "popover", "primary", "secondary",
+    "muted", "accent", "destructive", "border", "input", "ring",
+  ];
+  const colourKeys = Object.keys(config.theme?.extend?.colors ?? {});
+  for (const key of RETIRED_ALIAS_KEYS) assert.ok(!colourKeys.includes(key), `retired alias key '${key}' present in theme.extend.colors`);
+  const tailwind = read("tailwind.config.js");
   assert.match(tailwind, /borderRadius:\s*{\s*none:\s*'0px',\s*DEFAULT:\s*'var\(--radius\)',\s*sheet:\s*'26px',\s*full:\s*'9999px'\s*}/);
 });
 

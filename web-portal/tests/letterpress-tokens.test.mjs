@@ -74,3 +74,7 @@ test('focus ring is a 2px ink outline and radius is 4px', () => {
   assert.match(css, /:focus-visible\s*{\s*outline:\s*2px solid rgb\(var\(--ink\)\)/);
   assert.match(css, /--radius:\s*4px/);
 });
+
+test('native controls (checkbox, radio, range) tint from ink, not browser blue', () => {
+  assert.match(css, /accent-color:\s*rgb\(var\(--ink\)\);/);
+});
