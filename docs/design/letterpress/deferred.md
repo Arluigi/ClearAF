@@ -13,3 +13,6 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | Portal Account | Notification toggles | No clinician notification preferences |
 | Portal Account | Session timeout | No configurable session policy |
 | Portal Account | Audit-log export | No audit log |
+| Portal nav rail | Worklist count, Messages unread dot, "Check-in forms" item | The rail loads no worklist or inbox data; there is no standalone forms page |
+| Portal Workspace header | Age, sex and diagnosis line | No such patient fields |
+| Portal Workspace header | "Adherence 79% / 14d", "2 of 4" position, tab counts | Worklist-only data; the workspace does not load the worklist or every tab's totals |

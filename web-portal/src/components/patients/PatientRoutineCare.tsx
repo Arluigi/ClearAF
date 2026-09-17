@@ -1,8 +1,6 @@
 'use client';
 
 import TemplatePicker from '@/components/care-support/TemplatePicker';
-import CompletionCalendar from '@/components/care-support/CompletionCalendar';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { ArrowDown, ArrowUp, ClipboardCheck, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,20 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { useClinicalAPI } from '@/lib/auth';
-import { RoutineCareController, type RoutineEditorState } from '@/lib/routine-care';
+import type { RoutineCareController, RoutineCareState, RoutineEditorState } from '@/lib/routine-care';
 import type { RoutineTimeOfDay } from '@/types/api';
-
-function localDateToday(date = new Date()) {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function displayTime(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return 'Time unavailable';
-  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 function RoutineEditor({
   slot,
@@ -177,25 +163,7 @@ function RoutineEditor({
   </Card>;
 }
 
-export default function PatientRoutineCare({ patientId, onDirtyChange }: { patientId: string; onDirtyChange?: (dirty: boolean) => void }) {
-  const api = useClinicalAPI();
-  const controller = useMemo(() => new RoutineCareController({
-    fetchSnapshot: () => api.getPatientRoutines(patientId, localDateToday()),
-    saveRevision: (slot, revisionId, body) => api.savePatientRoutine(patientId, slot, revisionId, body),
-    fetchHistory: page => api.getPatientRoutineCompletions(patientId, page, 20),
-  }), [api, patientId]);
-  const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
-
-  useEffect(() => {
-    void controller.load();
-    void controller.loadHistory(1);
-    return () => controller.cancel();
-  }, [controller]);
-
-  useEffect(() => {
-    onDirtyChange?.(Object.values(state.slots).some(editor => editor.dirty || editor.hasPendingSave));
-  }, [state.slots, onDirtyChange]);
-
+export default function PatientRoutineCare({ controller, state }: { controller: RoutineCareController; state: RoutineCareState }) {
   const reloadAssignments = () => { void controller.load(); };
   const reloadConflict = (slot: RoutineTimeOfDay) => { void controller.reloadConflict(slot); };
   const saving = state.slots.morning.status === 'saving' || state.slots.evening.status === 'saving';
@@ -221,41 +189,5 @@ export default function PatientRoutineCare({ patientId, onDirtyChange }: { patie
       <RoutineEditor slot="morning" editor={state.slots.morning} controller={controller} reload={() => reloadConflict('morning')} />
       <RoutineEditor slot="evening" editor={state.slots.evening} controller={controller} reload={() => reloadConflict('evening')} />
     </div>}
-
-    <CompletionCalendar patientId={patientId} />
-    <div className="space-y-4 border-t pt-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="font-medium">Recent completion events</h2>
-          <p className="text-sm text-ink-secondary">Patient-reported completions retain the routine revision viewed at that time.</p>
-        </div>
-        <Button type="button" variant="outline" size="sm" disabled={state.history.status === 'loading'} onClick={() => void controller.loadHistory(state.history.page)}>
-          Refresh history
-        </Button>
-      </div>
-      {state.history.status === 'loading' && <p role="status">Loading completion history…</p>}
-      {state.history.status === 'error' && <div role="alert" className="space-y-2">
-        <p>{state.history.error}</p>
-        <Button type="button" variant="outline" onClick={() => void controller.loadHistory(state.history.page)}>Retry history</Button>
-      </div>}
-      {state.history.status === 'ready' && <>
-        {state.history.entries.length === 0 ? <p className="text-sm text-ink-secondary">No completion events on this page.</p> : <div className="space-y-3">
-          {state.history.entries.map(entry => <article key={entry.id} className="border-t pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-medium">{entry.routine.name}</p>
-              <Badge variant="outline">{entry.routine.timeOfDay === 'morning' ? 'Morning' : 'Evening'} · Version {entry.routine.version}</Badge>
-            </div>
-            <p className="mt-2 text-sm">Completed {displayTime(entry.completedAt)}</p>
-            <p className="text-sm text-ink-secondary">Reported local date {entry.localDate} · {entry.timeZone}</p>
-            <p className="text-sm text-ink-secondary">Received {displayTime(entry.receivedAt)}</p>
-          </article>)}
-        </div>}
-        <nav aria-label="Completion history pages" className="flex flex-wrap items-center justify-between gap-2">
-          <Button type="button" variant="outline" disabled={state.history.page <= 1} onClick={() => void controller.loadHistory(state.history.page - 1)}>Previous events</Button>
-          <p role="status" className="text-sm">Page {state.history.page} of {state.history.totalPages} · {state.history.total} events</p>
-          <Button type="button" variant="outline" disabled={state.history.page >= state.history.totalPages} onClick={() => void controller.loadHistory(state.history.page + 1)}>Next events</Button>
-        </nav>
-      </>}
-    </div>
   </section>;
 }

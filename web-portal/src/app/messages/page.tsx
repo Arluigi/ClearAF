@@ -6,7 +6,7 @@ import { useAuth, useClinicalAPI } from "@/lib/auth";
 import { useRead, LoadState } from "@/components/care-support/shared";
 import ConversationView from "@/components/messages/ConversationView";
 import { Button } from "@/components/ui/button";
-import type { Conversation, MessageReference } from "@/lib/assigned-messaging";
+import { messageReference, type Conversation } from "@/lib/assigned-messaging";
 function Messages() {
   const api = useClinicalAPI();
   const { user } = useAuth();
@@ -21,16 +21,11 @@ function Messages() {
     (conversation: Conversation) => setObserved(conversation),
     [],
   );
-  const type = params.get("referenceType"),
-    id = params.get("referenceId");
-  const reference = useMemo<MessageReference | null>(
-    () =>
-      (type === "photo" || type === "routineRevision") &&
-      id &&
-      /^[0-9a-f-]{36}$/i.test(id)
-        ? { type, id }
-        : null,
-    [type, id],
+  const referenceType = params.get("referenceType"),
+    referenceId = params.get("referenceId");
+  const reference = useMemo(
+    () => messageReference(referenceType, referenceId),
+    [referenceType, referenceId],
   );
   return (
     <DashboardLayout title="Messages">

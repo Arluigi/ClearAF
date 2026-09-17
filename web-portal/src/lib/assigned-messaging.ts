@@ -272,3 +272,9 @@ export class ConversationController {
     }
   }
 }
+
+const REFERENCE_ID = /^[0-9a-f-]{36}$/i;
+/** Only a photo or routine revision UUID from the URL can become a message reference. */
+export function messageReference(type: string | null, id: string | null): MessageReference | null {
+  return (type === "photo" || type === "routineRevision") && id && REFERENCE_ID.test(id) ? { type, id } : null;
+}
