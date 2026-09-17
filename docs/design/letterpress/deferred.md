@@ -16,3 +16,4 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | iOS Routine | PRESCRIPTION chip on steps | Routine steps carry no prescription flag |
 | iOS Routine | "Earlier versions of this routine" row | No patient API lists previous routine versions |
 | iOS Routine | "Assigned by Dr. Om" byline | Revisions store the author's ID, not a name; the byline reads "Assigned on 2 Sep" |
+| iOS Today | Check-in "4 questions · due today" | No check-in schedule; the form loads only inside Check-in |

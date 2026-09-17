@@ -20,6 +20,10 @@ enum CareStatusCopy {
         "Your photos and history stay available in ClearAF.",
         "You can still message your care team.",
     ]
+    static func byline(_ decision: CareDecision, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        guard let date = RoutineDates.instant(decision.createdAt) else { return "From \(decision.clinicianName)" }
+        return "From \(decision.clinicianName) on \(LetterpressFormat.dayMonthYear(date, locale: locale, timeZone: timeZone))"
+    }
 }
 
 /// Shown on Today only while the latest decision moves care away from asynchronous online care.
@@ -32,50 +36,50 @@ struct CareStatusSection: View {
     }
 }
 
+/// Adapted to Letterpress: eyebrow, serif title, clinician words with a 2pt ink rule (§4.7), ruled next steps.
 struct CareStatusCard: View {
     let decision: CareDecision
     var body: some View {
-        VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+            Text("Care update").letterpressEyebrow()
             Text(CareStatusCopy.title(for: decision.decision))
-                .font(Letterpress.ui(17, weight: .medium, relativeTo: .headline))
+                .font(Letterpress.display(24, relativeTo: .title2))
+                .foregroundStyle(Letterpress.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            // One line when it fits; otherwise name and date stack instead of squeezing the name into a column.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: Letterpress.Space.s4) {
-                    Text("From \(decision.clinicianName)")
-                    if let date = RoutineDates.instant(decision.createdAt) {
-                        Text("·").accessibilityHidden(true)
-                        Text(date, format: .dateTime.month().day().year())
-                    }
-                }
-                VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                    Text("From \(decision.clinicianName)").fixedSize(horizontal: false, vertical: true)
-                    if let date = RoutineDates.instant(decision.createdAt) {
-                        Text(date, format: .dateTime.month().day().year())
-                    }
-                }
-            }
-            .font(.subheadline)
-            .foregroundStyle(Letterpress.inkSecondary)
+            Text(CareStatusCopy.byline(decision))
+                .font(Letterpress.ui(13, relativeTo: .footnote))
+                .foregroundStyle(Letterpress.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             if let message = decision.patientMessage, !message.isEmpty {
-                Text(message).fixedSize(horizontal: false, vertical: true)
+                Text(message)
+                    .font(Letterpress.display(17, relativeTo: .body))
+                    .foregroundStyle(Letterpress.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, Letterpress.Space.s14)
+                    .overlay(alignment: .leading) { Rectangle().fill(Letterpress.ink).frame(width: 2) }
             }
-            VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
-                Text("Next steps").font(.headline)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Next steps").letterpressEyebrow().padding(.bottom, Letterpress.Space.s6)
                 ForEach(CareStatusCopy.nextSteps, id: \.self) { step in
-                    HStack(alignment: .firstTextBaseline, spacing: Letterpress.Space.s10) {
-                        Text("•").accessibilityHidden(true)
-                        Text(step).fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text(step)
+                        .font(Letterpress.ui(15, relativeTo: .body))
+                        .foregroundStyle(Letterpress.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, Letterpress.Space.s10)
+                        .overlay(alignment: .top) { LetterpressRule() }
                 }
+                LetterpressRule()
             }
+            .padding(.top, Letterpress.Space.s6)
             if let refund = CareStatusCopy.refund(decision.refundStatus) {
-                Text(refund).font(.subheadline).foregroundStyle(Letterpress.inkSecondary)
+                Text(refund)
+                    .font(Letterpress.ui(13, relativeTo: .footnote))
+                    .foregroundStyle(Letterpress.inkSecondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .letterpressSurface()
-        .padding(.horizontal, 20)
+        .padding(.horizontal, Letterpress.Space.s22)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("careStatusCard")
     }
