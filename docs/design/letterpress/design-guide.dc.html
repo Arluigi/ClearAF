@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><title>ClearAF — Letterpress design guide</title><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=IBM+Plex+Sans:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"><style>
+body{margin:0;background:#F2EFE7;color:#121312;font-family:'IBM Plex Sans',-apple-system,system-ui,sans-serif}
+a{color:#121312}a:hover{color:#6E4709}
+.eyebrow{font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#5F5D55}
+.h2{margin:0;font:300 30px/1.12 Newsreader,Georgia,serif;color:#121312}
+.h3{margin:0;font:500 16px/1.3 'IBM Plex Sans';color:#121312}
+.p{margin:0;font:400 14px/1.65 'IBM Plex Sans';color:#56544D;max-width:74ch;text-wrap:pretty}
+.mono{font:500 12px/1.5 'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;color:#121312}
+.sec{display:flex;flex-direction:column;gap:20px;padding:44px 0;border-top:2px solid #121312}
+.grid{display:grid;gap:14px}
+.card{border:1px solid rgba(18,19,18,.2);background:#EDEAE1;padding:18px}
+.row{display:flex;flex-wrap:wrap;gap:14px}
+.bk{background:#121312;color:#F2EFE7;border:0;border-radius:4px;padding:14px 22px;font:500 15px 'IBM Plex Sans'}
+.bo{background:transparent;color:#121312;border:1px solid rgba(18,19,18,.32);border-radius:4px;padding:13px 21px;font:500 15px 'IBM Plex Sans'}
+.bt{background:transparent;color:#121312;border:0;padding:13px 2px;font:500 15px 'IBM Plex Sans';text-decoration:underline;text-underline-offset:3px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#F0E6D2;color:#6E4709;padding:5px 9px;font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.06em}
+.do{border-left:2px solid #121312;padding-left:14px;font:450 14px/1.55 'IBM Plex Sans';color:#121312}
+.dont{border-left:2px solid #A6701F;padding-left:14px;font:450 14px/1.55 'IBM Plex Sans';color:#56544D;text-decoration:line-through;text-decoration-color:rgba(166,112,31,.5)}
+table{border-collapse:collapse;width:100%;font:400 13px/1.5 'IBM Plex Sans'}
+th{text-align:left;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#5F5D55;padding:0 10px 10px;border-bottom:2px solid #121312}
+td{padding:11px 10px;border-bottom:1px solid rgba(18,19,18,.14);vertical-align:top}
+code{font:500 12px 'IBM Plex Mono',monospace;color:#121312}
+.sw{height:52px;border:1px solid rgba(18,19,18,.14)}
+.ph{background:repeating-linear-gradient(135deg,#d6d1c3 0 5px,#e4dfd2 5px 10px)}
+</style></helmet>
+
+<div style="max-width:1100px;margin:0 auto;padding:56px 32px 96px">
+<div style="display:flex;flex-direction:column;gap:14px;padding-bottom:36px">
+<div style="display:flex;align-items:center;gap:12px"><div style="width:24.0px;height:30px;border:1.6px solid #121312;display:flex;align-items:flex-end;justify-content:flex-end;padding:0 5.5px 3px 0;box-sizing:border-box;flex:none"><div style="font:300 14px/1 Newsreader,serif;font-style:italic;color:#121312">af</div></div><div style="font:400 24px/1 Newsreader,serif;letter-spacing:.2em">clear<span style="font-style:italic">af</span></div></div>
+<h1 style="margin:0;font:300 46px/1.05 Newsreader,Georgia,serif;max-width:22ch">Letterpress</h1>
+<p class="p" style="font-size:16px">The design language for the ClearAF patient app and clinician portal. Version 1.0, September 2026 — supersedes <code>docs/design/design-language.md</code> (Care Journal) and the interim Ink &amp; Paper draft. It defines tokens, type, components, states and copy; it does not authorise new features.</p>
+<div class="row" style="gap:10px;padding-top:6px"><span class="chip">PATIENT IOS</span><span class="chip">CLINICIAN WEB</span><span class="chip">LIGHT + DARK</span></div>
+<p class="p" style="font-size:13px">Reference mockups: <strong style="color:#121312">ClearAF 2a - Mobile</strong> (12 screens) and <strong style="color:#121312">ClearAF 2a - Portal</strong> (8 screens). Where this document and a mockup disagree, this document wins.</p>
+</div>
+
+<section class="sec">
+<div class="eyebrow">01 · Character</div>
+<h2 class="h2">A record kept properly, not a wellness app</h2>
+<p class="p">ClearAF holds a person's face over months and a clinician's decisions about it. It should feel like a well-kept paper record wired to a capable clinic: warm, precise, quiet, printed. The old language reached for reassurance — gradients, glow, a skin score, a streak. This one reaches for credibility: real dates, real versions, real photographs, generous room around them, and no second accent colour to hide behind.</p>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:6px">
+<div class="card"><div class="h3">1 · Ink is the accent</div><p class="p" style="margin-top:8px;font-size:13px">There is no brand hue. Near-black on warm paper carries every interactive and selected state; ochre appears only for unread and prescriptions.</p></div>
+<div class="card"><div class="h3">2 · Paper, not cards</div><p class="p" style="margin-top:8px;font-size:13px">Hairlines and space make groups. A container earns a border only when it is a distinct task or an editable record.</p></div>
+<div class="card"><div class="h3">3 · Print geometry</div><p class="p" style="margin-top:8px;font-size:13px">Radius 4 and under for content; 1.5px hard keylines on photographs. Squarer reads older and more deliberate than rounded.</p></div>
+<div class="card"><div class="h3">4 · Glass is chrome only</div><p class="p" style="margin-top:8px;font-size:13px">Floating navigation, capture controls, sheets. Never a reading surface, never over a photograph you're judging, never on the web.</p></div>
+<div class="card"><div class="h3">5 · The photograph is the largest thing</div><p class="p" style="margin-top:8px;font-size:13px">Never tint, crop or beautify clinical images. Neutral mats, true 4:5, uncropped original always reachable.</p></div>
+<div class="card"><div class="h3">6 · Numbers get their own voice</div><p class="p" style="margin-top:8px;font-size:13px">Dates, versions, counts and percentages are mono with tabular figures. They read as data, not prose.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<div class="eyebrow">02 · Colour</div>
+<h2 class="h2">Warm paper, near-black ink, one ochre</h2>
+<p class="p">One accent, and it is the ink itself. Ochre is the single hue in the system and it is reserved: unread state, prescription chips, and “waiting on you” counts in the portal. It is never a success colour, never decoration, never a button fill. Status is never colour alone — it always carries a word.</p>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:8px">
+<div><div class="sw" style="background:#F2EFE7"></div><div class="mono" style="padding-top:8px">canvas<br>#F2EFE7</div></div>
+<div><div class="sw" style="background:#F9F7F1"></div><div class="mono" style="padding-top:8px">surface<br>#F9F7F1</div></div>
+<div><div class="sw" style="background:#EDEAE1"></div><div class="mono" style="padding-top:8px">rail<br>#EDEAE1</div></div>
+<div><div class="sw" style="background:#E8E3D6"></div><div class="mono" style="padding-top:8px">sunk<br>#E8E3D6</div></div>
+<div><div class="sw" style="background:#121312"></div><div class="mono" style="padding-top:8px">ink / action<br>#121312</div></div>
+<div><div class="sw" style="background:#56544D"></div><div class="mono" style="padding-top:8px">ink.secondary<br>#56544D</div></div>
+<div><div class="sw" style="background:#5F5D55"></div><div class="mono" style="padding-top:8px">ink.tertiary<br>#5F5D55</div></div>
+<div><div class="sw" style="background:#64625A"></div><div class="mono" style="padding-top:8px">ink.future<br>#64625A</div></div>
+<div><div class="sw" style="background:#A6701F"></div><div class="mono" style="padding-top:8px">attention.mark<br>#A6701F</div></div>
+<div><div class="sw" style="background:#6E4709"></div><div class="mono" style="padding-top:8px">attention.text<br>#6E4709</div></div>
+<div><div class="sw" style="background:#F0E6D2"></div><div class="mono" style="padding-top:8px">attention.wash<br>#F0E6D2</div></div>
+<div><div class="sw" style="background:#9A2015"></div><div class="mono" style="padding-top:8px">error<br>#9A2015</div></div>
+</div>
+<div style="overflow-x:auto;margin-top:14px">
+<table>
+<thead><tr><th>Token</th><th>Light</th><th>Dark</th><th>Role</th><th>Measured &amp; rule</th></tr></thead>
+<tbody>
+<tr><td><code>canvas</code></td><td>#F2EFE7</td><td>#171716</td><td>Page background</td><td>Dark is warm charcoal, never pure black — except capture, which is #0C0D0C.</td></tr>
+<tr><td><code>surface</code></td><td>#F9F7F1</td><td>#1F201E</td><td>Editable field body, portal reply box</td><td>Only inside a bordered editor. No shadow on content, ever.</td></tr>
+<tr><td><code>rail</code></td><td>#EDEAE1</td><td>#1C1D1B</td><td>Portal nav rail, side rails, active table row, stat cells</td><td>Structural tone, not a card fill.</td></tr>
+<tr><td><code>sunk</code></td><td>#E8E3D6</td><td>#24251F</td><td>Segmented track, unfilled meters, patient's own message block</td><td>Text on it must still clear 4.5:1 — check against this, not canvas.</td></tr>
+<tr><td><code>ink</code> / <code>action</code></td><td>#121312</td><td>#EFEDE4</td><td>Titles, body, buttons, checked, selected, tab tint, links</td><td>16.21:1 on canvas, 14.54:1 on sunk. Light: paper text on ink. Dark: ink text on bone.</td></tr>
+<tr><td><code>ink.secondary</code></td><td>#56544D</td><td>#A8A69C</td><td>Supporting sentence under a title</td><td>6.60:1 light / 7.35:1 dark.</td></tr>
+<tr><td><code>ink.tertiary</code></td><td>#5F5D55</td><td>#8F8D84</td><td>Mono eyebrows, unit labels, metadata</td><td>5.74:1 canvas, 5.15:1 sunk / 5.39:1 dark. Never a full sentence.</td></tr>
+<tr><td><code>ink.future</code></td><td>#64625A</td><td>#8B897E</td><td>Dates that haven't happened, out-of-range calendar cells</td><td>5.32:1 canvas, 4.77:1 sunk / 5.11:1 dark. The ONLY de-emphasis token — never invent a lighter grey for “inactive” text.</td></tr>
+<tr><td><code>attention.mark</code></td><td>#A6701F</td><td>#D9A64A</td><td>Unread bars, dots, sparkline flags — graphics only</td><td>Non-text use only; pair with a word. Never a fill behind text.</td></tr>
+<tr><td><code>attention.text</code></td><td>#6E4709</td><td>#E8C48A</td><td>“Unread”, “Waiting to share”, waiting counts</td><td>7.12:1 canvas, 6.60:1 on wash / 10.84:1 dark.</td></tr>
+<tr><td><code>attention.wash</code></td><td>#F0E6D2</td><td>#33291A</td><td>Prescription chip, edited-draft row in the portal editor</td><td>Only with <code>attention.text</code> on it.</td></tr>
+<tr><td><code>error</code></td><td>#9A2015</td><td>#FFB3A6</td><td>Failed save, upload error</td><td>7.05:1 light / 10.47:1 dark. Distinct from attention; preserve the user's work in the copy.</td></tr>
+<tr><td><code>rule</code></td><td>ink @ 13%</td><td>bone @ 13%</td><td>Row and section separators</td><td>1px. A 2px ink rule marks a major break (under the greeting, above a table head).</td></tr>
+</tbody>
+</table>
+</div>
+<p class="p" style="font-size:13px">Retired: the purple→teal gradient, <code>glowShadow</code>, <code>skinPeach</code>/<code>calmBlue</code>/<code>gentleGreen</code>/<code>softLavender</code>, the four <code>score*</code> colours and the score/streak concept they served — and, from the interim draft, viridian <code>#0B4D45</code> and clay <code>#C2552F</code>. No file should reference any of these after the change.</p>
+</section>
+
+<section class="sec">
+<div class="eyebrow">03 · Type</div>
+<h2 class="h2">Three faces, each with one job</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+<div class="card"><div class="eyebrow">Display · Newsreader 300</div><div style="font:300 40px/1.05 Newsreader,serif;padding-top:10px">Good morning,<br><span style="font-style:italic">Aryan</span></div><p class="p" style="font-size:13px;margin-top:12px">Greetings, patient names, screen titles, clinician words. Weight 300, tight leading, italic for the human half. One or two per screen, never more.</p></div>
+<div class="card"><div class="eyebrow">UI · IBM Plex Sans 400/450/500</div><div style="padding-top:10px;display:flex;flex-direction:column;gap:5px"><div style="font:500 17px 'IBM Plex Sans'">Adapalene 0.1%</div><div style="font:400 14px/20px 'IBM Plex Sans';color:#56544D">Pea-sized amount across the whole face. Three nights a week.</div><div style="font:500 15px 'IBM Plex Sans';text-decoration:underline;text-underline-offset:3px">Record this morning</div></div><p class="p" style="font-size:13px;margin-top:12px">Everything functional. 450 is the body weight — it holds up better than 400 on paper tones.</p></div>
+<div class="card"><div class="eyebrow">Data · IBM Plex Mono 400/500</div><div style="padding-top:10px;display:flex;flex-direction:column;gap:6px"><div class="eyebrow">PHOTO RECORD</div><div class="mono" style="font-size:20px">15 SEP · V4 · 46/47</div><div class="mono" style="font-size:20px;color:#6E4709">3 WAITING</div></div><p class="p" style="font-size:13px;margin-top:12px">Eyebrow labels, every date, version, count, percentage and ID. Tabular figures always on.</p></div>
+</div>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><th>Role</th><th>iOS</th><th>Web</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Display</td><td>Newsreader 300, <code>.largeTitle</code> relative (≈40/34)</td><td>30–46px</td><td>Dynamic Type via <code>Font.custom(_:relativeTo:)</code>.</td></tr>
+<tr><td>Screen title</td><td>Newsreader 300 at title (34)</td><td>32–34px</td><td>Replaces the bold SF large title.</td></tr>
+<tr><td>Section eyebrow</td><td>Mono 500, 10px, .16em, uppercase</td><td>10px</td><td>The one exception to the 11px floor — uppercase mono only, never a sentence, never a control label.</td></tr>
+<tr><td>Row title</td><td>Plex Sans 500, body (16–17)</td><td>15px</td><td>Sentence case.</td></tr>
+<tr><td>Body / instruction</td><td>Plex Sans 450, 15–17</td><td>14px / 24px leading</td><td>Max 74ch measure.</td></tr>
+<tr><td>Metadata</td><td>Mono 400/500, 11–12</td><td>11–12px</td><td>Tabular. Dates as <code>15 SEP · 07:12</code>.</td></tr>
+<tr><td>Control label</td><td>Plex Sans 500 (13–16)</td><td>13–15px</td><td>Never mono, never serif, never uppercase.</td></tr>
+</tbody>
+</table>
+</div>
+<p class="p" style="font-size:13px"><strong style="color:#121312">Size floor:</strong> 11px minimum for everything except uppercase mono eyebrow labels, which may sit at 10px because they are short, letterspaced and never load-bearing. 13px minimum for anything a patient must read to act. Ship both families with the app so first render is correct; the portal loads them with <code>display:swap</code> over a system-sans fallback.</p>
+</section>
+
+<section class="sec">
+<div class="eyebrow">04 · Space, shape, depth</div>
+<h2 class="h2">Hairlines and a short radius scale</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">
+<div class="card"><div class="h3">Spacing</div><p class="p" style="font-size:13px;margin-top:8px">4 · 6 · 10 · 14 · 18 · 22 · 28 · 44. iPhone gutter 22pt. Section gap 16–22. Row padding 11–14 vertical. Portal gutter 30–32px, rail 190–210px.</p></div>
+<div class="card"><div class="h3">Radius</div><p class="p" style="font-size:13px;margin-top:8px"><code>0</code> photo mats, chips, segmented, calendar cells, table rows · <code>4</code> buttons and step boxes · <code>26</code> sheets and glass bars · <code>999</code> avatars, toggles, radio marks, the capture button. Nothing between 4 and 26. Native controls keep system curvature.</p></div>
+<div class="card"><div class="h3">Rules over borders</div><p class="p" style="font-size:13px;margin-top:8px">1px rule separates rows and sections; 2px ink rule marks a major break. A full border means “editable or bounded”. No nested bordered boxes.</p></div>
+<div class="card"><div class="h3">Depth</div><p class="p" style="font-size:13px;margin-top:8px">Content: no shadow. Glass chrome: <code>0 2px 8px /.10</code> + <code>0 12px 30px /.12</code>. Segmented thumb: <code>0 1px 2px /.14</code>. No glow, no coloured shadow.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<div class="eyebrow">05 · Glass contract</div>
+<h2 class="h2">Where Liquid Glass is allowed</h2>
+<p class="p">Glass is the one piece of platform texture the brand borrows, so it stays meaningful: it marks things that float above the record and are always available. Everything else is opaque.</p>
+<div class="row" style="margin-top:4px">
+<div class="card" style="flex:1;min-width:260px"><div class="eyebrow" style="color:#121312">Yes</div><ul style="margin:10px 0 0;padding-left:18px;font:400 13px/1.7 'IBM Plex Sans';color:#56544D"><li>Floating tab bar with the fused capture button</li><li>Sheets and modals over content, including the post-capture review sheet</li><li>Scroll-edge effect under a large title</li><li>Keyboard accessory row</li></ul></div>
+<div class="card" style="flex:1;min-width:260px"><div class="eyebrow" style="color:#6E4709">No</div><ul style="margin:10px 0 0;padding-left:18px;font:400 13px/1.7 'IBM Plex Sans';color:#56544D"><li>Any card, row or reading surface</li><li>Over a photograph being judged</li><li>The camera — capture is the native iOS picker, unstyled</li><li>Second glass layer over the system tab bar</li><li>Portal — the web gets no glass, ever</li><li>Segmented controls (native, tinted only)</li></ul></div>
+</div>
+<div class="card"><p class="p" style="font-size:13px">Respect Reduce Transparency, Increase Contrast and Reduce Motion — the flatter result is correct, not a regression. Use standard materials; never simulate glass with a manual blurred rectangle. Any text over glass must be measured against the <em>composited</em> background, not the token behind it.</p></div>
+</section>
+
+<section class="sec">
+<div class="eyebrow">06 · Components</div>
+<h2 class="h2">The families</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+
+<div class="card"><div class="eyebrow">Buttons</div>
+<div class="row" style="margin-top:14px;align-items:center"><button class="bk">Record this morning</button><button class="bo">Retake</button><button class="bt">View all 46</button></div>
+<div class="row" style="margin-top:12px;align-items:center"><button class="bk" style="background:#E8E3D6;color:#5F5D55">Record this morning</button><span class="eyebrow">Disabled + reason required</span></div>
+<p class="p" style="font-size:13px;margin-top:12px">Filled ink (one per screen, full-width on iOS), outlined, text-underline. Radius 4. Disabled always accompanied by a sentence saying why.</p>
+<p class="p" style="font-size:13px;margin-top:10px"><strong style="color:#121312">Height is platform-specific — verify computed height, not padding.</strong> iOS is a touch target: <strong style="color:#121312">44pt minimum</strong>, pinned with <code>min-height:44</code> + centred content rather than derived from padding — padding-derived heights drift under the floor when the real font resolves <code>line-height: normal</code> or Dynamic Type scales. The portal is a mouse target and density is its premise: <strong style="color:#121312">32–36px</strong> for row, toolbar and inline controls (8–9px padding at 13px type), rising to 44px only for a primary full-width action such as Sign in. Never apply the 44pt floor to a portal table row.</p></div>
+
+<div class="card"><div class="eyebrow">Fields</div>
+<div style="margin-top:14px;display:flex;flex-direction:column;gap:16px">
+<div><div class="eyebrow" style="padding-bottom:7px">Email</div><div style="border-bottom:1.5px solid #121312;padding-bottom:8px;font:450 16px 'IBM Plex Sans'">aryan@illinois.edu</div></div>
+<div><div class="eyebrow" style="padding-bottom:7px">Note for this photo · optional</div><div style="border-bottom:1.5px solid rgba(18,19,18,.28);padding-bottom:8px;font:450 16px 'IBM Plex Sans';color:#5F5D55">Anything you noticed</div></div>
+<div><div class="eyebrow" style="padding-bottom:7px;color:#9A2015">Password</div><div style="border-bottom:1.5px solid #9A2015;padding-bottom:8px;font:450 16px 'IBM Plex Sans'">••••</div><div style="padding-top:7px;font:400 12px 'IBM Plex Sans';color:#9A2015">At least 8 characters. Your email is unchanged.</div></div>
+</div>
+<p class="p" style="font-size:13px;margin-top:14px">Baseline rule, not a box: 1.5px ink when filled or focused, 1.5px ink @28% when empty. Persistent mono label above; placeholders are examples only. Validation sits under the field and says what to do. Portal editors may use a bordered <code>surface</code> field inside a bounded editor.</p></div>
+
+<div class="card"><div class="eyebrow">Segmented · native family</div>
+<div style="margin-top:14px;display:flex;background:#E8E3D6;padding:2px;gap:2px"><div style="flex:1;text-align:center;background:#F9F7F1;box-shadow:0 1px 2px rgba(18,19,18,.14);font:500 13px/30px 'IBM Plex Sans'">Morning</div><div style="flex:1;text-align:center;font:450 13px/30px 'IBM Plex Sans';color:#56544D">Evening</div></div>
+<p class="p" style="font-size:13px;margin-top:12px">One family for every 2–3 mode switch: AM/PM, photo layout, compare mode, worklist filter. Native <code>Picker(.segmented)</code>, square corners, ink tint — no custom geometry, no <code>matchedGeometryEffect</code>. At accessibility text sizes it becomes a menu.</p></div>
+
+<div class="card"><div class="eyebrow">Checklist row</div>
+<div style="margin-top:14px">
+<div style="display:flex;gap:14px;padding:12px 0;border-top:1px solid rgba(18,19,18,.14)"><div style="width:22px;height:22px;background:#121312;flex:none;display:flex;align-items:center;justify-content:center;color:#F2EFE7"><svg width="13" height="10" viewBox="0 0 14 11" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 5.5l4 4L13 1.5"/></svg></div><div><div style="font:500 16px 'IBM Plex Sans';text-decoration:line-through;text-decoration-color:rgba(18,19,18,.32)">Gentle cleanser</div><div style="font:400 13px 'IBM Plex Sans';color:#56544D">Lukewarm, 30 seconds</div></div></div>
+<div style="display:flex;gap:14px;padding:12px 0;border-top:1px solid rgba(18,19,18,.14);border-bottom:1px solid rgba(18,19,18,.14)"><div style="width:22px;height:22px;border:1.5px solid #121312;flex:none"></div><div><div style="font:500 16px 'IBM Plex Sans'">Adapalene 0.1%</div><div style="font:400 13px 'IBM Plex Sans';color:#56544D">Pea-sized, whole face</div><div class="chip" style="margin-top:8px">PRESCRIPTION</div></div></div>
+</div>
+<p class="p" style="font-size:13px;margin-top:12px">Square 22pt boxes, ruled rows, not cards. Ticking is local and reversible; the filled button below is what records the completion against the routine version.</p></div>
+
+<div class="card"><div class="eyebrow">Photo tile + states</div>
+<div style="margin-top:14px;display:flex;gap:8px">
+<div style="flex:1"><div style="aspect-ratio:4/5;border:1.5px solid #121312;background:#E8E3D6;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace">TODAY</div><div class="mono" style="padding-top:6px;font-size:11px">15 SEP</div></div>
+<div style="flex:1"><div class="ph" style="aspect-ratio:4/5"></div><div class="mono" style="padding-top:6px;font-size:11px;color:#5F5D55">14 SEP</div><div style="font:400 11px 'IBM Plex Sans';color:#56544D">On device</div></div>
+<div style="flex:1"><div class="ph" style="aspect-ratio:4/5"></div><div class="mono" style="padding-top:6px;font-size:11px;color:#5F5D55">13 SEP</div><div style="font:400 11px 'IBM Plex Sans';color:#6E4709">Waiting to share</div></div>
+<div style="flex:1"><div class="ph" style="aspect-ratio:4/5;outline:1.5px solid #121312;outline-offset:-1.5px"></div><div class="mono" style="padding-top:6px;font-size:11px;color:#5F5D55">11 SEP</div><div style="font:400 11px 'IBM Plex Sans';color:#56544D">Reviewed</div></div>
+</div>
+<p class="p" style="font-size:13px;margin-top:12px">4:5, square corners, neutral mat, date in mono underneath, state in words. Four states only: on device · waiting to share · shared · reviewed by name. Selection is an inset ink outline, never an overlay tint. Clinician-side thumbnails sit on near-black.</p></div>
+
+<div class="card"><div class="eyebrow">Adherence strip &amp; calendar</div>
+<div style="margin-top:16px;display:flex;gap:2px;align-items:flex-end;height:30px"><div style="width:7px;height:100%;background:#121312"></div><div style="width:7px;height:70%;background:#121312"></div><div style="width:7px;height:40%;background:#D6D1C3"></div><div style="width:7px;height:100%;background:#121312"></div><div style="width:7px;height:100%;background:#121312"></div><div style="width:7px;height:70%;background:#121312"></div><div style="width:7px;height:40%;background:#D6D1C3"></div><div style="width:7px;height:100%;background:#121312"></div><div style="width:7px;height:100%;background:#121312"></div><div style="width:7px;height:100%;background:#121312"></div><div style="width:7px;height:70%;background:#121312"></div><div style="width:7px;height:40%;background:#D6D1C3"></div><div style="width:7px;height:100%;background:#121312"></div><div style="width:7px;height:100%;background:#121312"></div><div class="mono" style="margin-left:10px;align-self:center">11/14</div></div>
+<p class="p" style="font-size:13px;margin-top:12px">Full = both routines recorded, 70% = one, 40% sunk = none. The calendar uses the same three states as solid / half-split / sunk cells, with today as a 1.5px outline and future days in <code>ink.future</code>. Reads from real completion events only. It is a record, not a score: no target line, no colour grading, no celebration. Label it “11 of last 14 days” to patients; “79% / 14d” is clinician-side only.</p></div>
+
+<div class="card"><div class="eyebrow">Clinician note</div>
+<div style="margin-top:14px;display:flex;gap:14px"><div style="width:3px;align-self:stretch;background:#A6701F"></div><div><div class="eyebrow" style="color:#6E4709">Unread · Dr. Om</div><div style="margin-top:8px;font:400 16px/23px Newsreader,serif">“Keep adapalene to three nights and send a photo Friday.”</div><div class="mono" style="margin-top:8px;font-size:11px;color:#5F5D55">YESTERDAY 4:12 PM</div></div></div>
+<p class="p" style="font-size:13px;margin-top:12px">Clinician words are set in the display serif with a 2px ink rule at the left — the one place a patient hears another person. No bubbles, no tails. Ochre bar and eyebrow while unread; both drop to ink once read. The patient's own replies sit in a <code>sunk</code> block. Linked photo or routine references become a labelled inline box with a thumbnail.</p></div>
+
+<div class="card"><div class="eyebrow">Glass tab bar</div>
+<div style="margin-top:16px;height:62px;border-radius:999px;position:relative;overflow:hidden;background:#E8E3D6;box-shadow:0 2px 8px rgba(18,19,18,.1),0 12px 30px rgba(18,19,18,.12)"><div style="position:absolute;inset:0;border-radius:999px;border:.5px solid rgba(255,255,255,.7);box-shadow:inset 1.5px 1.5px 1px rgba(255,255,255,.8)"></div><div style="position:relative;height:100%;display:flex;align-items:center;padding:0 8px;font:500 10px 'IBM Plex Mono',monospace"><div style="flex:1;text-align:center">TODAY</div><div style="flex:1;text-align:center;color:#5F5D55">RECORD</div><div style="width:52px;height:52px;border-radius:999px;background:#121312;flex:none"></div><div style="flex:1;text-align:center;color:#5F5D55">PLAN</div><div style="flex:1;text-align:center;color:#5F5D55">NOTES</div></div></div>
+<p class="p" style="font-size:13px;margin-top:12px">Four destinations — Today, Record (photos), Plan (routines &amp; check-ins), Notes (messages) — with capture fused in the middle as an action, not a tab. Native <code>TabView</code>, native material, mono labels, ink tint. A tab is a destination: filters and actions never get one. Pushed detail views (profile, calendar, check-in, compare) have no tab bar and no bottom spacer.</p></div>
+
+<div class="card"><div class="eyebrow">Portal table row</div>
+<div style="margin-top:14px;display:grid;grid-template-columns:1fr 70px 60px;padding:0 2px 8px;border-bottom:2px solid #121312" class="eyebrow"><div>Patient</div><div>Waiting</div><div style="text-align:right">Action</div></div>
+<div style="display:grid;grid-template-columns:1fr 70px 60px;align-items:center;padding:12px 2px;border-bottom:1px solid rgba(18,19,18,.14);background:#EDEAE1"><div style="display:flex;gap:10px;align-items:center"><div style="width:4px;height:30px;background:#A6701F"></div><div><div style="font:500 14px 'IBM Plex Sans'">Maya Rodriguez</div><div class="mono" style="font-size:11px;color:#5F5D55">F 24 · ACNE VULGARIS</div></div></div><div class="mono" style="color:#6E4709">3</div><div style="text-align:right"><button class="bk" style="padding:8px 12px;font-size:13px">Review</button></div></div>
+<p class="p" style="font-size:13px;margin-top:12px">2px ink rule under the head, 1px rules between rows, <code>rail</code> fill on the row that needs you, ochre left bar for waiting, tabular mono figures, exactly one filled button per row. No zebra striping, no card-per-row. The “Review” button above is the portal reference size — <strong style="color:#121312">33px</strong>, correct for a mouse and deliberately below the iOS floor.</p></div>
+
+</div>
+</section>
+
+<section class="sec">
+<div class="eyebrow">07 · Required states</div>
+<h2 class="h2">Every feature ships all nine</h2>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><th>State</th><th>Treatment</th><th>Say</th></tr></thead>
+<tbody>
+<tr><td>Loading</td><td>Keep layout stable, name what's loading, never block the rest of the page</td><td>“Loading your photos”</td></tr>
+<tr><td>Empty</td><td>Display serif title, one sentence, one action. No large icon, no sample data</td><td>“No photos yet — take the first one today.”</td></tr>
+<tr><td>Populated</td><td>Task first, metadata in mono below</td><td>—</td></tr>
+<tr><td>Selected</td><td>Ink outline, ink fill, or <code>rail</code> row — from the component's own family</td><td>—</td></tr>
+<tr><td>Disabled</td><td><code>sunk</code> fill + <code>ink.tertiary</code> <em>and</em> a reason</td><td>“Recorded at 7:14 am. Comes back tomorrow.”</td></tr>
+<tr><td>Saving</td><td>Button locks, label changes, duplicates impossible</td><td>“Saving…”</td></tr>
+<tr><td>Success</td><td>Local save and remote completion are different events</td><td>“Saved on this device. Waiting to upload.”</td></tr>
+<tr><td>Error</td><td>Keep the work, name the problem, offer a retry that repeats the same action</td><td>“Couldn't share. Your photo is safe on this device.”</td></tr>
+<tr><td>Stale / offline</td><td>Ochre eyebrow on the affected block only</td><td>“Last checked 8:40 am”</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="sec">
+<div class="eyebrow">08 · Voice</div>
+<h2 class="h2">Plain, specific, unsentimental</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+<div style="display:flex;flex-direction:column;gap:12px"><div class="do">Record this morning</div><div class="dont">Complete your routine to keep your streak!</div></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div class="do">No completion recorded for Sunday</div><div class="dont">You missed your routine 😔</div></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div class="do">Saved on this device. Waiting to upload.</div><div class="dont">Sync queued (pending state: 1)</div></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div class="do">Assigned by Dr. Om on 2 Sep · v4</div><div class="dont">Your personalised skincare journey ✨</div></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div class="do">11 of the last 14 days</div><div class="dont">Skin score 82 · +3 this week</div></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div class="do">Saved on this device first, then uploaded</div><div class="dont">Let's capture your glow!</div></div>
+</div>
+<p class="p" style="font-size:13px">Sentence case everywhere. No emoji. No exclamation marks. Never promise an outcome, never imply improvement from photo order, never grade adherence. Dates are written out for patients (“2 Sep”) and mono-stamped for clinicians (<code>02 SEP · 07:04</code>).</p>
+</section>
+
+<section class="sec">
+<div class="eyebrow">09 · Implementation map</div>
+<h2 class="h2">Where this lands in the code</h2>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><th>File</th><th>Change</th></tr></thead>
+<tbody>
+<tr><td><code>ClearAF/Views/DesignSystem.swift</code></td><td>Replace <code>CareJournal</code> roles with the Letterpress tokens above as <code>Letterpress.*</code>; delete the gradient, glow, score and wellness-palette extensions; add <code>Letterpress.display/ui/data</code> font helpers using <code>relativeTo:</code>. <code>action == ink</code> — do not introduce a hue.</td></tr>
+<tr><td><code>ClearAF/ContentView.swift</code></td><td>Four tabs (Today · Record · Plan · Notes) with capture fused into the bar; <code>.tint(Letterpress.ink)</code>. Keep native <code>TabView</code>.</td></tr>
+<tr><td><code>DashboardViewEnhanced.swift</code></td><td>Rule-separated sections, day counter, photo rail, checklist, unread note, check-in row. Remove <code>AnimatedScoreDisplay</code>, <code>StreakIndicator</code>, <code>ProgressInsight</code>, <code>EnhancedProgressBar</code>.</td></tr>
+<tr><td><code>ProgressView.swift</code></td><td>4:5 tiles with the four named states, month rules, native segmented for Grid/List/Compare; keep paging, capture and review status. Add the compare view (side-by-side / overlay / flip) — new, no equivalent today.</td></tr>
+<tr><td><code>RoutineView.swift</code></td><td>Checklist rows; version and timezone copy demoted under the action; 14-day strip linking to <code>CompletionCalendarView</code>; earlier-versions row.</td></tr>
+<tr><td><code>CompletionCalendarView.swift</code></td><td>Three-state cells (both / one / none), today outlined, future in <code>ink.future</code>, per-day event list beneath.</td></tr>
+<tr><td><code>PhotoCaptureManager.swift</code></td><td>Keep the native iOS camera — no custom capture UI, no ghost overlay, no viewfinder chrome. Style only the sheet it returns to: 4:5 preview, optional note field, explicit “Send to Dr. Om” toggle, “Attach to this morning's routine” toggle, then Save to record.</td></tr>
+<tr><td><code>CheckInView.swift</code></td><td>One question per screen with a rule progress bar, required flags, local draft; submit all at the end.</td></tr>
+<tr><td><code>MessagingView.swift</code></td><td>Serif clinician turns with a 2px rule, sunk patient blocks, mono timestamps, reference boxes; no bubble tails.</td></tr>
+<tr><td><code>ProfileView</code> / settings</td><td>Care team, reminders, auto-share, keep-originals, PDF export, sign out — one ruled list, pushed (no tab bar).</td></tr>
+<tr><td><code>web-portal/src/app/globals.css</code></td><td>Swap the HSL token block for these values; add <code>--font-display/ui/data</code>; keep <code>:focus-visible</code> (now a 2px ink ring).</td></tr>
+<tr><td><code>web-portal/src/components/ui/*</code></td><td>Button, input, badge, table, tabs re-skinned: radius 4, square tables, hairline rules, mono numerals. Behaviour untouched.</td></tr>
+<tr><td><code>web-portal/src/app/patients/page.tsx</code></td><td>Becomes the worklist: four counts, tab filter, one ruled table merging the review queue with the patient list.</td></tr>
+<tr><td><code>components/patients/*</code></td><td>Workspace tabs (Photos · Routine · Check-ins · Messages · History); compare-first photo pane; draft-diff routine editor; check-in responses with ordered answers plotted as given.</td></tr>
+</tbody>
+</table>
+</div>
+<p class="p" style="font-size:13px">Nothing here changes data, permissions, versioning semantics or what is shared with whom. Adherence figures must come from real completion events; if a number can't be sourced, omit the block rather than estimate it.</p>
+</section>
+
+<section class="sec">
+<div class="eyebrow">10 · Review checklist</div>
+<h2 class="h2">Before a screen ships</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+<div class="card"><p class="p" style="font-size:13px">□ Exactly one filled ink button<br>□ No hue anywhere except reserved ochre<br>□ No card a hairline could have done<br>□ Glass only on floating chrome<br>□ Every number in mono with tabular figures</p></div>
+<div class="card"><p class="p" style="font-size:13px">□ 4.5:1 for all text under 24px, mono labels included<br>□ Measured against the <em>composited</em> background, incl. glass and sunk tones<br>□ Light and dark checked on device<br>□ Largest accessibility text size doesn't clip<br>□ Keyboard focus visible on web</p></div>
+<div class="card"><p class="p" style="font-size:13px">□ All nine states designed<br>□ Buttons: iOS ≥44pt computed, portal 32–36px<br>□ No bottom spacer on a pushed view<br>□ No score, streak, grade or promised outcome<br>□ Photos untinted, uncropped original reachable</p></div>
+</div>
+</section>
+
+<div style="padding-top:36px;font:400 11px/1.7 'IBM Plex Mono',monospace;color:#5F5D55">CLEARAF · LETTERPRESS 1.0 · SUPERSEDES DOCS/DESIGN/DESIGN-LANGUAGE.MD AND THE INK &amp; PAPER DRAFT · MOCKUPS: “CLEARAF 2A - MOBILE”, “CLEARAF 2A - PORTAL”</div>
+</div>
+</x-dc>
+</body>
+</html>
