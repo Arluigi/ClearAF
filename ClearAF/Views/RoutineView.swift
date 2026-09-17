@@ -1,72 +1,52 @@
 import SwiftUI
 
+/// Plan (spec §6 #7): AM/PM switch, checklist, one filled record action, metadata under it, 14-day strip.
 struct RoutineView: View {
     @ObservedObject private var repository = APIService.shared.routines
     @State private var selectedSlot: RoutineTimeOfDay = .morning
     @State private var actionError: String?
+    @State private var tickBook = RoutineTickBook()
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Your clinician assigns and updates these routines.")
-                        .foregroundStyle(Letterpress.inkSecondary)
+                VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
                     LetterpressPicker(title: "Time of day", selection: $selectedSlot) {
                         ForEach(RoutineTimeOfDay.allCases, id: \.self) { slot in
                             Text(slot.title).tag(slot)
                         }
                     }
-                    Text(Date.now, format: .dateTime.weekday().month().day()).font(.subheadline)
-                    if repository.isRefreshing {
-                        HStack { SwiftUI.ProgressView(); Text("Refreshing routines…") }
-                    }
-                    if let refreshed = repository.lastRefreshed {
-                        DisclosureGroup(repository.isCached ? "Saved assignment · refresh to check for changes" : "Assignment details") {
-                            Text(repository.isCached ? "Saved assignment on this device" : "Latest fetched assignment")
-                            Text("Last refreshed \(refreshed.formatted(date: .abbreviated, time: .shortened))")
-                        }.font(.caption).foregroundStyle(Letterpress.inkSecondary)
-                    }
+                    freshness
                     if let error = actionError ?? repository.lastError {
-                        Text(error).foregroundStyle(Letterpress.error).accessibilityIdentifier("routine-error")
-                        Button("Retry") {
-                            Task { @MainActor in
-                                guard APIService.shared.access.snapshot() == ticket else { return }
-                                actionError = nil
-                                await repository.retry()
+                        VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+                            Text(error)
+                                .font(Letterpress.ui(15, relativeTo: .body))
+                                .foregroundStyle(Letterpress.error)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("routine-error")
+                            Button("Retry") {
+                                Task { @MainActor in
+                                    guard APIService.shared.access.snapshot() == ticket else { return }
+                                    actionError = nil
+                                    await repository.retry()
+                                }
                             }
+                            .buttonStyle(.letterpress(.outlined))
                         }
                     }
-                    if let routine = repository.routine(for: selectedSlot) {
-                        if routine.isActive { assignment(routine, ticket: ticket) }
-                        else {
-                            Text("No active \(selectedSlot.rawValue) assignment").font(.title3)
-                            Text("Your clinician archived version \(routine.version). Contact your care team if you need guidance.")
-                                .foregroundStyle(Letterpress.inkSecondary)
-                        }
-                    } else if repository.snapshot != nil {
-                        Text("No \(selectedSlot.rawValue) routine assigned").font(.title3)
-                        Text("Your clinician’s assignment will appear here.").foregroundStyle(Letterpress.inkSecondary)
-                    } else if !repository.isRefreshing {
-                        Text("Assignments haven’t been loaded.").foregroundStyle(Letterpress.inkSecondary)
-                    }
-                    if !repository.pending.isEmpty {
-                        Text("\(repository.pending.count) completion(s) saved on this device and awaiting sync. Each keeps its original assignment, date and time zone.")
-                            .font(.caption).foregroundStyle(Letterpress.inkSecondary)
-                    }
+                    content
+                    LetterpressRule()
+                    AdherenceStripRow(repository: repository)
                 }
-                .padding(20)
+                .padding(.horizontal, Letterpress.Space.s22)
+                .padding(.vertical, Letterpress.Space.s18)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .foregroundStyle(Letterpress.ink)
-            .tint(Letterpress.action)
-            .background(Letterpress.canvas)
-            .navigationTitle("Routines")
+            .background(Letterpress.canvas.ignoresSafeArea())
+            .navigationTitle("Plan")
             .toolbar {
-                ToolbarItemGroup {
-                    NavigationLink { CompletionCalendarView() } label: {
-                        Label("Completion history", systemImage: "calendar")
-                    }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Task { @MainActor in
                             guard APIService.shared.access.snapshot() == ticket else { return }
@@ -76,8 +56,9 @@ struct RoutineView: View {
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                             .labelStyle(.iconOnly)
-                            .frame(minWidth: 44, minHeight: 44)
-                    }.disabled(repository.isRefreshing)
+                            .frame(minWidth: Letterpress.minTouch, minHeight: Letterpress.minTouch)
+                    }
+                    .disabled(repository.isRefreshing)
                 }
             }
             .refreshable {
@@ -88,44 +69,66 @@ struct RoutineView: View {
         }
     }
 
-    private func assignment(_ routine: CareRoutineRevision, ticket: AccountAccess.Ticket?) -> some View {
-        let status = repository.status(for: routine)
-        return VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(routine.name).font(Letterpress.display(22, relativeTo: .title2))
-                Text(routine.timeOfDay.title)
-                    .font(.subheadline).foregroundStyle(Letterpress.inkSecondary)
+    @ViewBuilder private var freshness: some View {
+        if repository.isRefreshing {
+            Text(repository.snapshot == nil ? "Loading your routine" : "Checking for changes")
+                .font(Letterpress.ui(13, relativeTo: .footnote))
+                .foregroundStyle(Letterpress.inkSecondary)
+        } else if repository.isCached, let refreshed = repository.lastRefreshed {
+            Text(RoutineRecordCopy.lastChecked(refreshed))
+                .letterpressEyebrow(color: Letterpress.attentionText)
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        if let routine = repository.routine(for: selectedSlot) {
+            if routine.isActive {
+                assignment(routine)
+            } else {
+                emptyState(title: "No active \(selectedSlot.rawValue) routine",
+                           sentence: "Your clinician archived version \(routine.version). Contact your care team if you need guidance.")
             }
-            ForEach(Array(routine.steps.enumerated()), id: \.offset) { index, step in
-                HStack(alignment: .top, spacing: 12) {
-                    Text("\(index + 1)").font(.headline).foregroundStyle(Letterpress.action)
-                        .frame(width: 24)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(step.title).font(.headline)
-                        if !step.instructions.isEmpty { Text(step.instructions) }
-                    }
+        } else if repository.snapshot != nil {
+            emptyState(title: "No \(selectedSlot.rawValue) routine yet", sentence: "Your clinician’s assignment will appear here.")
+        } else if !repository.isRefreshing {
+            emptyState(title: "Routine not loaded", sentence: "Pull down or tap Refresh to load your assignment.")
+        }
+    }
+
+    private func assignment(_ routine: CareRoutineRevision) -> some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
+            VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(routine.name)
+                        .font(Letterpress.display(22, relativeTo: .title2))
+                        .foregroundStyle(Letterpress.ink)
+                    Spacer(minLength: Letterpress.Space.s10)
+                    Text("V\(routine.version)")
+                        .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
+                        .foregroundStyle(Letterpress.inkTertiary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Letterpress.surface, in: RoundedRectangle(cornerRadius: Letterpress.Radius.control))
+                Text(RoutineRecordCopy.assignment(routine))
+                    .font(Letterpress.ui(13, relativeTo: .footnote))
+                    .foregroundStyle(Letterpress.inkSecondary)
             }
-            Text(status.label)
-                .font(.headline)
-                .accessibilityIdentifier("routine-\(routine.timeOfDay.rawValue)-status")
-            Button("Record completion") {
-                do {
-                    _ = try repository.recordCompletion(revision: routine, ticket: ticket)
-                    actionError = nil
-                } catch { actionError = error.localizedDescription }
-            }
-            .buttonStyle(.letterpress(.filled))
-            .disabled(status != .unrecorded)
-            .accessibilityIdentifier("routine-\(routine.timeOfDay.rawValue)-record")
-            Text("Record after you have completed the steps.")
-            DisclosureGroup("Routine details") {
-                Text("Version \(routine.version). Completions keep the assignment you viewed for that day.")
-            }
-                .font(.caption).foregroundStyle(Letterpress.inkSecondary)
+            RoutineChecklist(steps: routine.steps, ticked: Binding(
+                get: { tickBook.ticked(revisionID: routine.id, localDate: repository.localDate) },
+                set: { tickBook.setTicked($0, revisionID: routine.id, localDate: repository.localDate) }))
+            RoutineRecordPanel(routine: routine, repository: repository,
+                               identifierPrefix: "routine-\(routine.timeOfDay.rawValue)", actionError: $actionError)
+                .padding(.top, Letterpress.Space.s4)
+        }
+    }
+
+    private func emptyState(title: String, sentence: String) -> some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+            Text(title)
+                .font(Letterpress.display(24, relativeTo: .title2))
+                .foregroundStyle(Letterpress.ink)
+            Text(sentence)
+                .font(Letterpress.ui(15, relativeTo: .body))
+                .foregroundStyle(Letterpress.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

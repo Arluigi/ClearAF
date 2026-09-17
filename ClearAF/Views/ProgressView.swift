@@ -2,216 +2,244 @@ import SwiftUI
 import UIKit
 import CoreData
 
+enum PhotoRecordLayout: Hashable { case grid, list }
+
+/// Record (spec §6 #5): month rules over the existing 24-photo pages, 4:5 tiles with named states, native Grid/List.
 struct ProgressView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var store = PhotoPageStore()
+    @StateObject private var reviews = PhotoReviewIndex(access: APIService.shared.access, transport: APIService.shared)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var selectedViewMode = 0
-    @State private var showingCamera = false
+    @State private var layout = PhotoRecordLayout.grid
+    @State private var sharedCount: Int?
+    @State private var capturing = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
-                VStack(spacing: Letterpress.Space.s18) {
-                    Text("\(store.total) photos").font(Letterpress.data(12, relativeTo: .footnote))
-                        .accessibilityIdentifier("photoCount")
-                    LetterpressPicker(title: "Photo layout", selection: $selectedViewMode) {
-                        Text("Grid").tag(0)
-                        Text("List").tag(1)
+                VStack(alignment: .leading, spacing: 0) {
+                    header
+                    LetterpressPicker(title: "Photo layout", selection: $layout) {
+                        Text("Grid").tag(PhotoRecordLayout.grid)
+                        Text("List").tag(PhotoRecordLayout.list)
                     }
-                    if store.loading { SwiftUI.ProgressView("Loading photos") }
-                    if let error = store.error {
-                        Text(error)
-                        Button("Try again") { store.refresh() }
-                    } else if store.photos.isEmpty {
-                        EnhancedEmptyProgressView()
-                    } else if selectedViewMode == 0 {
-                        EnhancedPhotoGridView(photos: store.photos, images: store.images)
-                    } else {
-                        EnhancedPhotoListView(photos: store.photos, images: store.images)
+                    .padding(.top, Letterpress.Space.s14)
+                    content
+                        .padding(.top, Letterpress.Space.s18)
+                    if !store.photos.isEmpty {
+                        pagination.padding(.top, Letterpress.Space.s22)
                     }
-                    if dynamicTypeSize.isAccessibilitySize { photoActions }
-                }.padding(20)
-            }
-            .foregroundStyle(Letterpress.ink)
-            .tint(Letterpress.action)
-            .background(Letterpress.canvas.ignoresSafeArea())
-            .navigationTitle("Photos")
-            .safeAreaInset(edge: .bottom) {
-                if !dynamicTypeSize.isAccessibilitySize {
-                    photoActions.padding(20).background(Letterpress.canvas)
                 }
+                .padding(.horizontal, Letterpress.Space.s22)
+                .padding(.bottom, Letterpress.Space.s28)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .background(Letterpress.canvas.ignoresSafeArea())
+            .navigationTitle("Record")
             .refreshable { store.refresh() }
-            .sheet(isPresented: $showingCamera, onDismiss: { store.refresh() }) { DurablePhotoCaptureView() }
+            .sheet(isPresented: $capturing) { DurablePhotoCaptureView() }
             .onAppear { store.bind(context: viewContext) }
-            .onDisappear { store.dispose() }
+            .onDisappear { store.dispose(); reviews.cancel() }
+            .task(id: reviewKey) { await loadReviews() }
         }
     }
-    private var photoActions: some View {
-        VStack(spacing: 12) {
-            pagination
-            Button { showingCamera = true } label: {
-                Label("Take a photo", systemImage: "camera")
+
+    private var header: some View {
+        HStack(spacing: Letterpress.Space.s6) {
+            Text(PhotoRecordCounts.headline(total: store.total))
+                .accessibilityIdentifier("photoCount")
+            if let sharedCount, store.total > 0 {
+                Text("· \(sharedCount) shared")
             }
-            .buttonStyle(.letterpress(.filled, fullWidth: true))
-            .accessibilityLabel("Capture photo")
         }
+        .font(Letterpress.data(12, weight: .regular, relativeTo: .footnote))
+        .foregroundStyle(Letterpress.inkTertiary)
+    }
+
+    @ViewBuilder private var content: some View {
+        if store.loading && store.photos.isEmpty {
+            Text("Loading your photos")
+                .font(Letterpress.ui(15, relativeTo: .body))
+                .foregroundStyle(Letterpress.inkSecondary)
+        } else if let error = store.error {
+            VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+                Text(error).font(Letterpress.ui(15, relativeTo: .body)).foregroundStyle(Letterpress.error)
+                Button("Try again") { store.refresh() }.buttonStyle(.letterpress(.outlined))
+            }
+        } else if store.photos.isEmpty {
+            VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+                Text("No photos yet")
+                    .font(Letterpress.display(28, relativeTo: .title))
+                    .foregroundStyle(Letterpress.ink)
+                Text("Take the first one today. Photos are saved on this device first, then shared with your care team.")
+                    .font(Letterpress.ui(15, relativeTo: .body))
+                    .foregroundStyle(Letterpress.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Take a photo") { capturing = true }
+                    .buttonStyle(.letterpress(.filled, fullWidth: true))
+                    .padding(.top, Letterpress.Space.s6)
+            }
+        } else {
+            let groups = PhotoMonthGroup<SkinPhoto>.group(store.photos, date: { $0.captureDate })
+            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                monthRule(group.title, first: index == 0)
+                if layout == .grid {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: Letterpress.Space.s14) {
+                        ForEach(group.items, id: \.objectID) { photo in
+                            PhotoGridCell(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
+                        }
+                    }
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(group.items, id: \.objectID) { photo in
+                            PhotoListRow(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var columns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: Letterpress.Space.s6, alignment: .top), count: count)
+    }
+
+    private func monthRule(_ title: String, first: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+            if !first { LetterpressRule() }
+            Text(title).letterpressEyebrow()
+        }
+        .padding(.top, first ? 0 : Letterpress.Space.s18)
+        .padding(.bottom, Letterpress.Space.s10)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private var pagination: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: Letterpress.Space.s14))
-            : AnyLayout(HStackLayout(spacing: Letterpress.Space.s14))
-        return layout {
-            Button { store.previous() } label: { Text("Previous") }
-                .frame(maxWidth: .infinity).disabled(!store.hasPrevious)
-            Text("Page \(store.page + 1)").font(.caption)
-            Button { store.next() } label: { Text("Next") }
-                .frame(maxWidth: .infinity).disabled(!store.hasNext)
-        }
-        .buttonStyle(.letterpress(.outlined, fullWidth: true))
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-}
-
-// MARK: - Enhanced Progress Components
-
-struct EnhancedEmptyProgressView: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("No photos yet").font(.title2).foregroundStyle(Letterpress.ink)
-            Text("Take a photo to start your care record. Photos stay on this device until you share them.")
+        let pages = PhotoRecordCounts.pages(total: store.total, pageSize: PhotoPageStore.pageSize)
+        let stack = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Letterpress.Space.s10))
+            : AnyLayout(HStackLayout(spacing: Letterpress.Space.s10))
+        return stack {
+            Button("Previous") { store.previous() }
+                .buttonStyle(.letterpress(.outlined, fullWidth: true))
+                .disabled(!store.hasPrevious)
+            Text("Page \(store.page + 1) of \(pages)")
+                .font(Letterpress.data(12, weight: .regular, relativeTo: .footnote))
                 .foregroundStyle(Letterpress.inkSecondary)
-            Text("Use consistent lighting when possible.")
-                .font(.footnote).foregroundStyle(Letterpress.inkSecondary)
+                .fixedSize(horizontal: true, vertical: true)
+            Button("Next") { store.next() }
+                .buttonStyle(.letterpress(.outlined, fullWidth: true))
+                .disabled(!store.hasNext)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 24)
+    }
+
+    private var reviewKey: String {
+        guard let ticket = APIService.shared.access.snapshot() else { return "none" }
+        let ids = PhotoReviewIndex.sharedServerIDs(store.photos, accountID: ticket.accountID)
+        return "\(ticket.generation.uuidString)-\(store.total)-\(ids.map(\.uuidString).joined(separator: ","))"
+    }
+
+    private func loadReviews() async {
+        guard let ticket = APIService.shared.access.snapshot(),
+              viewContext.userInfo["accountID"] as? UUID == ticket.accountID else {
+            reviews.cancel(); sharedCount = nil; return
+        }
+        sharedCount = PhotoRecordCounts.shared(in: viewContext)
+        await reviews.load(photos: store.photos, ticket: ticket)
     }
 }
 
-struct EnhancedPhotoGridView: View {
-    let photos: [SkinPhoto]
-    let images: PhotoImageLoader
-    
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    private var columns: [GridItem] {
-        dynamicTypeSize.isAccessibilitySize
-            ? [GridItem(.flexible())]
-            : [GridItem(.adaptive(minimum: 108), spacing: Letterpress.Space.s10)]
-    }
-    
-    var body: some View {
-        Group {
-            LazyVGrid(columns: columns, spacing: Letterpress.Space.s14) {
-                ForEach(photos, id: \.id) { photo in
-                    EnhancedPhotoGridItem(photo: photo, images: images)
-                }
-            }
-
-        }
-    }
+private func datedPhotoLabel(_ photo: SkinPhoto) -> String {
+    photo.captureDate.map { "Dated photo, \(LetterpressFormat.dayMonthYear($0))" } ?? "Dated photo"
 }
 
-struct EnhancedPhotoGridItem: View {
+private struct PhotoGridCell: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
-    @State private var showingPhotoDetail = false
-    var body: some View {
-        VStack(spacing: Letterpress.Space.s4) {
-            Button { showingPhotoDetail = true } label: {
-                VStack {
-                    ProgressPhotoThumbnail(photo: photo, images: images, size: 100)
-                    if let date = photo.captureDate { Text(date, style: .date).font(.caption).fixedSize(horizontal: false, vertical: true) }
-                }
-            }.buttonStyle(.plain)
-            PhotoSharingStatusView(photo: photo, compact: true)
-        }
-        .padding(Letterpress.Space.s4)
-        .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo, images: images) }
-    }
-}
+    let reviewed: Bool
+    @State private var showingDetail = false
 
-struct EnhancedPhotoListView: View {
-    let photos: [SkinPhoto]
-    let images: PhotoImageLoader
-    
     var body: some View {
-        Group {
-            LazyVStack(spacing: Letterpress.Space.s18) {
-                ForEach(photos, id: \.id) { photo in
-                    EnhancedPhotoListItem(photo: photo, images: images)
+        VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
+            Button { showingDetail = true } label: {
+                VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
+                    PhotoFrame(photo: photo, images: images, maxPixelSize: 400)
+                    if let date = photo.captureDate {
+                        Text(LetterpressFormat.stamp(date))
+                            .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
+                            .foregroundStyle(Letterpress.inkTertiary)
+                    }
                 }
             }
-
+            .buttonStyle(.plain)
+            .accessibilityLabel(datedPhotoLabel(photo))
+            PhotoSharingStatusView(photo: photo, compact: true, reviewed: reviewed)
         }
+        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: images, reviewed: reviewed) }
     }
 }
 
-struct EnhancedPhotoListItem: View {
+private struct PhotoListRow: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
-    @State private var showingPhotoDetail = false
+    let reviewed: Bool
+    @State private var showingDetail = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Letterpress.Space.s18))
-            : AnyLayout(HStackLayout(spacing: Letterpress.Space.s18))
-        layout {
-            Button { showingPhotoDetail = true } label: { ProgressPhotoThumbnail(photo: photo, images: images, size: 80) }
-                .buttonStyle(.plain).accessibilityLabel("View photo details")
+        let stack = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Letterpress.Space.s10))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Letterpress.Space.s14))
+        stack {
+            Button { showingDetail = true } label: {
+                PhotoFrame(photo: photo, images: images, maxPixelSize: 400).frame(width: 72)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(datedPhotoLabel(photo))
             VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                if let date = photo.captureDate { Text(date, style: .date).font(Letterpress.ui(15, weight: .medium, relativeTo: .subheadline)) }
-                if let notes = photo.notes, !notes.isEmpty { Text(notes).font(Letterpress.ui(16, relativeTo: .callout)).lineLimit(2) }
-                PhotoSharingStatusView(photo: photo)
+                if let date = photo.captureDate {
+                    Text(LetterpressFormat.dayMonthYear(date))
+                        .font(Letterpress.ui(16, weight: .medium, relativeTo: .headline))
+                        .foregroundStyle(Letterpress.ink)
+                }
+                if let notes = photo.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(Letterpress.ui(13, relativeTo: .footnote))
+                        .foregroundStyle(Letterpress.inkSecondary)
+                        .lineLimit(2)
+                }
+                PhotoSharingStatusView(photo: photo, reviewed: reviewed)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .letterpressSurface()
-        .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo, images: images) }
-    }
-}
-
-private struct ProgressPhotoThumbnail: View {
-    @ObservedObject var photo: SkinPhoto
-    let images: PhotoImageLoader
-    let size: CGFloat
-    var body: some View {
-        Group {
-            if let bytes = photo.photoData, let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 400) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else { Image(systemName: "photo") }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Rectangle())
-        .accessibilityLabel("Dated photo")
+        .padding(.vertical, Letterpress.Space.s14)
+        .overlay(alignment: .top) { LetterpressRule() }
+        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: images, reviewed: reviewed) }
     }
 }
 
 struct PhotoSharingStatusView: View {
     @ObservedObject var photo: SkinPhoto
     var compact = false
+    var reviewed = false
     @State private var errorMessage: String?
-    private var label: String {
-        switch photo.uploadState {
-        case "pending": return "Waiting to share"
-        case "shared": return "Shared"
-        case "error": return "Couldn't share"
-        default: return "Saved on device"
-        }
-    }
+
     var body: some View {
-        VStack(alignment: compact ? .center : .leading, spacing: 4) {
-            Text(label).font(.caption).foregroundColor(photo.uploadState == "error" ? Letterpress.error : Letterpress.inkSecondary)
+        let state = PhotoTileState.of(uploadState: photo.uploadState, reviewed: reviewed)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(state.label)
+                .font(Letterpress.ui(compact ? 11 : 13, weight: .regular, relativeTo: .caption))
+                .foregroundStyle(state.color)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("photoSharingStatus")
-            if photo.uploadState != "shared" {
-                Button(photo.uploadState == nil ? "Share" : "Retry") {
+            if let action = state.action(compact: compact) {
+                Button(action) {
                     do { try APIService.shared.photos.share(photo) }
                     catch { errorMessage = error.localizedDescription }
-                }.font(.caption).buttonStyle(.letterpress(.outlined))
+                }
+                .buttonStyle(.letterpress(.underline))
             }
         }
         .alert("Unable to share photo", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
@@ -223,24 +251,57 @@ struct PhotoSharingStatusView: View {
 struct PhotoDetailView: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
+    var reviewed = false
     @Environment(\.dismiss) private var dismiss
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let bytes = photo.photoData, let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 1600) {
-                        Image(uiImage: image).resizable().scaledToFit().accessibilityLabel("Full photo")
+                VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
+                    if let bytes = photo.photoData,
+                       let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 1600) {
+                        // Sits on the same `sunk` mat as `PhotoFrame` (spec §4.5) instead of the reading-surface
+                        // canvas behind it, and keeps the photo's own aspect ratio since this is the uncropped view.
+                        Rectangle()
+                            .fill(Letterpress.sunk)
+                            .aspectRatio(image.size, contentMode: .fit)
+                            .overlay { Image(uiImage: image).resizable().scaledToFit() }
+                            .accessibilityElement()
+                            .accessibilityLabel("Full photo")
+                            .accessibilityAddTraits(.isImage)
                     }
-                    if let date = photo.captureDate { Text(date.formatted(date: .complete, time: .shortened)) }
-                    PhotoSharingStatusView(photo: photo)
+                    if let date = photo.captureDate {
+                        Text(LetterpressFormat.stampYearTime(date))
+                            .font(Letterpress.data(12, relativeTo: .footnote))
+                            .foregroundStyle(Letterpress.ink)
+                    }
+                    // `reviewed` is the page's batch PhotoReviewIndex lookup (fail-closed: any error clears it back
+                    // to "Shared"); PhotoReviewStatusView below does its own live, per-photo lookup. The two can
+                    // transiently disagree — e.g. a batch failure hides "Reviewed" here while the live check still
+                    // succeeds below — by design: the label above never claims more than the fail-closed batch can
+                    // back up, and the live section underneath is the authoritative answer for this one photo.
+                    PhotoSharingStatusView(photo: photo, reviewed: reviewed)
+                    LetterpressRule()
                     PhotoReviewStatusView(photo: photo)
-                    if let notes = photo.notes, !notes.isEmpty { Text(notes) }
-                    Text("Photo removal is not available yet.").font(.caption).foregroundColor(Letterpress.inkSecondary)
-                }.padding()
+                    if let notes = photo.notes, !notes.isEmpty {
+                        LetterpressRule()
+                        VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+                            Text("Your note").letterpressEyebrow()
+                            Text(notes).font(Letterpress.ui(16, relativeTo: .body)).foregroundStyle(Letterpress.ink)
+                        }
+                    }
+                    Text("Photo removal is not available yet.")
+                        .font(Letterpress.ui(13, relativeTo: .footnote))
+                        .foregroundStyle(Letterpress.inkSecondary)
+                }
+                .padding(Letterpress.Space.s22)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationTitle("Photo Details")
-            .navigationBarItems(trailing: Button { dismiss() } label: { Text("Done").font(.body) })
+            .navigationTitle("Photo details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+        .letterpressSheetBackground()
     }
 }
 
@@ -249,7 +310,6 @@ struct PhotoDetailView: View {
         .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
         .preferredColorScheme(.dark)
 }
-
 
 private struct PhotoReviewStatusView: View {
     @ObservedObject var photo: SkinPhoto
@@ -266,27 +326,31 @@ private struct PhotoReviewStatusView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Clinician review").font(.headline)
-            if photo.uploadState != "shared" {
-                Text("This photo has not been shared with your care team.")
-            } else {
-                switch reviews.state {
-                case .loading:
-                    SwiftUI.ProgressView("Loading review status")
-                case .unavailable:
-                    Text("Review status is unavailable.")
-                    Button("Retry review status") { retry += 1 }.buttonStyle(.letterpress(.outlined))
-                case .notReviewed:
-                    Text("Not yet marked reviewed.")
-                case .reviewed(let review):
-                    Text("Reviewed by \(review.reviewerName)")
-                    if let date = review.date { Text(date.formatted(date: .abbreviated, time: .shortened)) }
+        VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+            Text("Clinician review").letterpressEyebrow()
+            Group {
+                if photo.uploadState != "shared" {
+                    Text("This photo has not been shared with your care team.")
+                } else {
+                    switch reviews.state {
+                    case .loading:
+                        Text("Loading review status")
+                    case .unavailable:
+                        Text("Review status is unavailable.")
+                        Button("Retry review status") { retry += 1 }.buttonStyle(.letterpress(.outlined))
+                    case .notReviewed:
+                        Text("Not yet marked reviewed.")
+                    case .reviewed(let review):
+                        Text("Reviewed by \(review.reviewerName)")
+                        if let date = review.date {
+                            Text("\(LetterpressFormat.dayMonthYear(date)), \(LetterpressFormat.clock(date))")
+                        }
+                    }
                 }
             }
+            .font(Letterpress.ui(15, relativeTo: .subheadline))
+            .foregroundStyle(Letterpress.inkSecondary)
         }
-        .font(.subheadline)
-        .foregroundStyle(Letterpress.inkSecondary)
         .accessibilityIdentifier("photoReviewStatus")
         .task(id: "\(sharedID?.uuidString ?? "none")-\(api.access.snapshot()?.generation.uuidString ?? "none")-\(retry)") {
             reviews.cancel()

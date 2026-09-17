@@ -10,15 +10,15 @@ final class MVPExperienceUITests: XCTestCase {
             app.launchArguments = ["-UIPreferredContentSizeCategoryName", size]
             app.launch()
             XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
-            for screen in ["Today", "Photos", "Routines"] {
+            for screen in ["Today", "Record", "Plan"] {
                 try tapTab(screen, in: app)
-                if screen == "Photos" && size == "UICTContentSizeCategoryL" {
+                if screen == "Record" && size == "UICTContentSizeCategoryL" {
                     XCTAssertTrue(app.segmentedControls.buttons["List"].waitForExistence(timeout: 5))
                     app.segmentedControls.buttons["List"].tap()
                     XCTAssertTrue(app.segmentedControls.buttons["List"].isSelected)
                     app.segmentedControls.buttons["Grid"].tap()
                 }
-                if screen == "Routines" && size == "UICTContentSizeCategoryL" {
+                if screen == "Plan" && size == "UICTContentSizeCategoryL" {
                     XCTAssertTrue(app.segmentedControls.buttons["Evening"].waitForExistence(timeout: 5))
                     app.segmentedControls.buttons["Evening"].tap()
                     XCTAssertTrue(app.segmentedControls.buttons["Evening"].isSelected)
@@ -63,7 +63,7 @@ final class MVPExperienceUITests: XCTestCase {
 
     @MainActor func testVolumeAtLeastTwentyPageChangesMemory() throws {
         let app = try signedIn(largestText: false)
-        try tapTab("Photos", in: app)
+        try tapTab("Record", in: app)
         guard app.staticTexts["photoCount"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
         XCTAssertEqual(app.staticTexts["photoCount"].label.filter(\.isNumber), "1000")
         let options = XCTMeasureOptions(); options.iterationCount = 40
@@ -73,7 +73,7 @@ final class MVPExperienceUITests: XCTestCase {
             for _ in 0..<10 where !next.isHittable { app.swipeUp() }
             XCTAssertTrue(next.isEnabled && next.isHittable)
             next.tap(); page += 1
-            XCTAssertTrue(app.staticTexts["Page \(page)"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Page \(page) of")).firstMatch.waitForExistence(timeout: 5))
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.name = "Native volume page change"
             attachment.lifetime = .keepAlways; add(attachment)
@@ -91,8 +91,8 @@ final class MVPExperienceUITests: XCTestCase {
 
     @MainActor func testCaptureLibraryAtLargestTextVisibleReachability() throws {
         let app = try signedIn(largestText: true)
-        try tapTab("Photos", in: app)
-        app.buttons["Capture photo"].tap()
+        try tapTab("Record", in: app)
+        app.tabBars.buttons["Capture"].tap()
         try revealLibraryAndAudit(app)
         app.terminate()
     }
@@ -109,7 +109,7 @@ final class MVPExperienceUITests: XCTestCase {
 
     @MainActor func testAssignedRoutineAtLargestTextAccessibility() throws {
         let app = try signedIn(largestText: true)
-        try tapTab("Routines", in: app)
+        try tapTab("Plan", in: app)
         guard app.staticTexts["Synthetic Morning Routine"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
         try audit(app, screen: "Assigned morning routine largest text")
         let record = app.buttons["routine-morning-record"]
@@ -128,8 +128,8 @@ final class MVPExperienceUITests: XCTestCase {
     /// User must have positioned the camera at the prepared neutral subject before this scenario begins.
     @MainActor func testPhysicalCameraSettingsGrantAndOfflineCapture() async throws {
         let app = try signedIn(largestText: false)
-        try tapTab("Photos", in: app)
-        app.buttons["Capture photo"].tap()
+        try tapTab("Record", in: app)
+        app.tabBars.buttons["Capture"].tap()
         app.buttons["Take Photo"].tap()
         let shutter = app.buttons["Take Picture"]
         if !shutter.waitForExistence(timeout: 3) {
@@ -167,7 +167,13 @@ final class MVPExperienceUITests: XCTestCase {
         let use = app.buttons["Use Photo"]
         guard use.waitForExistence(timeout: 10) else { throw fixtureFailure() }
         use.tap()
+        let save = app.buttons["photoReviewSave"]
+        guard save.waitForExistence(timeout: 10) else { throw fixtureFailure() }
+        save.tap()
         guard app.staticTexts["Couldn't share"].waitForExistence(timeout: 45) else { throw fixtureFailure() }
+        // Grid tiles show state in words only, with no Retry action; switch to List for the full-size button.
+        if app.segmentedControls.buttons["List"].waitForExistence(timeout: 5) { app.segmentedControls.buttons["List"].tap() }
+        guard app.buttons["Retry"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
         XCTAssertTrue(app.buttons["Retry"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Synthetic camera capture recoverable offline share failure"
@@ -179,7 +185,7 @@ final class MVPExperienceUITests: XCTestCase {
     @MainActor func testPhysicalGeneratedHistoryIsolatedAcrossAccountSwitch() throws {
         let app = try signedIn(largestText: false)
         guard app.images["Latest progress photo"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
-        try tapTab("Photos", in: app)
+        try tapTab("Record", in: app)
         guard app.staticTexts["photoCount"].waitForExistence(timeout: 10),
               app.staticTexts["photoCount"].label.filter(\.isNumber) == "1" else { throw fixtureFailure() }
         let photos = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Dated photo'"))
@@ -202,7 +208,7 @@ final class MVPExperienceUITests: XCTestCase {
             try tapTab("Today", in: app)
             guard !app.images["Latest progress photo"].exists,
                   !app.staticTexts["Shared"].exists else { throw fixtureFailure() }
-            try tapTab("Photos", in: app)
+            try tapTab("Record", in: app)
             guard app.staticTexts["photoCount"].waitForExistence(timeout: 10),
                   app.staticTexts["photoCount"].label.filter(\.isNumber) == "0",
                   photos.count == 0, !app.staticTexts["Shared"].exists else { throw fixtureFailure() }
@@ -217,8 +223,11 @@ final class MVPExperienceUITests: XCTestCase {
     /// Parent restarts local API before this test. Existing account session/capture is retained.
     @MainActor func testPhysicalRetryCaptureAndAccountIsolation() throws {
         let app = XCUIApplication(); app.launch()
-        guard app.tabBars.buttons["Photos"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
-        try tapTab("Photos", in: app)
+        guard app.tabBars.buttons["Record"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
+        try tapTab("Record", in: app)
+        // Grid tiles show state in words only, with no Retry action; switch to List so an existing error
+        // state's Retry is actually reachable and this branch is never silently skipped.
+        if app.segmentedControls.buttons["List"].waitForExistence(timeout: 5) { app.segmentedControls.buttons["List"].tap() }
         if app.buttons["Retry"].firstMatch.waitForExistence(timeout: 3) {
             app.buttons["Retry"].firstMatch.tap()
             print("MVP explicit Retry used")
@@ -240,11 +249,11 @@ final class MVPExperienceUITests: XCTestCase {
         app.buttons["authSubmit"].tap()
         guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
         if app.staticTexts["Save Password?"].waitForExistence(timeout: 3), app.buttons["Not Now"].isHittable { app.buttons["Not Now"].tap() }
-        try tapTab("Photos", in: app)
+        try tapTab("Record", in: app)
         XCTAssertEqual(app.staticTexts["photoCount"].label.filter(\.isNumber), "0")
         XCTAssertFalse(app.staticTexts["Shared"].exists)
         app.terminate(); app.launch()
-        try tapTab("Photos", in: app)
+        try tapTab("Record", in: app)
         XCTAssertEqual(app.staticTexts["photoCount"].label.filter(\.isNumber), "0")
         app.terminate()
     }
@@ -252,10 +261,12 @@ final class MVPExperienceUITests: XCTestCase {
     /// Deliberate manual scoped selection: never selects an arbitrary personal library item.
     @MainActor func testPhysicalSelectPreparedSyntheticLibraryPhoto() throws {
         let app = try signedIn(largestText: false)
-        try tapTab("Photos", in: app)
+        try tapTab("Record", in: app)
         let before = try XCTUnwrap(Int(app.staticTexts["photoCount"].label.filter(\.isNumber)))
-        app.buttons["Capture photo"].tap(); app.buttons["Choose from Library"].tap()
+        app.tabBars.buttons["Capture"].tap(); app.buttons["Choose from Library"].tap()
         print("MVP READY_FOR_SYNTHETIC_SELECTION: user selects only the prepared prepared synthetic photo")
+        guard app.buttons["photoReviewSave"].waitForExistence(timeout: 120) else { throw fixtureFailure() }
+        app.buttons["photoReviewSave"].tap()
         let expected = String(before + 1)
         let saved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             app.staticTexts["photoCount"].exists && app.staticTexts["photoCount"].label.filter(\.isNumber) == expected
@@ -269,10 +280,10 @@ final class MVPExperienceUITests: XCTestCase {
 
     @MainActor private func auditRetainedScreens(largestText: Bool) throws {
         let app = try signedIn(largestText: largestText)
-        for tab in ["Today", "Photos", "Routines"] {
+        for tab in ["Today", "Record", "Plan"] {
             try tapTab(tab, in: app)
             try audit(app, screen: tab)
-            if tab == "Photos" {
+            if tab == "Record" {
                 let photo = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Dated photo'")).firstMatch
                 if photo.exists {
                     // At accessibility sizes the whole image+date button may exceed the visible
@@ -282,7 +293,7 @@ final class MVPExperienceUITests: XCTestCase {
                     }
                     guard photo.frame.minY + 50 < app.buttons["Previous"].frame.minY else { throw fixtureFailure() }
                     photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
-                    guard app.navigationBars["Photo Details"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
+                    guard app.navigationBars["Photo details"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
                     try audit(app, screen: "Photo detail")
                     let done = app.buttons["Done"]
                     XCTAssertTrue(done.isHittable)
@@ -303,9 +314,9 @@ final class MVPExperienceUITests: XCTestCase {
         try audit(app, screen: "Profile scrolled")
         app.terminate()
         app.launch()
-        guard app.tabBars.buttons["Photos"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
-        try tapTab("Photos", in: app)
-        app.buttons["Capture photo"].tap()
+        guard app.tabBars.buttons["Record"].waitForExistence(timeout: 15) else { throw fixtureFailure() }
+        try tapTab("Record", in: app)
+        app.tabBars.buttons["Capture"].tap()
         try audit(app, screen: "Capture")
         try revealLibraryAndAudit(app)
         app.terminate()

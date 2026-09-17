@@ -81,6 +81,20 @@ import Testing
         await first.value
         #expect(repo.conversation?.unreadCount == 0); #expect(repo.messages.allSatisfy { !$0.unreadForMe })
     }
+    /// Today's foreground refresh already calls `openCurrent()` before Notes opens. Notes' own `.task` calls
+    /// `openCurrent()` again and must still be able to acknowledge an already-visible message afterward — the
+    /// repository must not drop or duplicate-fail on the already-known message when reopened a second time.
+    @Test func openCurrentAfterAlreadyLoadedStillAcknowledgesKnownVisibleIDs() async throws {
+        let access = AccountAccess(); let ticket = access.activate(UUID()); let transport = MessagingFake(patient: ticket.accountID)
+        let repo = MessagingRepository(access: access, transport: transport)
+        try repo.resume(ticket)
+        await repo.openCurrent() // Today's foreground refresh.
+        #expect(repo.messages.map(\.id) == [transport.newest.id])
+        await repo.openCurrent() // Notes' own `.task` reopening the same, already-loaded conversation.
+        await repo.acknowledgeVisible([transport.newest.id])
+        #expect(transport.acked == [transport.newest.id])
+        #expect(repo.messages.first { $0.id == transport.newest.id }?.unreadForMe == false)
+    }
     @Test func accountChangeRejectsLateHistory() async throws {
         let access = AccountAccess(); let ticket = access.activate(UUID()); let transport = MessagingFake(patient: ticket.accountID)
         let repo = MessagingRepository(access: access, transport: transport)

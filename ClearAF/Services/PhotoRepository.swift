@@ -24,6 +24,9 @@ enum PhotoCaptureFailure: LocalizedError {
 /// Bytes and upload intent are committed together before any network work starts.
 /// A foreground-only worker retains the capture ID through every retry.
 @MainActor final class PhotoRepository: ObservableObject {
+    /// Shared with `PhotoReviewDraft.noteLimit` so the review sheet names the same limit this validates against.
+    /// `nonisolated` because it's an immutable `Int` literal, safe to read from any context.
+    nonisolated static let noteLimit = 10_000
     @Published var lastError: String?
     private let access: AccountAccess
     private let transport: any PhotoTransport
@@ -88,7 +91,7 @@ enum PhotoCaptureFailure: LocalizedError {
               bytes.starts(with: [0xff, 0xd8, 0xff]), UIImage(data: bytes) != nil else {
             throw PhotoCaptureFailure.invalidImage
         }
-        guard date.timeIntervalSince1970.isFinite, notes.utf16.count <= 10000 else {
+        guard date.timeIntervalSince1970.isFinite, notes.utf16.count <= Self.noteLimit else {
             throw PhotoCaptureFailure.invalidMetadata
         }
     }
