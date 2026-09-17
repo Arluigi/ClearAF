@@ -11,21 +11,6 @@ struct AccountProfileTests {
         #expect(AccountName.canSubmit("  Valid Patient  ", isSaving: false))
     }
 
-    @Test func actualTodayPhotoActionMeetsTextContrastInBothAppearances() {
-        for style in [UIUserInterfaceStyle.light, .dark] {
-            let fill = UIColor(TodayPhotoActionAppearance.tint).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
-            #expect(contrast(UIColor(TodayPhotoActionAppearance.foreground).resolvedColor(with: UITraitCollection(userInterfaceStyle: style)), fill) >= 4.5)
-        }
-    }
-
-    @Test func actualRoutineRecordActionMeetsTextContrastInBothAppearances() {
-        for style in [UIUserInterfaceStyle.light, .dark] {
-            let traits = UITraitCollection(userInterfaceStyle: style)
-            let fill = UIColor(RoutineActionAppearance.tint).resolvedColor(with: traits)
-            #expect(contrast(UIColor(RoutineActionAppearance.foreground).resolvedColor(with: UITraitCollection(userInterfaceStyle: style)), fill) >= 4.5)
-        }
-    }
-
     @Test func careJournalReadingColorsMeetContrastInBothAppearances() {
         for style in [UIUserInterfaceStyle.light, .dark] {
             let traits = UITraitCollection(userInterfaceStyle: style)

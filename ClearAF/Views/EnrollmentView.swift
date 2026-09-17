@@ -150,14 +150,12 @@ private struct ScreeningForm: View {
             Section {
                 Button(action: submit) {
                     HStack(spacing: .spaceSM) {
-                        if repository.saving { SwiftUI.ProgressView().tint(CareJournal.onPrimary) }
+                        if repository.saving { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                         Text(repository.saving ? "Saving…" : "Continue")
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(CareJournal.actionPrimary)
-                .foregroundStyle(CareJournal.onPrimary)
+                .buttonStyle(.letterpress(.filled))
                 .disabled(!canContinue)
                 .accessibilityIdentifier("enrollmentContinue")
                 .listRowBackground(Color.clear)
@@ -224,7 +222,7 @@ private struct NotEligibleView: View {
             Label {
                 Text("ClearAF can't provide your care right now").font(.title2.weight(.semibold))
             } icon: {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Letterpress.error)
             }
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("enrollmentNotEligible")
@@ -243,16 +241,14 @@ private struct NotEligibleView: View {
                 } label: {
                     Text("Notify me if ClearAF becomes available to me").frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(CareJournal.actionPrimary)
-                .foregroundStyle(CareJournal.onPrimary)
+                .buttonStyle(.letterpress(.filled))
                 .disabled(repository.saving)
                 .accessibilityIdentifier("enrollmentWaitlist")
             }
             Button(action: onUpdate) {
                 Text("Update my answers").frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.letterpress(.outlined))
             .disabled(repository.saving)
             .accessibilityIdentifier("enrollmentUpdateAnswers")
             if let error = repository.error {
@@ -288,14 +284,12 @@ private struct ConsentView: View {
                 Task { await repository.acceptConsent(ticket: ticket) }
             } label: {
                 HStack(spacing: .spaceSM) {
-                    if repository.saving { SwiftUI.ProgressView().tint(CareJournal.onPrimary) }
+                    if repository.saving { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                     Text("I understand and agree")
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(CareJournal.actionPrimary)
-            .foregroundStyle(CareJournal.onPrimary)
+            .buttonStyle(.letterpress(.filled))
             .disabled(repository.saving)
             .accessibilityIdentifier("enrollmentAgree")
             if let error = repository.error {

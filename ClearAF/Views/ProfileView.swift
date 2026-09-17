@@ -16,15 +16,15 @@ struct ProfileView: View {
                         Text("Name").font(.headline)
                         TextField("Your name", text: $name, axis: .vertical)
                             .textContentType(.name)
-                            .standardTextField()
+                            .letterpressField(isEmpty: name.isEmpty)
                             .accessibilityIdentifier("profileName")
                         Button(action: saveName) {
                             HStack {
-                                if saveState.isSaving { SwiftUI.ProgressView().tint(.white) }
+                                if saveState.isSaving { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                                 Text(saveState.isSaving ? "Saving…" : "Save name")
                             }.frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(PrimaryButtonStyle())
+                        .buttonStyle(.letterpress(.filled, fullWidth: true))
                         .accessibilityIdentifier("profileSaveName")
                         .disabled(!validName || saveState.isSaving)
                         if let saveError = saveState.errorMessage {

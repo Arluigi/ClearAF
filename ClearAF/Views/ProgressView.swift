@@ -15,7 +15,7 @@ struct ProgressView: View {
                 VStack(spacing: .spaceLG) {
                     Text("\(store.total) photos").font(.captionLarge)
                         .accessibilityIdentifier("photoCount")
-                    CareJournalPicker(title: "Photo layout", selection: $selectedViewMode) {
+                    LetterpressPicker(title: "Photo layout", selection: $selectedViewMode) {
                         Text("Grid").tag(0)
                         Text("List").tag(1)
                     }
@@ -53,10 +53,8 @@ struct ProgressView: View {
             pagination
             Button { showingCamera = true } label: {
                 Label("Take a photo", systemImage: "camera")
-                    .frame(maxWidth: .infinity).padding(.vertical, 8)
             }
-            .buttonStyle(.borderedProminent).tint(CareJournal.actionPrimary)
-            .foregroundStyle(CareJournal.onPrimary)
+            .buttonStyle(.letterpress(.filled, fullWidth: true))
             .accessibilityLabel("Capture photo")
         }
     }
@@ -72,7 +70,7 @@ struct ProgressView: View {
             Button { store.next() } label: { Text("Next").foregroundStyle(CareJournal.textPrimary) }
                 .frame(maxWidth: .infinity).disabled(!store.hasNext)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.letterpress(.outlined, fullWidth: true))
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -187,7 +185,7 @@ private struct ProgressPhotoThumbnail: View {
             } else { Image(systemName: "photo") }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: .radiusMedium))
+        .clipShape(Rectangle())
         .accessibilityLabel("Dated photo")
     }
 }
@@ -213,7 +211,7 @@ struct PhotoSharingStatusView: View {
                 Button(photo.uploadState == nil ? "Share" : "Retry") {
                     do { try APIService.shared.photos.share(photo) }
                     catch { errorMessage = error.localizedDescription }
-                }.font(.caption).buttonStyle(.bordered)
+                }.font(.caption).buttonStyle(.letterpress(.outlined))
             }
         }
         .alert("Unable to share photo", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
@@ -278,7 +276,7 @@ private struct PhotoReviewStatusView: View {
                     SwiftUI.ProgressView("Loading review status")
                 case .unavailable:
                     Text("Review status is unavailable.")
-                    Button("Retry review status") { retry += 1 }.buttonStyle(.bordered)
+                    Button("Retry review status") { retry += 1 }.buttonStyle(.letterpress(.outlined))
                 case .notReviewed:
                     Text("Not yet marked reviewed.")
                 case .reviewed(let review):

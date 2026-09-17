@@ -29,7 +29,7 @@ struct UrgentReportEntry: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } icon: {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(Letterpress.error)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").foregroundStyle(CareJournal.textSecondary).accessibilityHidden(true)
@@ -38,7 +38,7 @@ struct UrgentReportEntry: View {
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .careJournalSurface()
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.horizontal, horizontalPadding)
@@ -55,7 +55,7 @@ struct UrgentReportButton: View {
             Label {
                 Text("Something's wrong?").foregroundStyle(Color.retainedErrorText)
             } icon: {
-                Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(Letterpress.error)
             }
             .labelStyle(.titleAndIcon)
         }
@@ -76,11 +76,11 @@ struct UrgentReportView: View {
                     Label {
                         Text(UrgentReportCopy.emergency).font(.callout.weight(.semibold))
                     } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Letterpress.error)
                     }
                     .accessibilityIdentifier("urgentEmergencyNotice")
                 }
-                .listRowBackground(Color.red.opacity(0.12))
+                .listRowBackground(Letterpress.sunk)
                 if repository.sent != nil {
                     Section {
                         Label(UrgentReportCopy.sent, systemImage: "checkmark.circle")
@@ -140,14 +140,12 @@ struct UrgentReportView: View {
         Section {
             Button(action: send) {
                 HStack(spacing: .spaceSM) {
-                    if repository.sending { SwiftUI.ProgressView().tint(CareJournal.onPrimary) }
+                    if repository.sending { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                     Text(frozen ? "Retry" : "Send")
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(CareJournal.actionPrimary)
-            .foregroundStyle(CareJournal.onPrimary)
+            .buttonStyle(.letterpress(.filled))
             .disabled(!canSend)
             .accessibilityIdentifier("urgentSend")
             if let error = repository.error {

@@ -58,7 +58,7 @@ struct CompletionCalendarView: View {
                                     }
                                     .frame(maxWidth: .infinity, minHeight: 60)
                                     .padding(.vertical, 3)
-                                    .background(CareJournal.surface, in: RoundedRectangle(cornerRadius: 8))
+                                    .background(CareJournal.surface, in: Rectangle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("\(date), \(daySummary(day))")

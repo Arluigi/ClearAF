@@ -20,7 +20,7 @@ struct OnboardingView: View {
                     .font(.largeTitle.bold())
                 Text("Keep a dated photo history and follow the morning or evening routines assigned by your clinician.")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Letterpress.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: .spaceLG) {
                     Label("Photos stay dated so you and your care team can review changes over time.", systemImage: "camera")
@@ -32,25 +32,25 @@ struct OnboardingView: View {
                     Text("Your name").font(.headline)
                     TextField("Your name", text: $userName)
                         .textContentType(.name)
-                        .standardTextField()
+                        .letterpressField(isEmpty: userName.isEmpty)
                         .accessibilityIdentifier("onboardingName")
                     Text("Use between 2 and 100 characters.")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Letterpress.inkSecondary)
                 }
                 Button(action: completeOnboarding) {
                     HStack {
-                        if saveState.isSaving { SwiftUI.ProgressView().tint(.white) }
+                        if saveState.isSaving { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                         Text(saveState.isSaving ? "Saving…" : "Continue")
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(.letterpress(.filled, fullWidth: true))
                 .accessibilityIdentifier("onboardingContinue")
                 .disabled(!canSubmit)
                 if let saveError = saveState.errorMessage {
                     VStack(alignment: .leading, spacing: .spaceSM) {
-                        Text(saveError).foregroundStyle(.red).accessibilityIdentifier("onboardingError")
+                        Text(saveError).foregroundStyle(Letterpress.error).accessibilityIdentifier("onboardingError")
                         Button("Try again", action: completeOnboarding)
                             .accessibilityIdentifier("onboardingRetry")
                             .disabled(!canSubmit)

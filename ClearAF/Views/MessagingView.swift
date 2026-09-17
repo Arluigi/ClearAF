@@ -15,10 +15,10 @@ struct MessagingView: View {
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 16) {
                                 if repository.nextCursor != nil { Button("Load older messages") { Task { await repository.load(older: true) } }.disabled(repository.loading) }
-                                if repository.messages.isEmpty { Text("Start a conversation with your assigned clinician.").foregroundStyle(.secondary) }
+                                if repository.messages.isEmpty { Text("Start a conversation with your assigned clinician.").foregroundStyle(Letterpress.inkSecondary) }
                                 ForEach(repository.messages) { message in
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(message.senderType == "patient" ? "You" : pair.clinicianName).font(.caption).foregroundStyle(.secondary)
+                                        Text(message.senderType == "patient" ? "You" : pair.clinicianName).font(.caption).foregroundStyle(Letterpress.inkSecondary)
                                         Text(message.content).textSelection(.enabled)
                                         if let reference = message.reference {
                                             Button { selected = message } label: {
@@ -26,12 +26,11 @@ struct MessagingView: View {
                                             }
                                         }
                                         if let date = RoutineDates.instant(message.sentAt) {
-                                            HStack { Text(date, style: .date); Text(date, style: .time); if message.senderType == "patient" { Text("Sent") } }.font(.caption2).foregroundStyle(.secondary)
+                                            HStack { Text(date, style: .date); Text(date, style: .time); if message.senderType == "patient" { Text("Sent") } }.font(.caption2).foregroundStyle(Letterpress.inkSecondary)
                                         }
                                     }
                                     .padding().frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(message.senderType == "patient" ? CareJournal.actionPrimary.opacity(0.10) : Color.cardBackground)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .background(message.senderType == "patient" ? Letterpress.sunk : Letterpress.surface)
                                     .background(GeometryReader { geometry in
                                         Color.clear.preference(key: VisibleMessageFrames.self, value: [message.id: geometry.frame(in: .named("messageViewport"))])
                                     })
@@ -46,19 +45,19 @@ struct MessagingView: View {
                     }
                     VStack(alignment: .leading, spacing: 8) {
                         TextField("Write a message", text: Binding(get: { repository.draft?.content ?? "" }, set: { try? repository.edit($0) }), axis: .vertical)
-                            .textFieldStyle(.roundedBorder).lineLimit(2...5).disabled(repository.sending)
+                            .lineLimit(2...5).letterpressField(isEmpty: (repository.draft?.content ?? "").isEmpty).disabled(repository.sending)
                         HStack {
-                            Text("\(repository.draft?.content.count ?? 0)/4000").font(.caption).foregroundStyle(.secondary)
+                            Text("\(repository.draft?.content.count ?? 0)/4000").font(.caption).foregroundStyle(Letterpress.inkSecondary)
                             Spacer()
                             Button(repository.sending ? "Sending…" : repository.draft?.attempted == true ? "Retry message" : "Send") { Task { await repository.send() } }
-                                .buttonStyle(.borderedProminent).disabled(repository.sending || (repository.draft?.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true))
+                                .buttonStyle(.letterpress(.filled)).disabled(repository.sending || (repository.draft?.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true))
                         }
                     }.padding(.horizontal)
                 } else if repository.opened { ContentUnavailableView("Messaging unavailable", systemImage: "message", description: Text("A conversation becomes available when a clinician is assigned to your account.")) }
                 else { Button("Open current conversation") { Task { await repository.openCurrent() } } }
                 if repository.loading { SwiftUI.ProgressView() }
-                if let error = repository.error { Text(error).font(.callout).foregroundStyle(.secondary).padding(.horizontal).accessibilityIdentifier("messagesError") }
-                Text("Refresh to check for new messages.").font(.caption).foregroundStyle(.secondary)
+                if let error = repository.error { Text(error).font(.callout).foregroundStyle(Letterpress.inkSecondary).padding(.horizontal).accessibilityIdentifier("messagesError") }
+                Text("Refresh to check for new messages.").font(.caption).foregroundStyle(Letterpress.inkSecondary)
             }
             .padding(.vertical, 8).background(CareJournal.canvas)
             .navigationTitle("Messages")
@@ -94,7 +93,7 @@ private struct MessageReferenceView: View {
                     else if let detail {
                         Text(detail.reference.label ?? "Feedback reference").font(.title2)
                         if let routine = detail.routine {
-                            Text("\(routine.timeOfDay.capitalized) · Revision \(routine.version)").foregroundStyle(.secondary)
+                            Text("\(routine.timeOfDay.capitalized) · Revision \(routine.version)").foregroundStyle(Letterpress.inkSecondary)
                             ForEach(Array(routine.steps.enumerated()), id: \.offset) { _, step in VStack(alignment: .leading) { Text(step.title).font(.headline); Text(step.instructions) } }
                         }
                         if let photo = detail.photo { Text(photo.captureDate).font(.caption); if let image { Image(uiImage: image).resizable().scaledToFit() } else { Text("Photo preview unavailable.") } }

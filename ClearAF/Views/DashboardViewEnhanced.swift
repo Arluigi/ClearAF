@@ -192,12 +192,6 @@ struct CareLinksCard: View {
     }
 }
 
-// The prominent Today action uses the same white-on-action pairing as Photos and Capture.
-enum TodayPhotoActionAppearance {
-    static let tint = CareJournal.actionPrimary
-    static let foreground = CareJournal.onPrimary
-}
-
 // Photo Display Section Component
 struct PhotoDisplaySection: View {
     let todayPhoto: SkinPhoto?
@@ -213,11 +207,9 @@ struct PhotoDisplaySection: View {
             }
             Button { showingCamera = true } label: {
                 Label(todayPhoto == nil ? "Take a photo" : "Take another photo", systemImage: "camera")
-                    .foregroundStyle(TodayPhotoActionAppearance.foreground)
             }
             .accessibilityLabel("Take daily progress photo")
-            .buttonStyle(.borderedProminent)
-            .tint(TodayPhotoActionAppearance.tint)
+            .buttonStyle(.letterpress(.filled))
         }
         .frame(maxWidth: .infinity)
     }
@@ -230,7 +222,7 @@ private struct DashboardPhotoPreview: View {
         VStack(spacing: .spaceSM) {
             if let bytes = photo.photoData, let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 800) {
                 Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: .radiusMedium))
+                    .clipShape(Rectangle())
                     .accessibilityLabel("Latest progress photo")
             }
             if let date = photo.captureDate { Text(date, style: .date).font(.caption) }

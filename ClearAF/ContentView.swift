@@ -106,7 +106,7 @@ private struct PhotoPersistenceErrorView: View {
     @ObservedObject var repository: PhotoRepository
     var body: some View {
         if let error = repository.lastError {
-            Text(error).font(.callout).padding().background(.regularMaterial).cornerRadius(12).padding()
+            Text(error).font(.callout).padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: Letterpress.Radius.sheet)).padding()
         }
     }
 }

@@ -1,10 +1,5 @@
 import SwiftUI
 
-enum RoutineActionAppearance {
-    static let tint = CareJournal.actionPrimary
-    static let foreground = CareJournal.onPrimary
-}
-
 struct RoutineView: View {
     @ObservedObject private var repository = APIService.shared.routines
     @State private var selectedSlot: RoutineTimeOfDay = .morning
@@ -17,7 +12,7 @@ struct RoutineView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Your clinician assigns and updates these routines.")
                         .foregroundStyle(CareJournal.textSecondary)
-                    CareJournalPicker(title: "Time of day", selection: $selectedSlot) {
+                    LetterpressPicker(title: "Time of day", selection: $selectedSlot) {
                         ForEach(RoutineTimeOfDay.allCases, id: \.self) { slot in
                             Text(slot.title).tag(slot)
                         }
@@ -97,7 +92,7 @@ struct RoutineView: View {
         let status = repository.status(for: routine)
         return VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(routine.name).font(.system(.title2, design: .serif))
+                Text(routine.name).font(Letterpress.display(22, relativeTo: .title2))
                 Text(routine.timeOfDay.title)
                     .font(.subheadline).foregroundStyle(CareJournal.textSecondary)
             }
@@ -112,7 +107,7 @@ struct RoutineView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background(CareJournal.surface, in: RoundedRectangle(cornerRadius: 12))
+                .background(CareJournal.surface, in: RoundedRectangle(cornerRadius: Letterpress.Radius.control))
             }
             Text(status.label)
                 .font(.headline)
@@ -123,9 +118,7 @@ struct RoutineView: View {
                     actionError = nil
                 } catch { actionError = error.localizedDescription }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(RoutineActionAppearance.tint)
-            .foregroundStyle(RoutineActionAppearance.foreground)
+            .buttonStyle(.letterpress(.filled))
             .disabled(status != .unrecorded)
             .accessibilityIdentifier("routine-\(routine.timeOfDay.rawValue)-record")
             Text("Record after you have completed the steps.")

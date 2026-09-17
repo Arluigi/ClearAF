@@ -53,7 +53,7 @@ struct ReminderSettingsView: View {
     }
     @ViewBuilder private func reminder(_ name:String,time:Binding<ReminderTime>) -> some View {
         Toggle(name,isOn:time.enabled)
-            .tint(Letterpress.inkSecondary)
+            .tint(Letterpress.toggleOn)
         if time.wrappedValue.enabled {
             DatePicker("\(name) time",selection:Binding(get:{
                 Calendar.current.date(from:DateComponents(hour:time.wrappedValue.hour,minute:time.wrappedValue.minute)) ?? Date()
