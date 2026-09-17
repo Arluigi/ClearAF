@@ -3,7 +3,7 @@ import {isDeepStrictEqual as equal} from 'node:util';
 import {Prisma, CareTemplateRevision} from '@prisma/client';
 import {prisma} from '../config/database';
 import {careError,revisionInput} from './routineCare';
-import {formInput,responseInput,validateAnswers,questionInput,monthBounds} from './careSupportValidation';
+import {formInput,responseInput,validateAnswers,questionInput,monthBounds,timelineQuery,localDateIn,daySpan} from './careSupportValidation';
 type DB=Prisma.TransactionClient;
 const conflict=()=>careError(409,'Revision identity conflicts or content has changed');
 async function retry<T>(save:()=>Promise<T>):Promise<T>{try{return await save()}catch(e){if((e as {code?:string}).code!=='P2002')throw e;return save()}}
@@ -43,3 +43,19 @@ export async function calendar(userId:string,month:string,clinicianId?:string){r
  return {month,days:rows.map(r=>({localDate:r.localDate,morning:Number(r.morning),evening:Number(r.evening)}))};
 })}
 export async function calendarEvents(userId:string,localDate:string,page:number,limit:number,clinicianId?:string){return prisma.$transaction(async tx=>{await lockPatient(tx,userId,clinicianId);const where={userId,localDate};const total=await tx.careRoutineCompletion.count({where});const data=await tx.careRoutineCompletion.findMany({where,include:{routine:true},orderBy:[{receivedAt:'desc'},{id:'desc'}],skip:(page-1)*limit,take:limit});return {data,pagination:{page,limit,total,totalPages:Math.ceil(total/limit)}}})}
+const TIMELINE_RESPONSES=50;
+/** Compare timeline for the signed-in patient only: versions in force at each capture, versions saved in between, recorded days and check-ins. Read-only. */
+export async function timeline(userId:string,query:z.infer<typeof timelineQuery>){return prisma.$transaction(async tx=>{
+ await lockPatient(tx,userId);
+ const from=new Date(query.from),to=new Date(query.to);
+ const fromDate=localDateIn(from,query.timeZone),toDate=localDateIn(to,query.timeZone);
+ // Revisions are clinician-authored and few per patient; one ordered read serves "in force at" and "saved between".
+ const known=await tx.careRoutineRevision.findMany({where:{userId,createdAt:{lte:to}},orderBy:[{createdAt:'asc'},{version:'asc'}]});
+ const inForce=(instant:Date)=>['morning','evening'].flatMap(slot=>{const saved=known.filter(r=>r.timeOfDay===slot&&r.createdAt.getTime()<=instant.getTime());return saved.length?[saved[saved.length-1]]:[]});
+ const done=await tx.careRoutineCompletion.findMany({where:{userId,localDate:{gte:fromDate,lte:toDate}},include:{routine:true}});
+ const recorded=(slot:string)=>new Set(done.filter(c=>c.routine.timeOfDay===slot).map(c=>c.localDate)).size;
+ const window={userId,submittedAt:{gt:from,lte:to}};
+ const responsesTotal=await tx.careFormResponse.count({where:window});
+ const responses=await tx.careFormResponse.findMany({where:window,include:{form:true},orderBy:[{submittedAt:'asc'},{id:'asc'}],take:TIMELINE_RESPONSES});
+ return {fromDate,toDate,days:daySpan(fromDate,toDate),routinesAtFrom:inForce(from),routinesAtTo:inForce(to),revisions:known.filter(r=>r.createdAt.getTime()>from.getTime()),completions:{morning:recorded('morning'),evening:recorded('evening')},responses,responsesTotal};
+})}

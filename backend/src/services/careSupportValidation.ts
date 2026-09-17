@@ -15,3 +15,10 @@ export function validateAnswers(questions:z.infer<typeof questionInput>[],answer
  for(const a of answers){const q=questions.find(q=>q.id===a.questionId);if(!q||seen.has(a.questionId)){fail();continue}seen.add(a.questionId);if(q.type==='text'){if(a.optionId!==undefined||a.text===undefined||a.text.length>2000||(q.required&&!a.text.trim()))fail()}else if(a.text!==undefined||!q.options.some(o=>o.id===a.optionId))fail()}
  if(questions.some(q=>q.required&&!seen.has(q.id)))fail();if(issues.length)throw new z.ZodError(issues);
 }
+// Compare timeline (iOS): two capture instants and the device zone that turns them into local dates.
+export const timelineMaxDays=1096;
+const instantInput=z.string().max(40).datetime({offset:true}).refine(v=>validDate(v.slice(0,10))&&Number.isFinite(Date.parse(v)),'Invalid timestamp');
+const zoneInput=z.string().min(1).max(100).refine(zone=>{if(/^[+-]/.test(zone))return false;try{new Intl.DateTimeFormat('en-US',{timeZone:zone});return true}catch{return false}},'Invalid IANA timezone');
+export const timelineQuery=z.object({from:instantInput,to:instantInput,timeZone:zoneInput}).strict().superRefine((v,c)=>{const from=Date.parse(v.from),to=Date.parse(v.to);if(from>to)c.addIssue({code:'custom',path:['to'],message:'to must not be before from'});else if(to-from>timelineMaxDays*86400000)c.addIssue({code:'custom',path:['to'],message:'Range is too long'})});
+export function localDateIn(instant:Date,timeZone:string){const parts=new Intl.DateTimeFormat('en-US',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(instant);const part=(type:string)=>parts.find(p=>p.type===type)?.value;return `${part('year')}-${part('month')}-${part('day')}`}
+export function daySpan(fromDate:string,toDate:string){return Math.round((Date.parse(`${toDate}T00:00:00Z`)-Date.parse(`${fromDate}T00:00:00Z`))/86400000)+1}

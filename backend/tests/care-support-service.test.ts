@@ -7,7 +7,9 @@ const A='11111111-1111-4111-8111-111111111111', B='22222222-2222-4222-8222-22222
 process.env.SUPABASE_URL='https://routine-test.supabase.co';process.env.SUPABASE_ANON_KEY='synthetic';process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic';
 process.env.ENROLLMENT_ENFORCEMENT='off'; // The gate itself is covered by enrollment-gate.test.ts.
 let templates:any[]=[],forms:any[]=[],responses:any[]=[],revisions:any[]=[],completions:any[]=[],legacyWrites=0,assigned=C,queue=Promise.resolve(),afterLock:(()=>void)|undefined;
-const matches=(r:any,w:any):boolean=>Object.entries(w||{}).every(([k,v]:any)=>typeof v==='object'&&v!==null?matches(r,v):r[k]===v);
+const isRange=(v:any)=>typeof v==='object'&&v!==null&&!(v instanceof Date)&&Object.keys(v).length>0&&Object.keys(v).every(k=>['gt','gte','lt','lte'].includes(k));
+const inRange=(value:any,cond:any)=>Object.entries(cond).every(([op,bound]:any)=>op==='gt'?value>bound:op==='gte'?value>=bound:op==='lt'?value<bound:value<=bound);
+const matches=(r:any,w:any):boolean=>Object.entries(w||{}).every(([k,v]:any)=>isRange(v)?inRange(r[k],v):typeof v==='object'&&v!==null?matches(r,v):r[k]===v);
 function model(rows:()=>any[]){return {
  findUnique:async({where}:any)=>rows().find(r=>matches(r,where))??null,
  findFirst:async(args:any)=>(await model(rows).findMany(args))[0]??null,
@@ -38,3 +40,46 @@ test('response ID owned by another patient concealed with caller-owned form',asy
 test('same response attempt races yield one immutable record',async()=>{const first=await saveForm();assert.equal(first.status,201);const id=randomUUID(),body={formId:first.body.form.id,submittedAt:'2026-01-01T00:00:00Z',answers:[{questionId:question.id,optionId:question.options[0].id}]};assert.deepEqual((await Promise.all([call(`/responses/${id}`,A,'PUT',body),call(`/responses/${id}`,A,'PUT',body)])).map(r=>r.status).sort(),[200,201]);assert.equal(responses.length,1)});
 test('form reads expose latest inactive state and patient cannot access clinician endpoints',async()=>{const first=await saveForm();assert.equal(first.status,201);const next=await saveForm(randomUUID(),{...formBody(first.body.form.id),isActive:false,questions:[]});assert.equal(next.status,201);assert.equal((await call('/form')).body.form.id,next.body.form.id);assert.equal((await call('/form')).body.form.isActive,false);assert.equal((await call(`/patients/${A}/form`,A)).status,403);assert.equal((await call('/templates',A)).status,403)});
 test('day detail returns exact flat completion and immutable routine snapshot',async()=>{const r={id:randomUUID(),userId:A,version:1,name:'Original name',timeOfDay:'morning'};revisions.push(r);completions.push({id:randomUUID(),userId:A,revisionId:r.id,localDate:'2026-01-01',receivedAt:new Date(),completedAt:new Date('2026-01-01T00:00:00Z'),timeZone:'UTC'});const result=await call('/calendar/events?localDate=2026-01-01');assert.equal(result.status,200);assert.equal(result.body.data[0].routine.name,'Original name');assert.equal(result.body.data[0].revisionId,r.id);assert.equal(result.body.data[0].completion,undefined);assert.deepEqual(result.body.pagination,{page:1,limit:20,total:1,totalPages:1})});
+function seedTimeline(){
+ const at=(iso:string)=>new Date(iso);
+ const m1={id:randomUUID(),userId:A,timeOfDay:'morning',version:1,createdBy:C,createdAt:at('2026-08-20T09:00:00Z'),name:'Synthetic morning',isActive:true,steps:[]};
+ const m2={...m1,id:randomUUID(),version:2,createdAt:at('2026-09-05T09:00:00Z')};
+ const e1={...m1,id:randomUUID(),timeOfDay:'evening',createdAt:at('2026-09-20T09:00:00Z')};
+ const other={...m1,id:randomUUID(),userId:B,createdBy:D,createdAt:at('2026-09-06T09:00:00Z')};
+ revisions.push(m1,m2,e1,other);
+ const done=(revisionId:string,localDate:string,userId=A)=>completions.push({id:randomUUID(),userId,revisionId,localDate,completedAt:at(`${localDate}T07:00:00Z`),timeZone:'UTC',receivedAt:new Date()});
+ done(m1.id,'2026-09-01');done(m1.id,'2026-09-02');done(m1.id,'2026-09-03');done(m2.id,'2026-09-05');done(m2.id,'2026-09-15');done(m2.id,'2026-09-16');done(other.id,'2026-09-04',B);
+ const form={id:randomUUID(),userId:A,version:1,createdBy:C,createdAt:at('2026-08-01T00:00:00Z'),title:'Neutral form',isActive:true,questions:[question]};
+ forms.push(form);
+ const reply=(submittedAt:string,userId=A)=>responses.push({id:randomUUID(),userId,formId:form.id,submittedAt:at(submittedAt),receivedAt:at(submittedAt),answers:[{questionId:question.id,optionId:question.options[1].id}]});
+ reply('2026-09-01T12:00:00Z');reply('2026-09-14T12:00:00Z');reply('2026-09-10T12:00:00Z');reply('2026-09-16T12:00:00Z');reply('2026-09-12T12:00:00Z',B);
+ return {m1,m2,other};
+}
+test('timeline returns only the patient\'s own versions, recorded days and check-ins between two instants',async()=>{
+ const {m1,m2,other}=seedTimeline();
+ const r=await call('/timeline?from=2026-09-02T07:04:00.000Z&to=2026-09-15T07:12:00.000Z&timeZone=UTC');
+ assert.equal(r.status,200);
+ assert.deepEqual([r.body.fromDate,r.body.toDate,r.body.days],['2026-09-02','2026-09-15',14]);
+ assert.deepEqual(r.body.routinesAtFrom.map((x:any)=>x.id),[m1.id]);
+ assert.deepEqual(r.body.routinesAtTo.map((x:any)=>x.id),[m2.id]);
+ assert.deepEqual(r.body.revisions.map((x:any)=>x.id),[m2.id]);
+ assert.deepEqual(r.body.completions,{morning:4,evening:0});
+ assert.deepEqual(r.body.responses.map((x:any)=>x.submittedAt),['2026-09-10T12:00:00.000Z','2026-09-14T12:00:00.000Z']);
+ assert.equal(r.body.responses[0].form.title,'Neutral form');
+ assert.equal(r.body.responsesTotal,2);
+ const shifted=await call('/timeline?from=2026-09-02T20:00:00.000Z&to=2026-09-15T20:00:00.000Z&timeZone=Asia/Kolkata');
+ assert.deepEqual([shifted.body.fromDate,shifted.body.toDate,shifted.body.days],['2026-09-03','2026-09-16',14]);
+ assert.deepEqual(shifted.body.completions,{morning:4,evening:0});
+ const b=await call('/timeline?from=2026-09-02T07:04:00.000Z&to=2026-09-15T07:12:00.000Z&timeZone=UTC',B);
+ assert.deepEqual(b.body.revisions.map((x:any)=>x.id),[other.id]);
+ assert.deepEqual(b.body.completions,{morning:1,evening:0});
+ assert.equal(b.body.responsesTotal,1);
+});
+test('timeline rejects clinicians and invalid queries before reading records',async()=>{
+ seedTimeline();
+ const q='from=2026-09-02T07:04:00.000Z&to=2026-09-15T07:12:00.000Z&timeZone=UTC';
+ assert.equal((await call('/timeline?'+q,C)).status,403);
+ assert.equal((await call(`/patients/${A}/timeline?`+q,C)).status,404,'no clinician twin');
+ for(const query of ['',q.replace('timeZone=UTC','timeZone=%2B05:30'),q+'&page=2','from=2026-09-15T07:12:00.000Z&to=2026-09-02T07:04:00.000Z&timeZone=UTC','from=2020-01-01T00:00:00.000Z&to=2026-09-15T07:12:00.000Z&timeZone=UTC'])
+  assert.equal((await call('/timeline?'+query)).status,400,query);
+});
