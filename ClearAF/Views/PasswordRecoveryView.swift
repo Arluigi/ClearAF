@@ -9,7 +9,9 @@ struct PasswordRecoveryView: View {
         VStack(spacing: 20) {
             Text("Choose a new password").font(.title)
             SecureField("New password (at least 8 characters)", text: $password).textContentType(.newPassword)
+                .letterpressField(isEmpty: password.isEmpty)
             SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword)
+                .letterpressField(isEmpty: confirmation.isEmpty)
             if !error.isEmpty { Text(error) }
             Button(saving ? "Saving…" : "Update password") {
                 saving = true
@@ -20,6 +22,6 @@ struct PasswordRecoveryView: View {
                 }
             }.disabled(saving || password.count < 8 || password != confirmation)
             Button("Cancel and sign out") { APIService.shared.logout() }.disabled(saving)
-        }.textFieldStyle(.roundedBorder).padding()
+        }.padding()
     }
 }

@@ -11,30 +11,30 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: .spaceXXL) {
-                    VStack(alignment: .leading, spacing: .spaceSM) {
+                VStack(alignment: .leading, spacing: Letterpress.Space.s22) {
+                    VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                         Text("Name").font(.headline)
                         TextField("Your name", text: $name, axis: .vertical)
                             .textContentType(.name)
-                            .standardTextField()
+                            .letterpressField(isEmpty: name.isEmpty)
                             .accessibilityIdentifier("profileName")
                         Button(action: saveName) {
                             HStack {
-                                if saveState.isSaving { SwiftUI.ProgressView().tint(.white) }
+                                if saveState.isSaving { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                                 Text(saveState.isSaving ? "Saving…" : "Save name")
                             }.frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(PrimaryButtonStyle())
+                        .buttonStyle(.letterpress(.filled, fullWidth: true))
                         .accessibilityIdentifier("profileSaveName")
                         .disabled(!validName || saveState.isSaving)
                         if let saveError = saveState.errorMessage {
-                            Text(saveError).foregroundStyle(Color.retainedErrorText).accessibilityIdentifier("profileSaveError")
+                            Text(saveError).foregroundStyle(Letterpress.error).accessibilityIdentifier("profileSaveError")
                         }
                         if let saveConfirmation = saveState.successMessage {
-                            Text(saveConfirmation).foregroundStyle(Color.textSecondary).accessibilityIdentifier("profileSaveConfirmation")
+                            Text(saveConfirmation).foregroundStyle(Letterpress.inkSecondary).accessibilityIdentifier("profileSaveConfirmation")
                         }
                     }
-                    VStack(alignment: .leading, spacing: .spaceSM) {
+                    VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                         Text("Email").font(.headline)
                         Text(APIService.shared.currentUser?.email ?? "Unavailable")
                             .font(.body)
@@ -48,11 +48,11 @@ struct ProfileView: View {
                     Button("Account removal") { showingRemovalInfo = true }
                         .accessibilityHint("Explains the current account removal process")
                     Button(role: .destructive) { APIService.shared.logout() } label: {
-                        Text("Sign out").foregroundStyle(Color.retainedErrorText)
+                        Text("Sign out").foregroundStyle(Letterpress.error)
                     }
                         .accessibilityIdentifier("profileSignOut")
                 }
-                .padding(.spaceXXL)
+                .padding(Letterpress.Space.s22)
                 .frame(maxWidth: 600, alignment: .leading)
             }
             .navigationTitle("Profile")

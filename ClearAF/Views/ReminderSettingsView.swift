@@ -8,7 +8,7 @@ struct ReminderSettingsView: View {
         Form {
             Section {
                 Text("Choose reminders that work for you. These reminders stay on this device and pause when you sign out.")
-                    .foregroundStyle(CareJournal.textSecondary)
+                    .foregroundStyle(Letterpress.inkSecondary)
             }
             Section("Daily routines") {
                 reminder("Morning",time:$draft.morning)
@@ -27,14 +27,14 @@ struct ReminderSettingsView: View {
                     guard let ticket=api.access.snapshot() else{return}
                     Task { await repository.save(draft,ticket:ticket) }
                 }.disabled(repository.state == .saving)
-                Text(status).foregroundStyle(CareJournal.textSecondary).accessibilityIdentifier("reminderStatus")
+                Text(status).foregroundStyle(Letterpress.inkSecondary).accessibilityIdentifier("reminderStatus")
                 if repository.state == .denied {
                     Text("Allow notifications for ClearAF in iPhone Settings, then try saving again.")
                 }
             }
         }
         .navigationTitle("Reminders")
-        .tint(CareJournal.actionPrimary)
+        .tint(Letterpress.action)
         .task {
             if let ticket=api.access.snapshot(){await repository.resume(ticket:ticket)}
             draft=repository.preferences
@@ -53,7 +53,7 @@ struct ReminderSettingsView: View {
     }
     @ViewBuilder private func reminder(_ name:String,time:Binding<ReminderTime>) -> some View {
         Toggle(name,isOn:time.enabled)
-            .tint(Letterpress.inkSecondary)
+            .tint(Letterpress.toggleOn)
         if time.wrappedValue.enabled {
             DatePicker("\(name) time",selection:Binding(get:{
                 Calendar.current.date(from:DateComponents(hour:time.wrappedValue.hour,minute:time.wrappedValue.minute)) ?? Date()
