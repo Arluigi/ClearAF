@@ -351,25 +351,17 @@ extension Animation {
     static let smooth = Animation.easeOut(duration: 0.5)
 }
 
-// Care Journal content roles. Native navigation and controls retain system materials.
+// Care Journal role names, resolved to Letterpress until consumers migrate (deleted in PR 2).
 enum CareJournal {
-    private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
-        Color(UIColor { traits in
-            let hex = traits.userInterfaceStyle == .dark ? dark : light
-            return UIColor(red: CGFloat((hex >> 16) & 255) / 255,
-                           green: CGFloat((hex >> 8) & 255) / 255,
-                           blue: CGFloat(hex & 255) / 255, alpha: 1)
-        })
-    }
-    static let canvas = adaptive(0xF4F6F8, 0x18232D)
-    static let surface = adaptive(0xFFFFFF, 0x202D39)
-    static let textPrimary = adaptive(0x213B50, 0xE7EFF6)
-    static let textSecondary = adaptive(0x536779, 0xAEC0CF)
-    static let actionPrimary = adaptive(0x265579, 0xB0D5F2)
-    static let onPrimary = adaptive(0xFFFFFF, 0x172C3D)
-    static let accentSubtle = adaptive(0xE3EDF5, 0x2B4356)
-    static let separator = adaptive(0xC8D4DF, 0x435564)
-    static let display = Font.system(.largeTitle, design: .serif)
+    static let canvas = Letterpress.canvas
+    static let surface = Letterpress.surface
+    static let textPrimary = Letterpress.ink
+    static let textSecondary = Letterpress.inkSecondary
+    static let actionPrimary = Letterpress.action
+    static let onPrimary = Letterpress.canvas
+    static let accentSubtle = Letterpress.sunk
+    static let separator = Letterpress.rule
+    static let display = Letterpress.display(34)
 }
 
 extension View {

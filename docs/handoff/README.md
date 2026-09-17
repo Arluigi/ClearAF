@@ -4,7 +4,7 @@ September 13 update: PRs #1–5 are merged; T0–T4 are complete with the docume
 
 Prepared September 11, 2026. T2 implementation and verification are recorded in the [account reliability report](../accounts/README.md). No T2 production deployment occurred. See the [T2 plan](../superpowers/plans/2026-09-10-account-reliability.md), [baseline and recovery procedure](../baseline/README.md), and [security notes](../security/README.md).
 
-Design update: the first [Care Journal iPhone pass](../design/ios-care-journal.md) applies the [approved design language](../design/design-language.md) to Today, Photos and Routines. Portal migration is a separate follow-up. The demo iPhone runs the current build (confirmed by the owner on September 15, 2026).
+Design update: Letterpress 1.0 replaces Care Journal ([design language](../design/design-language.md), [plan](../superpowers/plans/2026-09-17-letterpress-redesign.md)); it lands in eight PRs.
 
 Client expansion: see [client expansion](../features/client-expansion.md) for the September 2026 release plan (enrollment and safety, intake and orders, follow-up and renewal).
 
@@ -125,7 +125,7 @@ T4 integrated MVP evidence, commands and remaining gates: [MVP verification](../
 
 Verification pacing and scope after T4: [working agreement](verification-workflow.md).
 
-Care Journal portal scope and focused verification: [portal design pass](../design/portal-care-journal.md).
+Archived: Care Journal portal scope and focused verification: [portal design pass](../design/archive/portal-care-journal.md).
 
 Feature expansion is tracked in [approved scope](../features/expansion.md). First slice: [photo comparison/review verification](../features/photo-review-verification.md); templates, calendars, reminders, check-ins and assigned messaging follow under the same active goal.
 
