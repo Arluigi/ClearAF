@@ -101,7 +101,7 @@ final class AccountFlowUITests: XCTestCase {
         nameField.clearAndEnterText("Synthetic Beta Updated")
         app.buttons["profileSaveName"].tap()
         XCTAssertTrue(app.staticTexts["Name saved"].waitForExistence(timeout: 10))
-        app.buttons["Close profile"].tap()
+        app.navigationBars["Profile"].buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["Synthetic Beta Updated"].waitForExistence(timeout: 5))
         signOut(app)
         login(app, email: a.email, password: a.password)

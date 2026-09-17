@@ -193,6 +193,7 @@ final class MVPExperienceUITests: XCTestCase {
         let a = XCTAttachment(screenshot: app.screenshot())
         a.name = "Physical A generated local history"; a.lifetime = .keepAlways; add(a)
         try tapTab("Today", in: app); app.buttons["Profile"].tap()
+        for _ in 0..<8 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
         app.buttons["Sign out"].tap()
         guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
         let env = ProcessInfo.processInfo.environment
@@ -215,7 +216,9 @@ final class MVPExperienceUITests: XCTestCase {
         }
         let b = XCTAttachment(screenshot: app.screenshot())
         b.name = "Physical B empty history after cold launch"; b.lifetime = .keepAlways; add(b)
-        try tapTab("Today", in: app); app.buttons["Profile"].tap(); app.buttons["Sign out"].tap()
+        try tapTab("Today", in: app); app.buttons["Profile"].tap()
+        for _ in 0..<8 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+        app.buttons["Sign out"].tap()
         guard app.buttons["authSubmit"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
         app.terminate()
     }

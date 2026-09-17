@@ -77,10 +77,7 @@ struct DashboardViewEnhanced: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active && selectedTab == .today { Task { await refresh() } }
             }
-            .sheet(isPresented: $showingProfile) {
-                ProfileView()
-                    .environment(\.managedObjectContext, viewContext)
-            }
+            .navigationDestination(isPresented: $showingProfile) { ProfileView() }
         }
     }
 
