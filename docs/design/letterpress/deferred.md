@@ -18,3 +18,5 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | iOS Routine | "Assigned by Dr. Om" byline | Revisions store the author's ID, not a name; the byline reads "Assigned on 2 Sep" |
 | iOS Today | Check-in "4 questions · due today" | No check-in schedule; the form loads only inside Check-in |
 | iOS Notes | "Attach a photo" | Patient notes carry no photo reference; the client rejects a patient message with one |
+| iOS Check-in | "due today" in the eyebrow | No check-in schedule; forms carry no due date |
+| iOS Check-in | "Save draft" button | Not needed: the draft file is written on every answer; the header says "Draft saved on this device" |

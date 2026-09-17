@@ -3,7 +3,7 @@ import Testing
 
 /// Pushed detail views (spec §6 tab bar, §8): no tab bar, no bottom spacer, no nested navigation stack.
 struct PushedScreenTests {
-    static let pushed = ["CompletionCalendarView.swift"]
+    static let pushed = ["CompletionCalendarView.swift", "CheckInView.swift"]
 
     @Test func pushedScreensHideTheTabBarAndNestNoNavigationStack() throws {
         let files = try LetterpressSweepTests.sources(in: ["ClearAF/Views"])
