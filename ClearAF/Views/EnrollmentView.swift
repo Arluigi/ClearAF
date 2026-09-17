@@ -33,7 +33,7 @@ struct EnrollmentView: View {
             // Each step starts with the "Something's wrong?" row (icon, text and error colour) in its content:
             // iOS 26+ toolbars render a Label icon-only with the glass style's own colour.
             content
-                .background(CareJournal.canvas.ignoresSafeArea())
+                .background(Letterpress.canvas.ignoresSafeArea())
                 .toolbar {
                     if updatingAnswers && repository.state?.status == .ineligible {
                         ToolbarItem(placement: .cancellationAction) {
@@ -45,7 +45,7 @@ struct EnrollmentView: View {
                     ToolbarItem(placement: .topBarTrailing) { Button("Sign out") { APIService.shared.logout() } }
                 }
         }
-        .tint(CareJournal.actionPrimary)
+        .tint(Letterpress.action)
         .task(id: repository.state?.status) {
             if repository.state?.status == .enrolled { APIService.shared.enrollmentFinished() }
         }
@@ -67,14 +67,14 @@ struct EnrollmentView: View {
         case .consentRequired:
             if let consent = repository.state?.consent { ConsentView(repository: repository, consent: consent) }
         case .enrolled:
-            VStack(spacing: .spaceLG) {
+            VStack(spacing: Letterpress.Space.s18) {
                 UrgentReportEntry(horizontalPadding: 0)
-                VStack(spacing: .spaceMD) { SwiftUI.ProgressView(); Text("Opening your account…") }
+                VStack(spacing: Letterpress.Space.s14) { SwiftUI.ProgressView(); Text("Opening your account…") }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(20)
         case nil:
-            VStack(spacing: .spaceLG) {
+            VStack(spacing: Letterpress.Space.s18) {
                 UrgentReportEntry(horizontalPadding: 0)
                 Spacer()
                 Text(repository.error ?? "Loading your eligibility steps…").multilineTextAlignment(.center)
@@ -110,12 +110,12 @@ private struct ScreeningForm: View {
             }
             Section {
                 // Standard row insets: with zero insets the wrapped second line was clipped at the leading edge.
-                VStack(alignment: .leading, spacing: .spaceSM) {
+                VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Text("A few questions first")
-                        .font(CareJournal.display)
-                        .foregroundStyle(CareJournal.textPrimary)
+                        .font(Letterpress.display(34))
+                        .foregroundStyle(Letterpress.ink)
                     Text("We check eligibility before you start. Your answers are shared with your care team.")
-                        .foregroundStyle(CareJournal.textSecondary)
+                        .foregroundStyle(Letterpress.inkSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -149,7 +149,7 @@ private struct ScreeningForm: View {
             }
             Section {
                 Button(action: submit) {
-                    HStack(spacing: .spaceSM) {
+                    HStack(spacing: Letterpress.Space.s10) {
                         if repository.saving { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                         Text(repository.saving ? "Saving…" : "Continue")
                     }
@@ -162,7 +162,7 @@ private struct ScreeningForm: View {
                 .listRowInsets(EdgeInsets())
                 if let error = repository.error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Color.retainedErrorText)
+                        .foregroundStyle(Letterpress.error)
                         .accessibilityIdentifier("enrollmentError")
                 }
             }
@@ -209,7 +209,7 @@ private struct NotEligibleView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: .spaceLG) {
+            VStack(spacing: Letterpress.Space.s18) {
                 UrgentReportEntry(horizontalPadding: 0)
                 result
             }
@@ -218,7 +218,7 @@ private struct NotEligibleView: View {
     }
 
     private var result: some View {
-        VStack(alignment: .leading, spacing: .spaceXL) {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s22) {
             Label {
                 Text("ClearAF can't provide your care right now").font(.title2.weight(.semibold))
             } icon: {
@@ -226,7 +226,7 @@ private struct NotEligibleView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("enrollmentNotEligible")
-            VStack(alignment: .leading, spacing: .spaceSM) {
+            VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                 ForEach(EnrollmentCopy.reasons(for: screening), id: \.self) { Text($0) }
                 Text("You have not been charged.")
             }
@@ -252,11 +252,11 @@ private struct NotEligibleView: View {
             .disabled(repository.saving)
             .accessibilityIdentifier("enrollmentUpdateAnswers")
             if let error = repository.error {
-                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.retainedErrorText)
+                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Letterpress.error)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .careJournalSurface()
+        .letterpressSurface()
     }
 }
 
@@ -266,7 +266,7 @@ private struct ConsentView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: .spaceLG) {
+            VStack(spacing: Letterpress.Space.s18) {
                 UrgentReportEntry(horizontalPadding: 0)
                 document
             }
@@ -275,7 +275,7 @@ private struct ConsentView: View {
     }
 
     private var document: some View {
-        VStack(alignment: .leading, spacing: .spaceXL) {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s22) {
             Text(consent.title).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             // Plain string: paragraphs are kept and nothing in the document is interpreted as Markdown.
             Text(verbatim: consent.body).fixedSize(horizontal: false, vertical: true)
@@ -283,7 +283,7 @@ private struct ConsentView: View {
                 guard let ticket = APIService.shared.access.snapshot() else { return }
                 Task { await repository.acceptConsent(ticket: ticket) }
             } label: {
-                HStack(spacing: .spaceSM) {
+                HStack(spacing: Letterpress.Space.s10) {
                     if repository.saving { SwiftUI.ProgressView().tint(Letterpress.inkTertiary) }
                     Text("I understand and agree")
                 }
@@ -293,11 +293,11 @@ private struct ConsentView: View {
             .disabled(repository.saving)
             .accessibilityIdentifier("enrollmentAgree")
             if let error = repository.error {
-                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.retainedErrorText)
+                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Letterpress.error)
             }
-            Text("Version \(consent.version)").font(.caption).foregroundStyle(CareJournal.textSecondary)
+            Text("Version \(consent.version)").font(.caption).foregroundStyle(Letterpress.inkSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .careJournalSurface()
+        .letterpressSurface()
     }
 }

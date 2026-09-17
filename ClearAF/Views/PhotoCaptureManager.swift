@@ -61,7 +61,7 @@ struct PhotoCaptureView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     Text(title).font(.largeTitle).bold().multilineTextAlignment(.center)
-                    Text(subtitle).foregroundStyle(Color.textSecondary).multilineTextAlignment(.center)
+                    Text(subtitle).foregroundStyle(Letterpress.inkSecondary).multilineTextAlignment(.center)
                     Button(action: requestCamera) {
                         Label("Take Photo", systemImage: "camera")
                     }
@@ -86,7 +86,7 @@ struct PhotoCaptureView: View {
                     Button { pickerError = nil; showingPhotoLibrary = true } label: {
                         Label("Choose from Library", systemImage: "photo.on.rectangle")
                     }.buttonStyle(.letterpress(.outlined, fullWidth: true))
-                    if let pickerError { Text(pickerError).foregroundStyle(Color.textSecondary).accessibilityIdentifier("photoPickerError") }
+                    if let pickerError { Text(pickerError).foregroundStyle(Letterpress.inkSecondary).accessibilityIdentifier("photoPickerError") }
                 }.padding(24)
             }
             .navigationTitle("Camera").navigationBarTitleDisplayMode(.inline)

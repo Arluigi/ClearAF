@@ -35,20 +35,20 @@ struct CareStatusSection: View {
 struct CareStatusCard: View {
     let decision: CareDecision
     var body: some View {
-        VStack(alignment: .leading, spacing: .spaceMD) {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
             Text(CareStatusCopy.title(for: decision.decision))
-                .font(.headlineLarge)
+                .font(Letterpress.ui(17, weight: .medium, relativeTo: .headline))
                 .fixedSize(horizontal: false, vertical: true)
             // One line when it fits; otherwise name and date stack instead of squeezing the name into a column.
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: .spaceXS) {
+                HStack(spacing: Letterpress.Space.s4) {
                     Text("From \(decision.clinicianName)")
                     if let date = RoutineDates.instant(decision.createdAt) {
                         Text("·").accessibilityHidden(true)
                         Text(date, format: .dateTime.month().day().year())
                     }
                 }
-                VStack(alignment: .leading, spacing: .spaceXXS) {
+                VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                     Text("From \(decision.clinicianName)").fixedSize(horizontal: false, vertical: true)
                     if let date = RoutineDates.instant(decision.createdAt) {
                         Text(date, format: .dateTime.month().day().year())
@@ -56,25 +56,25 @@ struct CareStatusCard: View {
                 }
             }
             .font(.subheadline)
-            .foregroundStyle(CareJournal.textSecondary)
+            .foregroundStyle(Letterpress.inkSecondary)
             if let message = decision.patientMessage, !message.isEmpty {
                 Text(message).fixedSize(horizontal: false, vertical: true)
             }
-            VStack(alignment: .leading, spacing: .spaceSM) {
+            VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                 Text("Next steps").font(.headline)
                 ForEach(CareStatusCopy.nextSteps, id: \.self) { step in
-                    HStack(alignment: .firstTextBaseline, spacing: .spaceSM) {
+                    HStack(alignment: .firstTextBaseline, spacing: Letterpress.Space.s10) {
                         Text("•").accessibilityHidden(true)
                         Text(step).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             if let refund = CareStatusCopy.refund(decision.refundStatus) {
-                Text(refund).font(.subheadline).foregroundStyle(CareJournal.textSecondary)
+                Text(refund).font(.subheadline).foregroundStyle(Letterpress.inkSecondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .careJournalSurface()
+        .letterpressSurface()
         .padding(.horizontal, 20)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("careStatusCard")

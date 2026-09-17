@@ -26,18 +26,18 @@ struct DashboardViewEnhanced: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: .spaceXL) {
+                VStack(spacing: Letterpress.Space.s22) {
                     // Header with improved accessibility and styling
                     HStack {
-                        VStack(alignment: .leading, spacing: .spaceXS) {
+                        VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                             Text(getTimeBasedGreeting())
                                 .font(.headline)
-                                .foregroundColor(CareJournal.textSecondary)
+                                .foregroundColor(Letterpress.inkSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             if let user = users.first {
                                 Text(user.name ?? "There")
-                                    .font(CareJournal.display)
-                                    .foregroundColor(CareJournal.textPrimary)
+                                    .font(Letterpress.display(34))
+                                    .foregroundColor(Letterpress.ink)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -47,8 +47,8 @@ struct DashboardViewEnhanced: View {
                         }) {
                             Image(systemName: "person.circle.fill")
                                 .font(.system(size: 32))
-                                .foregroundColor(CareJournal.actionPrimary)
-                                .frame(width: .touchTarget, height: .touchTarget)
+                                .foregroundColor(Letterpress.action)
+                                .frame(width: Letterpress.minTouch, height: Letterpress.minTouch)
                                 .contentShape(Circle())
                         }
                         .accessibleButton(label: "Profile", hint: "Open your profile settings")
@@ -66,13 +66,13 @@ struct DashboardViewEnhanced: View {
 
                     CareLinksCard()
 
-                    Spacer(minLength: .spaceHuge)
+                    Spacer(minLength: Letterpress.Space.s28)
                 }
-                .padding(.top, .spaceXL)
+                .padding(.top, Letterpress.Space.s22)
             }
-            .foregroundStyle(CareJournal.textPrimary)
-            .tint(CareJournal.actionPrimary)
-            .background(CareJournal.canvas.ignoresSafeArea())
+            .foregroundStyle(Letterpress.ink)
+            .tint(Letterpress.action)
+            .background(Letterpress.canvas.ignoresSafeArea())
             .navigationBarBackButtonHidden(true)
             .task { await refreshCareStatus() }
             .onChange(of: scenePhase) { _, phase in
@@ -123,15 +123,15 @@ struct DailyPhotoCardEnhanced: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: .spaceLG) {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
             HStack {
-                Text("Your photos").font(.headlineSmall)
+                Text("Your photos").font(Letterpress.ui(15, weight: .medium, relativeTo: .subheadline))
                 Spacer()
                 Button("View all") { selectedTab = 1 }
             }
             PhotoDisplaySection(todayPhoto: photos.first, images: images, showingCamera: $showingCamera)
         }
-        .careJournalSurface()
+        .letterpressSurface()
         .padding(.horizontal, 20)
         .sheet(isPresented: $showingCamera) { DurablePhotoCaptureView() }
         .onDisappear { images.clear() }
@@ -142,14 +142,14 @@ struct DailyTasksCardEnhanced: View {
     @Binding var selectedTab: Int
     @ObservedObject private var repository = APIService.shared.routines
     var body: some View {
-        VStack(alignment: .leading, spacing: .spaceLG) {
-            Text("Assigned routines").font(.headlineLarge)
-            Text(Date.now, format: .dateTime.weekday().month().day()).font(.caption).foregroundStyle(CareJournal.textSecondary)
+        VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
+            Text("Assigned routines").font(Letterpress.ui(17, weight: .medium, relativeTo: .headline))
+            Text(Date.now, format: .dateTime.weekday().month().day()).font(.caption).foregroundStyle(Letterpress.inkSecondary)
             ForEach(RoutineTimeOfDay.allCases, id: \.self) { slot in
                 Button { selectedTab = 2 } label: {
-                    HStack(spacing: .spaceMD) {
+                    HStack(spacing: Letterpress.Space.s14) {
                         Image(systemName: slot == .morning ? "sun.max" : "moon")
-                        VStack(alignment: .leading, spacing: .spaceXS) {
+                        VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                             Text(slot.title).font(.headline)
                             if let routine = repository.routine(for: slot), routine.isActive {
                                 Text(routine.name).font(.subheadline)
@@ -162,7 +162,7 @@ struct DailyTasksCardEnhanced: View {
                         Spacer()
                         Image(systemName: "chevron.right")
                     }
-                    .foregroundStyle(CareJournal.textPrimary)
+                    .foregroundStyle(Letterpress.ink)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -170,24 +170,24 @@ struct DailyTasksCardEnhanced: View {
             }
             if repository.lastError != nil {
                 Text("Routines need attention. Open Routines to refresh or retry.")
-                    .font(.caption).foregroundStyle(CareJournal.textSecondary)
+                    .font(.caption).foregroundStyle(Letterpress.inkSecondary)
             }
         }
-        .careJournalSurface()
+        .letterpressSurface()
         .padding(.horizontal, 20)
     }
 }
 
 struct CareLinksCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: .spaceMD) {
-            Text("Care team").font(.headlineLarge)
+        VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
+            Text("Care team").font(Letterpress.ui(17, weight: .medium, relativeTo: .headline))
             NavigationLink { CheckInView() } label: {
                 Label("Check-in from your clinician", systemImage: "list.clipboard")
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             }
         }
-        .careJournalSurface()
+        .letterpressSurface()
         .padding(.horizontal, 20)
     }
 }
@@ -198,12 +198,12 @@ struct PhotoDisplaySection: View {
     let images: PhotoImageLoader
     @Binding var showingCamera: Bool
     var body: some View {
-        VStack(spacing: .spaceMD) {
+        VStack(spacing: Letterpress.Space.s14) {
             if let photo = todayPhoto {
                 DashboardPhotoPreview(photo: photo, images: images)
             } else {
-                Image(systemName: "camera.fill").font(.largeTitle).foregroundColor(CareJournal.actionPrimary)
-                Text("Start your photo history").foregroundColor(CareJournal.textSecondary)
+                Image(systemName: "camera.fill").font(.largeTitle).foregroundColor(Letterpress.action)
+                Text("Start your photo history").foregroundColor(Letterpress.inkSecondary)
             }
             Button { showingCamera = true } label: {
                 Label(todayPhoto == nil ? "Take a photo" : "Take another photo", systemImage: "camera")
@@ -219,7 +219,7 @@ private struct DashboardPhotoPreview: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
     var body: some View {
-        VStack(spacing: .spaceSM) {
+        VStack(spacing: Letterpress.Space.s10) {
             if let bytes = photo.photoData, let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 800) {
                 Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 200)
                     .clipShape(Rectangle())

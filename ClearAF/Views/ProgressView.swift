@@ -12,8 +12,8 @@ struct ProgressView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: .spaceLG) {
-                    Text("\(store.total) photos").font(.captionLarge)
+                VStack(spacing: Letterpress.Space.s18) {
+                    Text("\(store.total) photos").font(Letterpress.data(12, relativeTo: .footnote))
                         .accessibilityIdentifier("photoCount")
                     LetterpressPicker(title: "Photo layout", selection: $selectedViewMode) {
                         Text("Grid").tag(0)
@@ -33,13 +33,13 @@ struct ProgressView: View {
                     if dynamicTypeSize.isAccessibilitySize { photoActions }
                 }.padding(20)
             }
-            .foregroundStyle(CareJournal.textPrimary)
-            .tint(CareJournal.actionPrimary)
-            .background(CareJournal.canvas.ignoresSafeArea())
+            .foregroundStyle(Letterpress.ink)
+            .tint(Letterpress.action)
+            .background(Letterpress.canvas.ignoresSafeArea())
             .navigationTitle("Photos")
             .safeAreaInset(edge: .bottom) {
                 if !dynamicTypeSize.isAccessibilitySize {
-                    photoActions.padding(20).background(CareJournal.canvas)
+                    photoActions.padding(20).background(Letterpress.canvas)
                 }
             }
             .refreshable { store.refresh() }
@@ -61,13 +61,13 @@ struct ProgressView: View {
 
     private var pagination: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: .spaceMD))
-            : AnyLayout(HStackLayout(spacing: .spaceMD))
+            ? AnyLayout(VStackLayout(spacing: Letterpress.Space.s14))
+            : AnyLayout(HStackLayout(spacing: Letterpress.Space.s14))
         return layout {
-            Button { store.previous() } label: { Text("Previous").foregroundStyle(CareJournal.textPrimary) }
+            Button { store.previous() } label: { Text("Previous").foregroundStyle(Letterpress.ink) }
                 .frame(maxWidth: .infinity).disabled(!store.hasPrevious)
             Text("Page \(store.page + 1)").font(.caption)
-            Button { store.next() } label: { Text("Next").foregroundStyle(CareJournal.textPrimary) }
+            Button { store.next() } label: { Text("Next").foregroundStyle(Letterpress.ink) }
                 .frame(maxWidth: .infinity).disabled(!store.hasNext)
         }
         .buttonStyle(.letterpress(.outlined, fullWidth: true))
@@ -81,11 +81,11 @@ struct ProgressView: View {
 struct EnhancedEmptyProgressView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("No photos yet").font(.title2).foregroundStyle(CareJournal.textPrimary)
+            Text("No photos yet").font(.title2).foregroundStyle(Letterpress.ink)
             Text("Take a photo to start your care record. Photos stay on this device until you share them.")
-                .foregroundStyle(CareJournal.textSecondary)
+                .foregroundStyle(Letterpress.inkSecondary)
             Text("Use consistent lighting when possible.")
-                .font(.footnote).foregroundStyle(CareJournal.textSecondary)
+                .font(.footnote).foregroundStyle(Letterpress.inkSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 24)
@@ -100,12 +100,12 @@ struct EnhancedPhotoGridView: View {
     private var columns: [GridItem] {
         dynamicTypeSize.isAccessibilitySize
             ? [GridItem(.flexible())]
-            : [GridItem(.adaptive(minimum: 108), spacing: .spaceSM)]
+            : [GridItem(.adaptive(minimum: 108), spacing: Letterpress.Space.s10)]
     }
     
     var body: some View {
         Group {
-            LazyVGrid(columns: columns, spacing: .spaceMD) {
+            LazyVGrid(columns: columns, spacing: Letterpress.Space.s14) {
                 ForEach(photos, id: \.id) { photo in
                     EnhancedPhotoGridItem(photo: photo, images: images)
                 }
@@ -120,7 +120,7 @@ struct EnhancedPhotoGridItem: View {
     let images: PhotoImageLoader
     @State private var showingPhotoDetail = false
     var body: some View {
-        VStack(spacing: .spaceXS) {
+        VStack(spacing: Letterpress.Space.s4) {
             Button { showingPhotoDetail = true } label: {
                 VStack {
                     ProgressPhotoThumbnail(photo: photo, images: images, size: 100)
@@ -129,7 +129,7 @@ struct EnhancedPhotoGridItem: View {
             }.buttonStyle(.plain)
             PhotoSharingStatusView(photo: photo, compact: true)
         }
-        .padding(.spaceXS)
+        .padding(Letterpress.Space.s4)
         .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo, images: images) }
     }
 }
@@ -140,7 +140,7 @@ struct EnhancedPhotoListView: View {
     
     var body: some View {
         Group {
-            LazyVStack(spacing: .spaceLG) {
+            LazyVStack(spacing: Letterpress.Space.s18) {
                 ForEach(photos, id: \.id) { photo in
                     EnhancedPhotoListItem(photo: photo, images: images)
                 }
@@ -157,19 +157,19 @@ struct EnhancedPhotoListItem: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: .spaceLG))
-            : AnyLayout(HStackLayout(spacing: .spaceLG))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Letterpress.Space.s18))
+            : AnyLayout(HStackLayout(spacing: Letterpress.Space.s18))
         layout {
             Button { showingPhotoDetail = true } label: { ProgressPhotoThumbnail(photo: photo, images: images, size: 80) }
                 .buttonStyle(.plain).accessibilityLabel("View photo details")
-            VStack(alignment: .leading, spacing: .spaceXS) {
-                if let date = photo.captureDate { Text(date, style: .date).font(.headlineSmall) }
-                if let notes = photo.notes, !notes.isEmpty { Text(notes).font(.bodyMedium).lineLimit(2) }
+            VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
+                if let date = photo.captureDate { Text(date, style: .date).font(Letterpress.ui(15, weight: .medium, relativeTo: .subheadline)) }
+                if let notes = photo.notes, !notes.isEmpty { Text(notes).font(Letterpress.ui(16, relativeTo: .callout)).lineLimit(2) }
                 PhotoSharingStatusView(photo: photo)
             }
             Spacer()
         }
-        .careJournalSurface()
+        .letterpressSurface()
         .sheet(isPresented: $showingPhotoDetail) { PhotoDetailView(photo: photo, images: images) }
     }
 }
@@ -204,7 +204,7 @@ struct PhotoSharingStatusView: View {
     }
     var body: some View {
         VStack(alignment: compact ? .center : .leading, spacing: 4) {
-            Text(label).font(.caption).foregroundColor(photo.uploadState == "error" ? .retainedErrorText : .textSecondary)
+            Text(label).font(.caption).foregroundColor(photo.uploadState == "error" ? Letterpress.error : Letterpress.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("photoSharingStatus")
             if photo.uploadState != "shared" {
@@ -235,7 +235,7 @@ struct PhotoDetailView: View {
                     PhotoSharingStatusView(photo: photo)
                     PhotoReviewStatusView(photo: photo)
                     if let notes = photo.notes, !notes.isEmpty { Text(notes) }
-                    Text("Photo removal is not available yet.").font(.caption).foregroundColor(CareJournal.textSecondary)
+                    Text("Photo removal is not available yet.").font(.caption).foregroundColor(Letterpress.inkSecondary)
                 }.padding()
             }
             .navigationTitle("Photo Details")
@@ -286,7 +286,7 @@ private struct PhotoReviewStatusView: View {
             }
         }
         .font(.subheadline)
-        .foregroundStyle(CareJournal.textSecondary)
+        .foregroundStyle(Letterpress.inkSecondary)
         .accessibilityIdentifier("photoReviewStatus")
         .task(id: "\(sharedID?.uuidString ?? "none")-\(api.access.snapshot()?.generation.uuidString ?? "none")-\(retry)") {
             reviews.cancel()

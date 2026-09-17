@@ -32,7 +32,7 @@ struct CompletionCalendarView: View {
                         NavigationLink { CompletionDayView(date: date) } label: {
                             VStack(alignment: .leading) {
                                 Text(date)
-                                Text(daySummary(day)).font(.caption).foregroundStyle(CareJournal.textSecondary)
+                                Text(daySummary(day)).font(.caption).foregroundStyle(Letterpress.inkSecondary)
                             }
                         }.accessibilityLabel("\(date), \(daySummary(day))")
                     }
@@ -40,7 +40,7 @@ struct CompletionCalendarView: View {
                     Section {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 7), spacing: 8) {
                             ForEach(Array(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].enumerated()), id: \.offset) { _, name in
-                                Text(name).font(.caption2).foregroundStyle(CareJournal.textSecondary).accessibilityHidden(true)
+                                Text(name).font(.caption2).foregroundStyle(Letterpress.inkSecondary).accessibilityHidden(true)
                             }
                             ForEach(0..<weekdayOffset, id: \.self) { _ in Color.clear.frame(height: 60).accessibilityHidden(true) }
                             ForEach(SupportDates.days(month), id: \.self) { date in
@@ -58,7 +58,7 @@ struct CompletionCalendarView: View {
                                     }
                                     .frame(maxWidth: .infinity, minHeight: 60)
                                     .padding(.vertical, 3)
-                                    .background(CareJournal.surface, in: Rectangle())
+                                    .background(Letterpress.surface, in: Rectangle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("\(date), \(daySummary(day))")
@@ -66,11 +66,11 @@ struct CompletionCalendarView: View {
                             }
                         }
                         Text("AM: morning · PM: evening · —: Not recorded")
-                            .font(.caption).foregroundStyle(CareJournal.textSecondary)
+                            .font(.caption).foregroundStyle(Letterpress.inkSecondary)
                     }
                 }
             }
-        }.navigationTitle("Completion history").tint(CareJournal.actionPrimary)
+        }.navigationTitle("Completion history").tint(Letterpress.action)
         .task(id: month) { await load() }
     }
     private var weekdayOffset: Int {

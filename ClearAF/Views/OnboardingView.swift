@@ -11,10 +11,10 @@ struct OnboardingView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: .spaceXXL) {
+            VStack(alignment: .leading, spacing: Letterpress.Space.s22) {
                 Image(systemName: "sparkles")
                     .font(.largeTitle)
-                    .foregroundStyle(Color.primaryPurple)
+                    .foregroundStyle(Letterpress.ink)
                     .accessibilityHidden(true)
                 Text("Welcome to Clear AF")
                     .font(.largeTitle.bold())
@@ -22,13 +22,13 @@ struct OnboardingView: View {
                     .font(.body)
                     .foregroundStyle(Letterpress.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: .spaceLG) {
+                VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
                     Label("Photos stay dated so you and your care team can review changes over time.", systemImage: "camera")
                     Label("Routines show only assignments from your clinician and let you record completion.", systemImage: "checklist")
                 }
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: .spaceSM) {
+                VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Text("Your name").font(.headline)
                     TextField("Your name", text: $userName)
                         .textContentType(.name)
@@ -49,7 +49,7 @@ struct OnboardingView: View {
                 .accessibilityIdentifier("onboardingContinue")
                 .disabled(!canSubmit)
                 if let saveError = saveState.errorMessage {
-                    VStack(alignment: .leading, spacing: .spaceSM) {
+                    VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                         Text(saveError).foregroundStyle(Letterpress.error).accessibilityIdentifier("onboardingError")
                         Button("Try again", action: completeOnboarding)
                             .accessibilityIdentifier("onboardingRetry")
@@ -57,10 +57,10 @@ struct OnboardingView: View {
                     }
                 }
             }
-            .padding(.spaceXXL)
+            .padding(Letterpress.Space.s22)
             .frame(maxWidth: 600, alignment: .leading)
         }
-        .background(Color.backgroundPrimary.ignoresSafeArea())
+        .background(Letterpress.canvas.ignoresSafeArea())
         .onAppear {
             if userName.isEmpty { userName = APIService.shared.currentUser?.name ?? "" }
         }

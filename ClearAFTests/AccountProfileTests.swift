@@ -11,11 +11,11 @@ struct AccountProfileTests {
         #expect(AccountName.canSubmit("  Valid Patient  ", isSaving: false))
     }
 
-    @Test func careJournalReadingColorsMeetContrastInBothAppearances() {
+    @Test func letterpressReadingColorsMeetContrastInBothAppearances() {
         for style in [UIUserInterfaceStyle.light, .dark] {
             let traits = UITraitCollection(userInterfaceStyle: style)
-            for surface in [CareJournal.canvas, CareJournal.surface] {
-                for text in [CareJournal.textPrimary, CareJournal.textSecondary, CareJournal.actionPrimary] {
+            for surface in [Letterpress.canvas, Letterpress.surface] {
+                for text in [Letterpress.ink, Letterpress.inkSecondary, Letterpress.action] {
                     #expect(contrast(UIColor(text).resolvedColor(with: traits), UIColor(surface).resolvedColor(with: traits)) >= 4.5)
                 }
             }
@@ -63,28 +63,13 @@ struct AccountProfileTests {
         #expect(metadata["name"] == .string("Taylor Patient"))
     }
 
-    @Test func brandForegroundAndActionColorsMeetNormalTextContrastInBothAppearances() {
+    @Test func secondaryAndErrorTextMeetContrastOnSystemFormBackgrounds() {
         for style in [UIUserInterfaceStyle.light, .dark] {
             let traits = UITraitCollection(userInterfaceStyle: style)
-            let background = UIColor.systemBackground.resolvedColor(with: traits)
-            let foreground = UIColor(Color.primaryPurple).resolvedColor(with: traits)
-            let actionPurple = UIColor(Color.primaryActionPurple).resolvedColor(with: traits)
-            let actionTeal = UIColor(Color.primaryActionTeal).resolvedColor(with: traits)
-
-            #expect(contrast(foreground, background) >= 4.5)
-            #expect(contrast(.white, actionPurple) >= 4.5)
-            #expect(contrast(.white, actionTeal) >= 4.5)
-        }
-    }
-
-    @Test func retainedSecondaryAndErrorTextMeetContrastAcrossBothAppearances() {
-        for style in [UIUserInterfaceStyle.light, .dark] {
-            let traits = UITraitCollection(userInterfaceStyle: style)
-            for background in [UIColor.systemBackground, .secondarySystemBackground, .tertiarySystemBackground, .systemGray6] {
-                for (label, color) in [("secondary", Color.textSecondary), ("error", Color.retainedErrorText)] {
+            for background in [UIColor.systemBackground, .secondarySystemBackground, .tertiarySystemBackground, .systemGroupedBackground, .secondarySystemGroupedBackground] {
+                for (label, color) in [("secondary", Letterpress.inkSecondary), ("error", Letterpress.error)] {
                     let ratio = contrast(UIColor(color).resolvedColor(with: traits), background.resolvedColor(with: traits))
-                    #expect(ratio >= 4.5)
-                    print("MVP contrast \(style.rawValue) \(label): \(ratio)")
+                    #expect(ratio >= 4.5, "\(label) \(style.rawValue): \(ratio)")
                 }
             }
         }

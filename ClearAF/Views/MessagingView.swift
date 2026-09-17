@@ -59,7 +59,7 @@ struct MessagingView: View {
                 if let error = repository.error { Text(error).font(.callout).foregroundStyle(Letterpress.inkSecondary).padding(.horizontal).accessibilityIdentifier("messagesError") }
                 Text("Refresh to check for new messages.").font(.caption).foregroundStyle(Letterpress.inkSecondary)
             }
-            .padding(.vertical, 8).background(CareJournal.canvas)
+            .padding(.vertical, 8).background(Letterpress.canvas)
             .navigationTitle("Messages")
             .toolbar { Button("Refresh", systemImage: "arrow.clockwise") { Task { await repository.openCurrent(); if active && scenePhase == .active && selected == nil { await repository.acknowledgeVisible(visible) } } }.disabled(repository.loading || repository.sending) }
             .sheet(item: $selected) { message in if let pair = repository.conversation { MessageReferenceView(message: message, pair: pair) } }

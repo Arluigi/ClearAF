@@ -45,7 +45,7 @@ struct CheckInView: View {
                 Section { Text(form?.isActive == false ? "Your clinician archived this check-in." : "No check-in assigned"); Text("Questions from your clinician will appear here.") }
             } else { SwiftUI.ProgressView("Loading check-in…") }
         }
-        .navigationTitle("Check-in").tint(CareJournal.actionPrimary)
+        .navigationTitle("Check-in").tint(Letterpress.action)
         .task { await load(ticket) }
         .refreshable { await load(ticket) }
     }

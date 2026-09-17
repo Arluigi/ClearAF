@@ -27,7 +27,7 @@ struct ContentView: View {
             case .onboarding:
                 OnboardingView {}
                     .overlay(alignment: .topTrailing) {
-                        HStack(spacing: .spaceLG) {
+                        HStack(spacing: Letterpress.Space.s18) {
                             UrgentReportButton(isPresented: $showingUrgent)
                             Button("Sign out") { apiService.logout() }
                         }
@@ -60,7 +60,7 @@ struct ContentView: View {
                         .tabItem { Image(systemName: "message.fill"); Text("Messages") }
                         .tag(3)
                 }
-                .tint(CareJournal.actionPrimary)
+                .tint(Letterpress.action)
             }
         }
         .environment(\.managedObjectContext, apiService.persistence.container.viewContext)

@@ -4,8 +4,7 @@ import Testing
 /// Scans the Swift source tree (via #filePath) for design values Letterpress retired.
 struct LetterpressSweepTests {
     static let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-    /// DesignSystem.swift is deleted in the next task; until then it is the one file allowed to hold retired values.
-    static let excluded: Set<String> = ["LetterpressSweepTests.swift", "DesignSystem.swift"]
+    static let excluded: Set<String> = ["LetterpressSweepTests.swift"]
 
     static func sources(in folders: [String]) throws -> [(path: String, text: String)] {
         var files: [(path: String, text: String)] = []
@@ -38,5 +37,14 @@ struct LetterpressSweepTests {
         let controls = #"\.buttonStyle\(\.bordered(Prominent)?\)|\.textFieldStyle\(\.roundedBorder\)|\.cornerRadius\(|cornerRadius:\s*[0-9.]|PrimaryButtonStyle|SecondaryButtonStyle|GhostButtonStyle|standardTextField|design:\s*\.serif|\.tint\(Letterpress\.inkSecondary\)|CareJournalPicker"#
         #expect(try Self.offences(hues, in: ["ClearAF"]) == [])
         #expect(try Self.offences(controls, in: ["ClearAF"]) == [])
+    }
+
+    @Test func designSystemFileIsGone() {
+        #expect(!FileManager.default.fileExists(atPath: Self.repoRoot.appendingPathComponent("ClearAF/Views/DesignSystem.swift").path))
+    }
+
+    @Test func noRetiredDesignSystemNamesRemain() throws {
+        let retired = #"\b(CareJournal\w*|careJournal\w*|primaryPurple|primaryActionPurple|primaryActionTeal|primaryTeal|skinPeach|calmBlue|gentleGreen|warmBeige|softLavender|retainedErrorText|textPrimary|textSecondary|textTertiary|backgroundPrimary|backgroundSecondary|backgroundTertiary|borderSubtle|cardBackground|buttonPrimary|buttonSecondary|buttonDisabled|primaryGradient|glowShadow|softShadow|mediumShadow|strongShadow|wellnessCard|WellnessCardModifier|clickableBackground|ClickableBackgroundModifier|StandardTextFieldModifier|score[A-Z]\w*|space(XXS|XS|SM|MD|LG|XL|XXL|Huge|Giant|Massive)|radius(Small|Medium|Large|XL|XXL|Pill)|display(Large|Medium|Small)|headline(Large|Medium|Small)|body(Large|Medium|Small)|caption(Large|Medium|Small)|dynamic(Title|Headline|Body)|touchTarget|TodayPhotoActionAppearance|RoutineActionAppearance)\b"#
+        #expect(try Self.offences(retired, in: ["ClearAF", "ClearAFTests", "ClearAFUITests"]) == [])
     }
 }
