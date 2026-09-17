@@ -1,4 +1,5 @@
 "use client";
+import * as React from "react";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { LatestRead, RevisionEditor } from "@/lib/care-support";
 import { Button } from "@/components/ui/button";
@@ -20,17 +21,21 @@ export function LoadState({
   status,
   error,
   retry,
+  loading = "Loading",
 }: {
   status: string;
   error: string;
   retry: () => void;
+  loading?: string;
 }) {
   return status === "loading" ? (
-    <p role="status">Loading…</p>
+    <p role="status" className="text-sm text-ink-secondary">
+      {loading}
+    </p>
   ) : status === "error" ? (
-    <div role="alert">
-      <p>{error}</p>
-      <Button variant="outline" onClick={retry}>
+    <div role="alert" className="space-y-2">
+      <p className="text-sm">{error}</p>
+      <Button variant="outline" size="sm" onClick={retry}>
         Retry
       </Button>
     </div>

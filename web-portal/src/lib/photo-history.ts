@@ -40,26 +40,3 @@ export class PhotoHistoryController {
     }
   }
 }
-
-
-export type PhotoOriginalState = { id: string; url?: string; error?: boolean };
-type PhotoDetailState =
-  | { status: 'ready'; photo: PhotoSummary; url: string }
-  | { status: 'loading' | 'error' | 'unavailable'; message: string };
-
-/** Resolve independent summary/original outcomes without an endless dialog spinner. */
-export function photoDetailState(
-  history: PhotoHistoryState,
-  selected: string | null,
-  original: PhotoOriginalState | null,
-): PhotoDetailState {
-  if (history.status === 'error') return { status: 'error', message: history.error };
-  if (history.status === 'loading') return { status: 'loading', message: 'Loading photo…' };
-  const photo = history.photos.find(item => item.id === selected);
-  if (!photo) return { status: 'unavailable', message: 'This photo is no longer on this page. Close this view and refresh the history.' };
-  if (original?.id === selected && original.error) {
-    return { status: 'error', message: 'Photo could not be loaded. Use Refresh images to retry.' };
-  }
-  if (original?.id === selected && original.url) return { status: 'ready', photo, url: original.url };
-  return { status: 'loading', message: 'Loading photo…' };
-}

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ConversationController,
+  applyReference,
   type Conversation,
   type MessagePage,
   type MessageRecord,
@@ -140,4 +141,27 @@ test("explicit new draft creates a fresh identity after editing failed content",
     return { ...message(id), content: body.content };
   });
   assert.deepEqual(attempts, ["1", "2"]);
+});
+
+// ConversationView applies `initialReference` (the URL's referenceType/referenceId) in a separate effect from the
+// message load, calling exactly this. A tab switch that drops those URL params (the reference prop goes from set
+// to null) must not wipe the in-progress draft or the linked reference.
+test("applyReference links a fresh reference but never clears the draft when the prop reverts to null", async () => {
+  const c = new ConversationController("p", "c");
+  await c.load(async () => ({ conversation, messages: [], nextCursor: null }));
+  c.edit("Draft in progress");
+  applyReference(c, { type: "photo", id: "x" });
+  assert.deepEqual([c.snapshot().text, c.snapshot().reference], ["Draft in progress", { type: "photo", id: "x" }]);
+  // Simulates the tab-switch: the reference prop reverts to null (URL params dropped), which must be a no-op.
+  applyReference(c, null);
+  assert.deepEqual([c.snapshot().text, c.snapshot().reference, c.snapshot().messages], ["Draft in progress", { type: "photo", id: "x" }, []]);
+});
+
+test("applyReference does not link while a send is frozen", async () => {
+  const c = new ConversationController("p", "c");
+  c.edit("Reply");
+  const pending = c.send(() => new Promise<MessageRecord>(() => {})); // never resolves: stays frozen
+  applyReference(c, { type: "routineRevision", id: "y" });
+  assert.equal(c.snapshot().reference, null);
+  void pending;
 });

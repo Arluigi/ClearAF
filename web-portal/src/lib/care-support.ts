@@ -1,4 +1,5 @@
 import type { RoutineStep } from "../types/api";
+import { plural } from "./worklist";
 export interface Template {
   id: string;
   revisionId: string;
@@ -196,4 +197,68 @@ export class RevisionEditor<D extends object> extends Observable<{
       });
     }
   }
+}
+
+/** An answer as the patient gave it: their text, the chosen option's label, or "Not answered". */
+export function answerText(question: Question, response: CheckInResponse): string {
+  const answer = response.answers.find((a) => a.questionId === question.id);
+  if (question.type === "text") return answer?.text?.trim() ? answer.text : "Not answered";
+  return question.options.find((o) => o.id === answer?.optionId)?.label ?? "Not answered";
+}
+
+export const choiceQuestions = (form: Form) => form.questions.filter((q) => q.type === "choice");
+
+export interface AnswerPoint {
+  responseId: string;
+  submittedAt: string;
+  formVersion: number;
+  /** Option labels of this response's own form version, in the order the clinician wrote them. */
+  options: string[];
+  index: number | null;
+  label: string;
+}
+
+/** Ordered-choice answers exactly as given, oldest first. Never averaged or scored. */
+export function answerSeries(responses: CheckInResponse[], questionId: string): AnswerPoint[] {
+  return responses
+    .flatMap((response) => {
+      const question = response.form.questions.find((q) => q.id === questionId && q.type === "choice");
+      if (!question) return [];
+      const answer = response.answers.find((a) => a.questionId === questionId);
+      const index = question.options.findIndex((o) => o.id === answer?.optionId);
+      return [{
+        responseId: response.id,
+        submittedAt: response.submittedAt,
+        formVersion: response.form.version,
+        options: question.options.map((o) => o.label),
+        index: index < 0 ? null : index,
+        label: index < 0 ? "Not answered" : question.options[index].label,
+      }];
+    })
+    .sort((a, b) => Date.parse(a.submittedAt) - Date.parse(b.submittedAt));
+}
+
+export function formSummary(form: Form) {
+  return `${plural(form.questions.length, "question")} · ${form.questions.filter((q) => q.required).length} required`;
+}
+
+export function templateSummary(template: Pick<Template, "steps">) {
+  if (!template.steps.length) return "No steps";
+  const text = template.steps.map((step) => step.title).join(" · ");
+  return text.length > 60 ? `${text.slice(0, 59)}…` : text;
+}
+
+export function templateVersionNote(version: number | null, isActive: boolean) {
+  if (version === null) return "New · saving creates v1";
+  return `V${version}${isActive ? "" : " · archived"} · editing creates v${version + 1}`;
+}
+
+/**
+ * Using a template on a clean slot copies immediately. On a dirty slot (an unsaved draft) the first click only
+ * arms that button ("Replace unsaved draft?"); the copy runs only on a second, confirming click on the same
+ * button. Clicking a different button, or the slot becoming clean in the meantime, starts over at "copy".
+ */
+export function templateCopyAction(armed: string | null, key: string, dirty: boolean): { action: "copy" | "arm"; nextArmed: string | null } {
+  if (dirty && armed !== key) return { action: "arm", nextArmed: key };
+  return { action: "copy", nextArmed: null };
 }

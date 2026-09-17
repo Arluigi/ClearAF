@@ -1,4 +1,5 @@
 import type { RoutineRevision } from "../types/api";
+import { clock, day, stamp } from "./worklist";
 export type MessageReference = {
   type: "photo" | "routineRevision";
   id: string;
@@ -271,4 +272,42 @@ export class ConversationController {
         selected.forEach((id) => this.reading.delete(id));
     }
   }
+}
+
+/**
+ * Applies a URL-carried reference to a live conversation, without ever discarding a draft. Only a fresh, non-null
+ * reference is linked, and only when nothing is frozen (a send in flight already owns the reference). A tab switch
+ * that drops the URL's reference param (going from set to null) must not clear the current draft or link.
+ */
+export function applyReference(controller: ConversationController, reference: MessageReference | null) {
+  if (reference && !controller.frozen) controller.link(reference);
+}
+
+const REFERENCE_ID = /^[0-9a-f-]{36}$/i;
+/** Only a photo or routine revision UUID from the URL can become a message reference. */
+export function messageReference(type: string | null, id: string | null): MessageReference | null {
+  return (type === "photo" || type === "routineRevision") && id && REFERENCE_ID.test(id) ? { type, id } : null;
+}
+
+/** `14 SEP · 16:12 · You` or `· Ada`; set in mono uppercase by `.meta-mono`. */
+export function turnEyebrow(message: MessageRecord, patientFirstName: string) {
+  return `${stamp(message.sentAt)} · ${message.senderType === "dermatologist" ? "You" : patientFirstName || "Patient"}`;
+}
+
+export function threadTime(iso: string, now: Date) {
+  const date = new Date(iso);
+  return date.toDateString() === now.toDateString() ? clock(date) : day(iso);
+}
+
+export const inboxUnread = (conversations: Conversation[]) =>
+  conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
+
+export function referenceLabel(reference: ReferenceView) {
+  if (!reference.available) return reference.type === "photo" ? "Photo unavailable" : "Routine revision unavailable";
+  return reference.label || (reference.type === "photo" ? "Photo" : "Routine revision");
+}
+
+export function linkedLabel(reference: MessageReference, linkedCaptureDate: string | null) {
+  if (reference.type === "routineRevision") return "Links the selected routine version";
+  return linkedCaptureDate ? `Links photo ${day(linkedCaptureDate)}` : "Links the selected photo";
 }

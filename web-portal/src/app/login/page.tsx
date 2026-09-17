@@ -1,13 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import AuthShell from '@/components/layout/AuthShell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Stethoscope, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 export default function LoginPage() {
@@ -16,34 +14,31 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
+  const [notice, setNotice] = useState('');
   const { login, isAuthenticated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('password') === 'updated') setError('Password updated. Sign in with your new password.');
-    if (new URLSearchParams(window.location.search).get('logout') === 'revocation-failed') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('password') === 'updated') setNotice('Password updated. Sign in with your new password.');
+    if (params.get('logout') === 'revocation-failed') {
       setError('You are signed out on this browser. The server could not confirm session revocation; sign in again when your connection is available.');
     }
   }, []);
 
-  // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push('/patients');
-    }
+    if (isAuthenticated) router.push('/patients');
   }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-
     try {
       await login(email, password);
       router.push('/patients');
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Login failed. Please try again.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Sign in failed. Check your details and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -52,131 +47,38 @@ export default function LoginPage() {
   const isFormValid = email.trim() !== '' && password.length >= 6;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-canvas">
-      <div className="w-full max-w-md space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <div className="p-3 rounded-full bg-sunk border border-rule">
-              <Stethoscope className="h-8 w-8 text-ink" />
-            </div>
-          </div>
-          <div>
-            <h1 className="editorial-title text-4xl">Clear AF</h1>
-            <p className="text-ink-secondary">Clinician portal</p>
+    <AuthShell eyebrow="Clinician portal" title="Sign in">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Work email</Label>
+          <Input id="email" type="email" autoComplete="email" placeholder="you@practice.example" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Password</Label>
+          <div className="relative">
+            <Input id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="pr-14" required />
+            <button
+              type="button"
+              className="absolute right-0 top-1/2 -translate-y-1/2 text-[13px] font-medium text-ink-secondary underline underline-offset-[3px] hover:text-ink"
+              onClick={() => setShowPassword((value) => !value)}
+              aria-pressed={showPassword}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
           </div>
         </div>
-
-        {/* Login Form */}
-        <Card className="">
-          <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <CardDescription>
-              Sign in to review assigned patient photos and routines
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="doctor@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-11"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="h-11 pr-10"
-                      required
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-11 px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-ink-secondary" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-ink-secondary" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full"
-                disabled={!isFormValid || isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </Button>
-
-              <div className="text-center space-y-4">
-                <Button
-                  type="button"
-                  variant="link"
-                  className="text-sm text-ink-secondary hover:text-ink"
-                  onClick={() => router.push('/forgot-password')}
-                >
-                  Forgot your password?
-                </Button>
-
-                <div className="text-sm text-ink-secondary">
-                  Don&apos;t have an account?{' '}
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="p-0 h-auto font-semibold text-ink hover:underline"
-                    onClick={() => router.push('/register')}
-                  >
-                    Request practice access
-                  </Button>
-                </div>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Footer */}
-        <div className="text-center text-sm text-ink-secondary">
-          <p>Professional dermatology platform</p>
-          <p className="mt-1">For dermatology care teams</p>
+        {notice && <p role="status" className="text-sm">{notice}</p>}
+        {error && <p role="alert" className="border-l-2 border-error pl-3 text-sm text-error">{error}</p>}
+        <Button type="submit" size="lg" className="w-full" disabled={!isFormValid || isLoading}>
+          {isLoading ? 'Signing in…' : 'Sign in'}
+        </Button>
+        {!isFormValid && !isLoading && <p className="text-xs text-ink-secondary">Enter your work email and a password of at least 6 characters to continue.</p>}
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          <a className="underline underline-offset-[3px]" href="/forgot-password">Forgot password</a>
+          <a className="underline underline-offset-[3px]" href="/register">Request practice access</a>
         </div>
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   );
 }

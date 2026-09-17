@@ -27,13 +27,14 @@ async function cleanup(){
  await db.query('delete from auth.sessions where user_id=any($1::uuid[])',[ids]);
  await db.query('delete from assigned_messages where "patientId"=any($1::uuid[])',[ids]);
  await db.query('delete from photo_reviews where "photoId" in(select id from skin_photos where "userId"=any($1::uuid[]))',[ids]);
- for(const [table,column] of [['urgent_reports','patientId'],['care_form_responses','userId'],['care_form_revisions','userId'],['care_routine_completions','userId'],['care_routine_revisions','userId'],['skin_photos','userId'],['photo_cleanup','userId']])
+ for(const [table,column] of [['urgent_reports','patientId'],['care_form_responses','userId'],['care_form_revisions','userId'],['care_routine_completions','userId'],['care_routine_revisions','userId'],['care_template_revisions','ownerId'],['skin_photos','userId'],['photo_cleanup','userId']])
   await db.query(`delete from public.${table} where "${column}"=any($1::uuid[])`,[ids]);
  await unenrollFixture(db,ids);
  await db.query('delete from user_profiles where id=any($1::uuid[])',[ids]);
  await db.query('delete from dermatologists where id=any($1::uuid[])',[ids]);
  for(const a of s.accounts)assert(!(await admin.auth.admin.deleteUser(a.id)).error,'Synthetic auth cleanup failed');
  assert.equal(Number((await db.query('select count(*) from auth.users where id=any($1::uuid[])',[ids])).rows[0].count),0);
+ assert.equal(Number((await db.query('select count(*) from public.care_template_revisions where "ownerId"=any($1::uuid[])',[ids])).rows[0].count),0);
  fs.unlinkSync(state);ok('recorded synthetic accounts, sessions and care rows removed');
 }
 (async()=>{

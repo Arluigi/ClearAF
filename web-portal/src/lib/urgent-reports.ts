@@ -77,3 +77,8 @@ export function clearStaleErrors(
     Object.entries(errors).filter(([id]) => errors[id] && !confirmedIds.has(id)),
   );
 }
+
+/** Unresolved reports stay in view; resolved ones fold away. Order within each group is kept (newest first). */
+export function splitReports(rows: UrgentReport[]) {
+  return { active: rows.filter((r) => r.status !== 'resolved'), resolved: rows.filter((r) => r.status === 'resolved') };
+}

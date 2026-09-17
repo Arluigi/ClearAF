@@ -1,11 +1,13 @@
 "use client";
-import { useCallback } from "react";
+import { Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { useClinicalAPI } from "@/lib/auth";
-import { useRead, LoadState, Pages } from "@/components/care-support/shared";
+import { LoadState, Pages, useRead } from "@/components/care-support/shared";
 import TemplateEditor from "@/components/care-support/TemplateEditor";
+import { TemplateTable } from "@/components/care-support/TemplateTable";
+import { Button } from "@/components/ui/button";
+import { useClinicalAPI } from "@/lib/auth";
+
 function Templates() {
   const api = useClinicalAPI();
   const params = useSearchParams();
@@ -13,65 +15,42 @@ function Templates() {
   const fetch = useCallback(() => api.getTemplates(page), [api, page]);
   const result = useRead(fetch);
   const selected = params.get("id");
+  const creating = params.has("new");
   const template = result.data?.data.find((t) => t.id === selected);
+  // One filled action: New template, unless an editor with its own Save is open.
+  const editorOpen = creating || Boolean(template);
   return (
     <DashboardLayout title="Templates">
       <div className="portal-page">
-        <header>
-          <h1 className="editorial-title text-4xl">Routine templates</h1>
-          <p className="text-ink-secondary">
-            Your reusable routines. Copy a template into a patient draft, then
-            review and save the assignment.
-          </p>
+        <header className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 space-y-1">
+            <p className="eyebrow">{result.data ? `Reusable routines · ${result.data.pagination.total}` : "Reusable routines"}</p>
+            <h1 className="editorial-title text-[32px]">Templates</h1>
+            <p className="max-w-prose text-sm text-ink-secondary">Copy a template into a patient draft, then review and save the assignment.</p>
+          </div>
+          <Button variant="ghost" size="sm" asChild><a href={"/templates?page=" + page}>Refresh</a></Button>
+          <Button variant={editorOpen ? "outline" : "default"} asChild><a href="/templates?new=1">New template</a></Button>
         </header>
-        <a className="underline" href="/templates?new=1">
-          Create template
-        </a>
-        <a className="underline" href={"/templates?page=" + page}>
-          Refresh template list
-        </a>
-        <LoadState {...result} />
+        <LoadState {...result} loading="Loading templates" />
         {result.data && (
           <>
-            <div className="space-y-3">
-              {!result.data.data.length && <p>No templates yet.</p>}
-              {result.data.data.map((t) => (
-                <article
-                  className="flex justify-between gap-3 border-t py-4"
-                  key={t.id}
-                >
-                  <a
-                    className="underline"
-                    href={
-                      "/templates?page=" +
-                      page +
-                      "&id=" +
-                      encodeURIComponent(t.id)
-                    }
-                  >
-                    {t.name}
-                  </a>
-                  <span>
-                    Version {t.version} · {t.isActive ? "Active" : "Archived"}
-                  </span>
-                </article>
-              ))}
-            </div>
-            <Pages
-              page={page}
-              totalPages={result.data.pagination.totalPages}
-              onPage={(next) => {
-                window.location.href = "/templates?page=" + next;
-              }}
-            />
-            {params.has("new") ? (
+            {result.data.data.length === 0 && !creating ? (
+              <div className="space-y-2 py-6">
+                <h2 className="editorial-title text-2xl">No templates yet</h2>
+                <p className="text-sm text-ink-secondary">Write a reusable routine once, then copy it into patient drafts.</p>
+              </div>
+            ) : result.data.data.length > 0 ? (
+              <TemplateTable templates={result.data.data} page={page} selectedId={template?.id ?? null} />
+            ) : null}
+            {result.data.pagination.totalPages > 1 && (
+              <Pages page={page} totalPages={result.data.pagination.totalPages} onPage={(next) => { window.location.href = "/templates?page=" + next; }} />
+            )}
+            {creating ? (
               <TemplateEditor key="new" template={null} />
             ) : template ? (
               <TemplateEditor key={template.revisionId} template={template} />
             ) : selected ? (
-              <p>
-                Template is not on this page. Use the page controls to find it.
-              </p>
+              <p className="text-sm text-ink-secondary">This template is not on this page. Use the page controls to find it.</p>
             ) : null}
           </>
         )}
@@ -81,7 +60,7 @@ function Templates() {
 }
 export default function Page() {
   return (
-    <Suspense fallback={<p>Opening templates…</p>}>
+    <Suspense fallback={<p className="p-8 text-sm text-ink-secondary">Opening templates</p>}>
       <Templates />
     </Suspense>
   );
