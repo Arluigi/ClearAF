@@ -361,7 +361,7 @@ enum CareJournal {
     static let onPrimary = Letterpress.canvas
     static let accentSubtle = Letterpress.sunk
     static let separator = Letterpress.rule
-    static let display = Font.system(.largeTitle, design: .serif)
+    static let display = Letterpress.display(34)
 }
 
 extension View {

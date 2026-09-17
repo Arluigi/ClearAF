@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct ClearAFApp: App {
+    init() { Letterpress.registerFonts() }
 
     var body: some Scene {
         WindowGroup {

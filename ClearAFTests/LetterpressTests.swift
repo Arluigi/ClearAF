@@ -58,4 +58,20 @@ struct LetterpressTests {
             }
         }
     }
+
+    @Test func everyBundledFontResolvesByPostScriptName() {
+        Letterpress.registerFonts()
+        #expect(Letterpress.fontNames.count == 9)
+        for name in Letterpress.fontNames {
+            #expect(UIFont(name: name, size: 17) != nil, "\(name) did not resolve; SwiftUI would silently fall back to SF")
+        }
+    }
+
+    @Test func typeRolesMapToTheIntendedFaces() {
+        #expect(Letterpress.displayFontName(size: 34, italic: false) == "Newsreader72pt-Light")
+        #expect(Letterpress.displayFontName(size: 20, italic: true) == "Newsreader16pt-LightItalic")
+        #expect(Letterpress.UIWeight.body.fontName == "IBMPlexSans-Text")
+        #expect(Letterpress.UIWeight.medium.fontName == "IBMPlexSans-Medm")
+        #expect(Letterpress.DataWeight.medium.fontName == "IBMPlexMono-Medm")
+    }
 }
