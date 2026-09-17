@@ -7,6 +7,12 @@ export const CHECK_IN_WINDOW_DAYS=7;
 export const worklistError=(statusCode:number,code:string)=>Object.assign(new Error(code),{statusCode,code});
 const iso=(date:Date|null|undefined)=>date?date.toISOString():null;
 const earliest=(dates:(Date|null)[])=>dates.filter((d):d is Date=>d!==null).sort((a,b)=>a.getTime()-b.getTime())[0]??null;
+// A day's routines are the distinct time-of-day slots with a completion, not the raw completion row count:
+// CareRoutineCompletion is unique on (userId, revisionId, localDate), so a same-day revision change for the
+// same slot (morning v1 → morning v2) yields two rows for one slot. Shared by the summary and the page rows
+// so the "under threshold" count and each patient's own adherence always agree.
+const slotCounts=(days:Map<string,Set<string>>|undefined):Map<string,number>=>
+ new Map([...(days??new Map<string,Set<string>>()).entries()].map(([date,slots])=>[date,slots.size] as [string,number]));
 
 /**
  * Read-only clinician worklist. Every read filters by the patient's current assignment, inside one
@@ -26,15 +32,23 @@ export async function worklist(clinicianId:string,query:WorklistQuery,now=new Da
   const photos=await tx.skinPhoto.aggregate({where:{review:{is:null},user:assigned},_count:{_all:true},_min:{createdAt:true}});
   const unreadByPatient=await tx.assignedMessage.groupBy({by:['patientId'],where:unread,_count:{_all:true}});
   const checkIns=await tx.careFormResponse.count({where:{user:assigned,receivedAt:{gte:since}}});
-  const revisions=await tx.careRoutineRevision.findMany({where:{user:assigned},select:{userId:true,timeOfDay:true,version:true,isActive:true,createdAt:true}});
-  const daily=await tx.careRoutineCompletion.groupBy({by:['userId','localDate'],where:{user:assigned,localDate:inWindow},_count:{_all:true}});
+  const revisions=await tx.careRoutineRevision.findMany({where:{user:assigned},select:{id:true,userId:true,timeOfDay:true,version:true,isActive:true,createdAt:true}});
+  // Grouped by revision (not just day), so a same-day revision change for one slot is one slot, not two.
+  const daily=await tx.careRoutineCompletion.groupBy({by:['userId','localDate','revisionId'],where:{user:assigned,localDate:inWindow},_count:{_all:true}});
   const routines=routineState(revisions);
   const adherenceFor=(userId:string,slots:Map<string,number>):Adherence|null=>
    routines.active.has(userId)?adherence(query.localDate,routines.first.get(userId)!,slots):null;
-  const recordedDays=new Map<string,Map<string,number>>();
-  for(const row of daily){const days=recordedDays.get(row.userId)??new Map<string,number>();days.set(row.localDate,row._count._all);recordedDays.set(row.userId,days)}
+  const revisionSlot=new Map(revisions.map(row=>[row.id,row.timeOfDay]));
+  const recordedDays=new Map<string,Map<string,Set<string>>>();
+  for(const row of daily){
+   const timeOfDay=revisionSlot.get(row.revisionId);
+   if(!timeOfDay)continue;
+   const days=recordedDays.get(row.userId)??new Map<string,Set<string>>();
+   const done=days.get(row.localDate)??new Set<string>();
+   done.add(timeOfDay);days.set(row.localDate,done);recordedDays.set(row.userId,days);
+  }
   let adherenceUnder=0;
-  for(const userId of routines.active)if(underThreshold(adherenceFor(userId,recordedDays.get(userId)??new Map())))adherenceUnder++;
+  for(const userId of routines.active)if(underThreshold(adherenceFor(userId,slotCounts(recordedDays.get(userId)))))adherenceUnder++;
 
   // One page of patient ids in the filter's order.
   let ids:string[],total:number;
@@ -73,7 +87,7 @@ export async function worklist(clinicianId:string,query:WorklistQuery,now=new Da
    const user=byId.get(id)!;
    const photo=pagePhotos.find(row=>row.userId===id);
    const urgent=pageUrgent.filter(row=>row.patientId===id);
-   const daySlots=new Map([...(slots.get(id)??new Map<string,Set<string>>()).entries()].map(([date,done])=>[date,done.size] as [string,number]));
+   const daySlots=slotCounts(slots.get(id));
    return {
     patientId:id,
     name:user.name,

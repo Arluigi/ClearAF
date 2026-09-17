@@ -31,12 +31,14 @@ function baseline(){
   'careFormResponse.count':1,
   'careFormResponse.groupBy':[{userId:P1,_max:{receivedAt:at('2026-09-15T07:04:00.000Z')}}],
   'careRoutineRevision.findMany':[
-   {userId:P1,timeOfDay:'morning',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
-   {userId:P1,timeOfDay:'evening',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
-   {userId:P2,timeOfDay:'morning',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
-   {userId:P2,timeOfDay:'morning',version:2,isActive:false,createdAt:at('2026-09-01T09:00:00.000Z')},
+   {id:'rev-p1-morning',userId:P1,timeOfDay:'morning',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
+   {id:'rev-p1-evening',userId:P1,timeOfDay:'evening',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
+   {id:'rev-p2-morning-v1',userId:P2,timeOfDay:'morning',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
+   {id:'rev-p2-morning-v2',userId:P2,timeOfDay:'morning',version:2,isActive:false,createdAt:at('2026-09-01T09:00:00.000Z')},
   ],
-  'careRoutineCompletion.groupBy':PATTERN.flatMap((n,i)=>n?[{userId:P1,localDate:past(13-i),_count:{_all:n}}]:[]),
+  // One row per completed slot (grouped by revision), same shape the fixed query returns — a same-day
+  // revision change for one slot would be two rows here but still one slot once mapped back to timeOfDay.
+  'careRoutineCompletion.groupBy':PATTERN.flatMap((n,i)=>['morning','evening'].slice(0,n).map(timeOfDay=>({userId:P1,localDate:past(13-i),revisionId:timeOfDay==='morning'?'rev-p1-morning':'rev-p1-evening',_count:{_all:1}}))),
   'careRoutineCompletion.findMany':PATTERN.flatMap((n,i)=>['morning','evening'].slice(0,n).map(timeOfDay=>({userId:P1,localDate:past(13-i),routine:{timeOfDay}}))),
   'urgentReport.groupBy':({orderBy}:any)=>orderBy?[{patientId:P2,_min:{createdAt:at('2026-09-14T10:00:00.000Z')}}]:[{patientId:P2,status:'open',_count:{_all:1},_min:{createdAt:at('2026-09-14T10:00:00.000Z')}}],
  };
@@ -80,12 +82,14 @@ test('needs review returns the four counts and review-queue rows, scoped to the 
  assert.deepEqual(queue.args.orderBy,[{_min:{createdAt:'asc'}},{userId:'asc'}]);
  assert.deepEqual(queue.args.where,{review:{is:null},user:{dermatologistId:C}});
  assert.deepEqual([queue.args.skip,queue.args.take],[0,20]);
+ const unread=calls.find(c=>c.model==='assignedMessage'&&c.method==='groupBy')!;
+ assert.deepEqual(unread.args,{by:['patientId'],where:{clinicianId:C,recipientId:C,recipientType:'dermatologist',readAt:null,patient:{dermatologistId:C}},_count:{_all:true}});
  for(const c of calls)assert.ok(JSON.stringify(c.args.where).includes(C),`${c.model}.${c.method} is not scoped to the clinician`);
  assert.equal(isolation,'RepeatableRead');
 });
 
 test('adherence under the threshold counts only patients with an active routine, from recorded days',async()=>{
- fixtures['careRoutineRevision.findMany']=[...(fixtures['careRoutineRevision.findMany'] as any[]),{userId:P2,timeOfDay:'morning',version:3,isActive:true,createdAt:at('2026-09-02T09:00:00.000Z')}];
+ fixtures['careRoutineRevision.findMany']=[...(fixtures['careRoutineRevision.findMany'] as any[]),{id:'rev-p2-morning-v3',userId:P2,timeOfDay:'morning',version:3,isActive:true,createdAt:at('2026-09-02T09:00:00.000Z')}];
  let r=await call(`/?filter=all&localDate=${TODAY}`);
  assert.equal(r.body.summary.adherenceUnderThreshold.count,1);
  const ben=r.body.data.find((p:any)=>p.patientId===P2);
@@ -94,6 +98,37 @@ test('adherence under the threshold counts only patients with an active routine,
  r=await call(`/?filter=all&localDate=${TODAY}`);
  assert.equal(r.body.summary.adherenceUnderThreshold.count,0);
  assert.equal(r.body.data.find((p:any)=>p.patientId===P2).adherence,null);
+});
+
+test('a same-day revision change for the same slot counts once, not twice, in both the summary and the row',async()=>{
+ // CareRoutineCompletion is unique on (userId, revisionId, localDate): a revision change mid-day for the
+ // same slot yields two completion rows on one day for one slot, not two slots.
+ const changedDay=past(3);
+ fixtures['careRoutineRevision.findMany']=[
+  {id:'rev-p1-morning-a',userId:P1,timeOfDay:'morning',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
+  {id:'rev-p1-morning-b',userId:P1,timeOfDay:'morning',version:2,isActive:true,createdAt:at('2026-09-10T09:00:00.000Z')},
+  {id:'rev-p2-morning-v1',userId:P2,timeOfDay:'morning',version:1,isActive:true,createdAt:at('2026-08-01T09:00:00.000Z')},
+ ];
+ fixtures['careRoutineCompletion.groupBy']=[
+  {userId:P1,localDate:changedDay,revisionId:'rev-p1-morning-a',_count:{_all:1}},
+  {userId:P1,localDate:changedDay,revisionId:'rev-p1-morning-b',_count:{_all:1}},
+ ];
+ fixtures['careRoutineCompletion.findMany']=[
+  {userId:P1,localDate:changedDay,routine:{timeOfDay:'morning'}},
+  {userId:P1,localDate:changedDay,routine:{timeOfDay:'morning'}},
+ ];
+ const r=await call(`/?localDate=${TODAY}`);
+ const ada=r.body.data.find((p:any)=>p.patientId===P1);
+ // The row: one slot recorded that day, not two.
+ assert.equal(ada.adherence.days.find((d:any)=>d.localDate===changedDay)?.routines,1);
+ assert.deepEqual([ada.adherence.completedDays,ada.adherence.countedDays],[1,13]);
+ // The summary: both patients are below 60% from this one recorded slot (or none for P2), not pulled
+ // above threshold by double-counting the revision change as a full day.
+ assert.equal(r.body.summary.adherenceUnderThreshold.count,2);
+ // The fix: the completion query groups by revision (not just day), so same-slot rows can be told apart
+ // from different-slot rows before they are folded into a day's distinct slot count.
+ const groupBy=calls.find(c=>c.model==='careRoutineCompletion'&&c.method==='groupBy')!;
+ assert.deepEqual(groupBy.args.by,['userId','localDate','revisionId']);
 });
 
 test('flagged and all patients use their own order, search and totals',async()=>{
