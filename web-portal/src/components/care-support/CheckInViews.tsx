@@ -67,11 +67,6 @@ export function SubmissionTable({ responses, openId, onOpen }: { responses: Chec
   );
 }
 
-const shortDay = (iso: string) => {
-  const date = new Date(iso);
-  return `${date.getDate()}/${date.getMonth() + 1}`;
-};
-
 export function AnswerPlot({ question, questions, series, onQuestion }: { question: Question; questions: Question[]; series: AnswerPoint[]; onQuestion: (id: string) => void }) {
   return (
     <section aria-label="Answers over time" className="space-y-3 border-t border-rule pt-5">
@@ -97,7 +92,7 @@ export function AnswerPlot({ question, questions, series, onQuestion }: { questi
                     </div>
                   ))}
                 </div>
-                <span className="font-data text-[11px] tabular-nums text-ink-tertiary">{shortDay(point.submittedAt)}</span>
+                <span className="font-data text-[11px] tabular-nums text-ink-tertiary">{day(point.submittedAt)}</span>
               </div>
             ))}
           </div>

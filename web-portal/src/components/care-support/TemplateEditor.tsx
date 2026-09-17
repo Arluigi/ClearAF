@@ -35,6 +35,10 @@ export default function TemplateEditor({ template }: { template: Template | null
   const version = state.savedVersion ?? template?.version ?? null;
   const exists = Boolean(template || state.savedVersion);
   const blocked = state.pending || state.status === "saving" || state.status === "conflict";
+  // The saved (confirmed) active state, not the draft: while dirty is true the draft can hold an edit whose save
+  // is still pending or already failed, and it must not flip Archive/Restore before the server confirms it.
+  const [confirmedActive, setConfirmedActive] = useState(draft.isActive);
+  if (!state.dirty && confirmedActive !== draft.isActive) setConfirmedActive(draft.isActive);
   const edit = (change: Partial<TemplateDraft>) => editor.edit({ ...draft, ...change });
   const move = (from: number, to: number) => {
     const steps = [...draft.steps];
@@ -115,13 +119,13 @@ export default function TemplateEditor({ template }: { template: Template | null
       <div className="flex flex-wrap items-end gap-3">
         <SaveState editor={editor} rebase={rebase} label={`Save as v${(version ?? 0) + 1}`} />
         <Button type="button" variant="outline" disabled={state.pending || draft.steps.length >= 20} onClick={() => edit({ steps: [...draft.steps, { title: "", instructions: "" }] })}><Plus aria-hidden />Add step</Button>
-        {exists && (draft.isActive
+        {exists && (confirmedActive
           ? <Button type="button" variant="outline" disabled={blocked} onClick={() => saveAs(false)}>Archive</Button>
           : <Button type="button" variant="outline" disabled={blocked} onClick={() => saveAs(true)}>Restore</Button>)}
       </div>
       {exists && (
         <p className="text-xs text-ink-secondary">
-          {draft.isActive
+          {confirmedActive
             ? `Archive saves v${(version ?? 0) + 1}, including any edits, as archived. Archived templates are not offered when copying into a patient routine.`
             : `Archived. Restore saves v${(version ?? 0) + 1} as active.`}
         </p>

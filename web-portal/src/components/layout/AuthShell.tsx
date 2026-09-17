@@ -16,7 +16,7 @@ export default function AuthShell({ eyebrow, title, children }: { eyebrow: strin
           {children}
         </div>
       </div>
-      <p className="meta-mono">Signed-in sessions stay in this browser until you sign out</p>
+      <p className="meta-mono">Signed-in sessions stay in this browser until you sign out or the session is revoked</p>
     </div>
     <aside aria-label="About the clinician portal" className="hidden flex-col justify-end bg-ink p-12 text-canvas lg:flex lg:w-1/2">
       <blockquote className="max-w-md font-display text-[30px] font-light leading-snug">“Photos, routines and check-ins, in the order they happened.”</blockquote>

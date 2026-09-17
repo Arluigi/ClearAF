@@ -63,6 +63,13 @@ test('photo reference picker lists shared photos by date on the photo mat', () =
   assert.match(renderToStaticMarkup(h(PhotoReferenceList, { photos: [], previews: {}, onChoose: noop })), /No shared photos to attach\./);
 });
 
+test('conversation view: the reference is applied in its own effect, separate from the message-load/cancel effect', () => {
+  const view = read('src/components/messages/ConversationView.tsx');
+  assert.match(view, /}, \[api, controller, patientId, clinicianId\]\);/);
+  assert.doesNotMatch(view, /}, \[api, controller, patientId, clinicianId, initialReference\]\);/);
+  assert.match(view, /applyReference\(controller, initialReference\);\s*\n\s*}, \[controller, initialReference\]\);/);
+});
+
 test('messages page: thread list plus thread; the composer has one filled Send, Attach photo reference and a mono counter', () => {
   const page = read('src/app/messages/page.tsx');
   assert.match(page, /<ThreadList /); assert.match(page, /messageReference\(referenceType, referenceId\)/);

@@ -90,18 +90,35 @@ test('version history lists saved versions newest first, and says so plainly whe
   assert.match(renderToStaticMarkup(h(RoutineVersionList, { slot: 'evening', page: 1, onPage: noop, onRetry: noop, state: { status: 'ready', page: { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } } } })), /No saved versions yet\./);
 });
 
+const template = { id: 't', revisionId: 'tr', version: 5, name: 'Tretinoin ramp', steps: [saved.steps[0], saved.steps[1]], isActive: true, updatedAt: '2026-08-28T00:00:00' };
 test('templates beside the editor copy into a chosen slot and are blocked for a slot with an unresolved save', () => {
-  const html = renderToStaticMarkup(h(TemplateList, { templates: [{ id: 't', revisionId: 'tr', version: 5, name: 'Tretinoin ramp', steps: [saved.steps[0], saved.steps[1]], isActive: true, updatedAt: '2026-08-28T00:00:00' }], disabled: { morning: true, evening: false }, onCopy: noop }));
+  const html = renderToStaticMarkup(h(TemplateList, { templates: [template], disabled: { morning: true, evening: false }, dirty: { morning: false, evening: false }, onCopy: noop }));
   assert.match(html, /Tretinoin ramp/); assert.match(html, /V5 · 2 steps/);
   assert.match(html, /<button[^>]*disabled=""[^>]*>Use in morning<\/button>/);
   assert.match(html, /<button(?![^>]*disabled="")[^>]*>Use in evening<\/button>/);
-  assert.match(renderToStaticMarkup(h(TemplateList, { templates: [], disabled: { morning: false, evening: false }, onCopy: noop })), /No active templates on this page\./);
+  assert.match(renderToStaticMarkup(h(TemplateList, { templates: [], disabled: { morning: false, evening: false }, dirty: { morning: false, evening: false }, onCopy: noop })), /No active templates on this page\./);
+});
+
+test('a dirty slot still reads "Use in <slot>" before the first click; a clean slot never shows the replace confirmation', () => {
+  // Static render only shows the pre-click state (armed starts null); the arm→confirm→copy transition itself is
+  // covered by the templateCopyAction test in template-copy.test.ts, which TemplateList's onClick calls directly.
+  const html = renderToStaticMarkup(h(TemplateList, { templates: [template], disabled: { morning: false, evening: false }, dirty: { morning: true, evening: false }, onCopy: noop }));
+  assert.doesNotMatch(html, /Replace unsaved draft\?/);
+  assert.match(html, />Use in morning</); assert.match(html, />Use in evening</);
+});
+
+test('TemplateList wiring: onCopy runs only via templateCopyAction, and the label flips to the in-page confirm when armed', () => {
+  const source = read('src/components/care-support/TemplateList.tsx');
+  assert.match(source, /templateCopyAction\(armed, key, dirty\[slot\]\)/);
+  assert.match(source, /if \(action === "copy"\) onCopy\(slot, template\);/);
+  assert.match(source, /"Replace unsaved draft\?"/);
+  assert.doesNotMatch(source, /<Dialog|window\.confirm/);
 });
 
 test('the routine tab places templates and version history beside the two panes and links feedback to the Messages tab', () => {
   const source = read('src/components/patients/PatientRoutineCare.tsx');
   assert.match(source, /xl:grid-cols-\[minmax\(0,1fr\)_minmax\(0,1fr\)_16rem\]/);
-  assert.match(source, /<TemplatePicker /); assert.match(source, /<RoutineVersionHistory /);
+  assert.match(source, /<TemplatePicker/); assert.match(source, /<RoutineVersionHistory /);
   assert.match(read('src/components/patients/workspace/RoutineVersionHistory.tsx'), /loadRevisionHistory\(\(\) => api\.getPatientRoutineRevisions\(patientId, slot, page\)\)/);
   assert.match(read('src/app/patients/[id]/page.tsx'), /openTab\('messages', \{ referenceType: 'routineRevision', referenceId: revisionId \}\)/);
 });

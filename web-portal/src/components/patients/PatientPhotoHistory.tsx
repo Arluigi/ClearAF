@@ -64,7 +64,9 @@ export default function PatientPhotoHistory({ patientId, patientName, onCareDeci
     if (selectedKey && !comparing) void reviews.compare();
   }, [reviews, selectedKey, comparing]);
   const targetId = replyTarget(state.photos, reviewState.selected)?.id ?? null;
-  useEffect(() => { feedback.target(targetId); }, [feedback, targetId]);
+  // target() no-ops while a send/mark is frozen, so a targetId change during the freeze is dropped. Re-running
+  // this once reply.status changes (freeze clears) re-links the reply to the current target photo.
+  useEffect(() => { feedback.target(targetId); }, [feedback, targetId, reply.status]);
 
   const ids = state.photos.map(photo => photo.id);
   const panes = comparePanes(state.photos, reviewState.selected);
@@ -92,6 +94,7 @@ export default function PatientPhotoHistory({ patientId, patientName, onCareDeci
           zoom={zoom}
           onZoom={setZoom}
           onRetry={() => reviews.close()}
+          onFail={id => reviews.failOriginal(id)}
         />
         <PhotoReplyView
           patientFirstName={name}
@@ -101,8 +104,9 @@ export default function PatientPhotoHistory({ patientId, patientName, onCareDeci
           reviewed={reviewed}
           reviewPending={replyPhoto ? Boolean(reviewState.pending[replyPhoto.id]) : false}
           reviewError={replyPhoto ? Boolean(reviewState.errors[replyPhoto.id]) : false}
+          reviewUnavailable={reviewState.status !== 'ready'}
           onEdit={text => feedback.edit(text)}
-          onSubmit={() => void feedback.submit(reviewed)}
+          onSubmit={() => void feedback.submit(reviewed || reviewState.status !== 'ready')}
           onNewDraft={() => feedback.newDraft()}
           onLeaveUnreviewed={() => feedback.leaveUnreviewed()}
           onMarkOnly={() => { if (replyPhoto) void reviews.mark(replyPhoto.id); }}
@@ -120,6 +124,7 @@ export default function PatientPhotoHistory({ patientId, patientName, onCareDeci
         total={state.total}
         page={state.page}
         totalPages={state.totalPages}
+        frozen={feedback.frozen}
         onToggle={id => reviews.toggle(id)}
         onPage={page => { void history.load(page); }}
       />}

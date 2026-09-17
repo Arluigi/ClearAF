@@ -35,7 +35,7 @@ export function RoutineSlotEditor({ slot, editor, controller, primary, patientFi
 
     <div className="space-y-1.5">
       <Label htmlFor={`${slot}-routine-name`}>Routine name</Label>
-      <Input id={`${slot}-routine-name`} aria-label={`${label} routine name`} value={editor.draft.name} maxLength={120} disabled={locked} placeholder={`${label} routine`} onChange={event => controller.setName(slot, event.target.value)} />
+      <Input id={`${slot}-routine-name`} value={editor.draft.name} maxLength={120} disabled={locked} placeholder={`${label} routine`} onChange={event => controller.setName(slot, event.target.value)} />
       {tracked && changes.name !== null && <p className="meta-mono">Edited · was “{changes.name}”</p>}
     </div>
 
@@ -45,7 +45,7 @@ export function RoutineSlotEditor({ slot, editor, controller, primary, patientFi
         <p className="text-xs text-ink-secondary">Turn off and save to archive this routine.</p>
         {tracked && changes.active !== null && <p className="meta-mono">Edited · was {changes.active ? 'active' : 'archived'}</p>}
       </div>
-      <Switch id={`${slot}-active`} aria-label={`${label} routine active`} checked={editor.draft.isActive} disabled={locked} onCheckedChange={checked => controller.setActive(slot, checked)} />
+      <Switch id={`${slot}-active`} checked={editor.draft.isActive} disabled={locked} onCheckedChange={checked => controller.setActive(slot, checked)} />
     </div>
 
     <div className="flex items-center justify-between gap-2">
@@ -63,9 +63,9 @@ export function RoutineSlotEditor({ slot, editor, controller, primary, patientFi
           <span className="pt-6 font-data text-xs font-medium tabular-nums">{String(index + 1).padStart(2, '0')}</span>
           <div className="min-w-0 space-y-1.5">
             <Label htmlFor={`${slot}-step-${index}-title`} className={quiet}>Step title</Label>
-            <Input id={`${slot}-step-${index}-title`} aria-label={`${label} step ${index + 1} title`} value={step.title} maxLength={120} disabled={locked} className={cn(marked && 'placeholder:text-ink-secondary')} onChange={event => controller.setStepTitle(slot, index, event.target.value)} />
+            <Input id={`${slot}-step-${index}-title`} value={step.title} maxLength={120} disabled={locked} className={cn(marked && 'placeholder:text-ink-secondary')} onChange={event => controller.setStepTitle(slot, index, event.target.value)} />
             <Label htmlFor={`${slot}-step-${index}-instructions`} className={cn('block pt-2', quiet)}>Instructions</Label>
-            <Textarea id={`${slot}-step-${index}-instructions`} aria-label={`${label} step ${index + 1} instructions`} value={step.instructions} maxLength={2000} disabled={locked} className="min-h-16" onChange={event => controller.setStepInstructions(slot, index, event.target.value)} />
+            <Textarea id={`${slot}-step-${index}-instructions`} value={step.instructions} maxLength={2000} disabled={locked} className="min-h-16" onChange={event => controller.setStepInstructions(slot, index, event.target.value)} />
             {marked && <p className={cn('meta-mono', quiet)}>{change.kind === 'edited' ? `Edited · was “${change.was}”` : 'New step'}</p>}
           </div>
           <div className="flex flex-col gap-1">

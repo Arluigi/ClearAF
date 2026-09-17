@@ -86,6 +86,19 @@ test('editing as a new message after a failed send issues a fresh id', async () 
   assert.deepEqual(sent, ['message-1', 'message-2']);
 });
 
+test('target() dropped during a frozen send is not lost: calling it again once the attempt clears re-links the reply', async () => {
+  const controller = new PhotoFeedbackController(async (id, body) => record(id, body), async () => {}, ids());
+  controller.target('photo-1'); controller.edit('Reply');
+  const pending = controller.submit(false); // now frozen (sending)
+  controller.target('photo-2'); // PatientPhotoHistory's effect fires again (selection changed) but is a no-op
+  assert.deepEqual([controller.snapshot().photoId, controller.frozen], ['photo-1', true]);
+  await pending; // attempt clears (sent)
+  assert.equal(controller.frozen, false);
+  // Simulates the effect re-running because reply.status changed: the reply now re-links to the current target.
+  controller.target('photo-2');
+  assert.equal(controller.snapshot().photoId, 'photo-2');
+});
+
 test('cancel discards a late result', async () => {
   let finish!: () => void; let marks = 0;
   const controller = new PhotoFeedbackController(

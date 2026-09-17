@@ -73,7 +73,7 @@ export default function LoginPage() {
         <Button type="submit" size="lg" className="w-full" disabled={!isFormValid || isLoading}>
           {isLoading ? 'Signing in…' : 'Sign in'}
         </Button>
-        {!isFormValid && !isLoading && <p className="text-xs text-ink-secondary">Enter your work email and password to continue.</p>}
+        {!isFormValid && !isLoading && <p className="text-xs text-ink-secondary">Enter your work email and a password of at least 6 characters to continue.</p>}
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           <a className="underline underline-offset-[3px]" href="/forgot-password">Forgot password</a>
           <a className="underline underline-offset-[3px]" href="/register">Request practice access</a>

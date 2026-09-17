@@ -252,3 +252,13 @@ export function templateVersionNote(version: number | null, isActive: boolean) {
   if (version === null) return "New · saving creates v1";
   return `V${version}${isActive ? "" : " · archived"} · editing creates v${version + 1}`;
 }
+
+/**
+ * Using a template on a clean slot copies immediately. On a dirty slot (an unsaved draft) the first click only
+ * arms that button ("Replace unsaved draft?"); the copy runs only on a second, confirming click on the same
+ * button. Clicking a different button, or the slot becoming clean in the meantime, starts over at "copy".
+ */
+export function templateCopyAction(armed: string | null, key: string, dirty: boolean): { action: "copy" | "arm"; nextArmed: string | null } {
+  if (dirty && armed !== key) return { action: "arm", nextArmed: key };
+  return { action: "copy", nextArmed: null };
+}

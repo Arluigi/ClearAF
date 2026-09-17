@@ -33,7 +33,11 @@ export default function PatientRoutineCare({ patientId, patientName, controller,
     {state.loadStatus === 'ready' && <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_16rem]">
       {SLOTS.map(slot => <RoutineSlotEditor key={slot} slot={slot} editor={state.slots[slot]} controller={controller} primary={primarySlot === slot} patientFirstName={firstName(patientName)} onReloadConflict={() => void controller.reloadConflict(slot)} onFeedback={onFeedback} />)}
       <aside aria-label="Templates and version history" className="space-y-8">
-        <TemplatePicker disabled={{ morning: state.slots.morning.hasPendingSave, evening: state.slots.evening.hasPendingSave }} onCopy={(slot, template) => controller.copyTemplate(slot, template)} />
+        <TemplatePicker
+          disabled={{ morning: state.slots.morning.hasPendingSave, evening: state.slots.evening.hasPendingSave }}
+          dirty={{ morning: state.slots.morning.dirty, evening: state.slots.evening.dirty }}
+          onCopy={(slot, template) => controller.copyTemplate(slot, template)}
+        />
         {SLOTS.map(slot => <RoutineVersionHistory key={`${slot}-${state.slots[slot].routine?.id ?? 'none'}`} patientId={patientId} slot={slot} />)}
       </aside>
     </div>}

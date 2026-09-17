@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useClinicalAPI } from "@/lib/auth";
 import { answerSeries, choiceQuestions } from "@/lib/care-support";
@@ -12,6 +12,14 @@ export default function PatientCheckIns({ patientId, patientName, onReply }: { p
   const api = useClinicalAPI();
   const formFetch = useCallback(() => api.getPatientForm(patientId), [api, patientId]);
   const form = useRead(formFetch);
+  // useRead clears data to null while a retry is in flight; onSaved's retry (below) would otherwise unmount
+  // FormEditor mid-save and the "Version N saved" confirmation would never be seen. Keep the last loaded form
+  // visible through that reload so the editor (and its own confirmation) stays mounted.
+  const lastForm = useRef<typeof form.data>(null);
+  useEffect(() => {
+    if (form.data) lastForm.current = form.data;
+  }, [form.data]);
+  const formData = form.data ?? lastForm.current;
   const [page, setPage] = useState(1);
   const responsesFetch = useCallback(() => api.getPatientResponses(patientId, page), [api, patientId, page]);
   const responses = useRead(responsesFetch);
@@ -30,7 +38,7 @@ export default function PatientCheckIns({ patientId, patientName, onReply }: { p
         <div hidden={!editing} className="space-y-3">
           <Button type="button" variant="link" size="sm" className="px-0" onClick={() => setEditing(false)}>Back to responses</Button>
           <LoadState {...form} loading="Loading the assigned form" />
-          {form.data && <FormEditor patientId={patientId} form={form.data.form} onSaved={form.retry} />}
+          {formData && <FormEditor patientId={patientId} form={formData.form} onSaved={form.retry} />}
         </div>
         <div hidden={editing} className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">

@@ -13,7 +13,6 @@ export default function AccountPage() {
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
   return <DashboardLayout title="Account"><div className="portal-page max-w-2xl">
     <header className="space-y-1">
-      {user?.email && <p className="eyebrow break-all">Signed in as {user.email}</p>}
       <h1 className="editorial-title text-[32px]">Account</h1>
     </header>
     <section aria-label="Profile" className="space-y-3">
@@ -29,6 +28,7 @@ export default function AccountPage() {
         <Button variant="outline" asChild><a href="/forgot-password">Change password</a></Button>
         <Button variant="outline" onClick={() => void logout()}>Sign out</Button>
       </div>
+      <p className="text-xs text-ink-secondary">Change password sends a reset email to your work address.</p>
     </section>
   </div></DashboardLayout>;
 }

@@ -38,6 +38,18 @@ test('changing photo pages clears selection and ignores stale status', async () 
  assert.deepEqual(controller.snapshot().selected,[]); assert.deepEqual(controller.snapshot().reviews,{}); assert.deepEqual(controller.snapshot().ids,['b']);
 });
 
+test('failOriginal surfaces an image load failure (the signed URL loaded but the <img> itself failed) so Retry originals can appear; a stale failure after a fresh compare is ignored', async () => {
+  const controller = new PhotoReviewController(async () => ({reviews:[]}), async () => ({review}), async id => ({photoUrl:`private-${id}`}));
+  await controller.load(['a']); controller.toggle('a'); await controller.compare();
+  assert.deepEqual(controller.snapshot().originals, { a: { url: 'private-a' } });
+  controller.failOriginal('a');
+  assert.deepEqual(controller.snapshot().originals, { a: { error: true } });
+  // A fresh compare cleared that entry; a late onError for the old <img> must not resurrect a stale failure.
+  controller.close();
+  controller.failOriginal('a');
+  assert.deepEqual(controller.snapshot().originals, {});
+});
+
 test('a page load preselects only ids on that page, compares one or two photos, and a toggle while comparing starts over', async () => {
  const fetched: string[] = [];
  const controller = new PhotoReviewController(async () => ({reviews:[]}), async () => ({review}), async id => { fetched.push(id); return {photoUrl:`private-${id}`}; });

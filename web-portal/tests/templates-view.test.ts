@@ -36,6 +36,10 @@ test('template editor saves as the next version and archives by saving; no activ
   assert.match(editor, /label=\{`Save as v\$\{\(version \?\? 0\) \+ 1\}`\}/);
   assert.match(editor, />Archive</); assert.match(editor, />Restore</); assert.match(editor, /saveAs\(false\)/); assert.match(editor, /saveAs\(true\)/);
   assert.doesNotMatch(editor, /type="checkbox"/);
+  // Archive/Restore and its copy read the saved (confirmed) state, not the unconfirmed draft, so a failed save
+  // does not flip the label before the server has actually archived/restored anything.
+  assert.match(editor, /exists && \(confirmedActive/);
+  assert.doesNotMatch(editor, /exists && \(draft\.isActive/);
   const page = read('src/app/templates/page.tsx');
   assert.match(page, /variant=\{editorOpen \? "outline" : "default"\}/);
   assert.match(page, /<TemplateTable /);

@@ -65,6 +65,9 @@ test('answer plot marks each answer as given with the same answers in words, and
   assert.equal((html.match(/rounded-full bg-ink/g) ?? []).length, 3);
   for (const text of ['24 AUG', 'Not answered', 'Worse', 'About the same', 'Better than last week', 'Not a computed score']) assert.match(html, new RegExp(text));
   assert.doesNotMatch(html, /average|mean|trend|improv|score of/i);
+  // The chart's own date labels use the shared mono day() format ("24 AUG"), not a d/m slash format.
+  assert.equal((html.match(/24 AUG/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /\b24\/8\b/);
 });
 
 test('assigned form summary shows version and required count only; no schedule or response rate anywhere', () => {

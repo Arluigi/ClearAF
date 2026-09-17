@@ -7,9 +7,9 @@ import type { ThumbnailState } from '@/lib/private-thumbnail';
 import { day, stamp } from '@/lib/worklist';
 import type { PhotoSummary } from '@/types/api';
 
-export function PhotoStrip({ photos, previews, selected, reviews, reviewStatus, total, page, totalPages, onToggle, onPage }: {
+export function PhotoStrip({ photos, previews, selected, reviews, reviewStatus, total, page, totalPages, frozen, onToggle, onPage }: {
   photos: PhotoSummary[]; previews: Record<string, ThumbnailState>; selected: string[]; reviews: Record<string, PhotoReview>;
-  reviewStatus: 'loading' | 'ready' | 'error'; total: number; page: number; totalPages: number;
+  reviewStatus: 'loading' | 'ready' | 'error'; total: number; page: number; totalPages: number; frozen: boolean;
   onToggle: (id: string) => void; onPage: (page: number) => void;
 }) {
   const words = (id: string) => reviewStatus === 'ready' ? (reviews[id] ? 'Reviewed' : 'Not reviewed') : reviewStatus === 'error' ? 'Review status unavailable' : 'Checking review';
@@ -19,8 +19,10 @@ export function PhotoStrip({ photos, previews, selected, reviews, reviewStatus, 
     <ul className="grid grid-cols-2 gap-2">{photos.map(photo => {
       const pressed = selected.includes(photo.id);
       const preview = previews[photo.id];
+      // A reply send/mark in flight is frozen to one photo; toggling the comparison mid-send could re-target the
+      // reply out from under it, so selection is disabled until it clears.
       return <li key={photo.id}>
-        <button type="button" aria-pressed={pressed} aria-label={`${pressed ? 'Remove from comparison' : 'Add to comparison'}: photo from ${stamp(photo.captureDate)}, ${words(photo.id)}`} disabled={!pressed && selected.length >= 2} onClick={() => onToggle(photo.id)} className="block w-full text-left disabled:cursor-not-allowed aria-pressed:selected-outline aria-pressed:focus-visible:outline-offset-2">
+        <button type="button" aria-pressed={pressed} aria-label={`${pressed ? 'Remove from comparison' : 'Add to comparison'}: photo from ${stamp(photo.captureDate)}, ${words(photo.id)}`} disabled={frozen || (!pressed && selected.length >= 2)} onClick={() => onToggle(photo.id)} className="block w-full text-left disabled:cursor-not-allowed aria-pressed:selected-outline aria-pressed:focus-visible:outline-offset-2">
           <span className="photo-mat flex aspect-[4/5] items-center justify-center overflow-hidden">
             {preview?.status === 'ready' && preview.url
               ? <img src={preview.url} alt="" className="h-full w-full object-contain" />

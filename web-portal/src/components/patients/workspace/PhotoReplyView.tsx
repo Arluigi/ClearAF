@@ -7,22 +7,27 @@ import type { FeedbackState } from '@/lib/photo-feedback';
 import { day } from '@/lib/worklist';
 import type { PhotoSummary } from '@/types/api';
 
-const submitLabel = (status: FeedbackState['status'], reviewed: boolean) =>
+// reviewUnavailable is true when review status could not be confirmed at all (not just this one photo's fetch,
+// but the whole per-photo review list). Both it and a review already in flight (reviewPending) mean this submit
+// cannot honestly promise to mark reviewed, so the label and the mark attempt fall back to a plain reply.
+const submitLabel = (status: FeedbackState['status'], reviewed: boolean, reviewUnavailable: boolean) =>
   status === 'sending' ? 'Sending…'
     : status === 'marking' ? 'Marking reviewed…'
       : status === 'send-failed' ? 'Retry same message'
         : status === 'mark-failed' ? 'Retry marking reviewed'
-          : reviewed ? 'Send reply' : 'Send & mark reviewed';
+          : (reviewed || reviewUnavailable) ? 'Send reply' : 'Send & mark reviewed';
 
-export function PhotoReplyView({ patientFirstName, target, feedback, frozen, reviewed, reviewPending, reviewError, onEdit, onSubmit, onNewDraft, onLeaveUnreviewed, onMarkOnly, onCareDecision }: {
+export function PhotoReplyView({ patientFirstName, target, feedback, frozen, reviewed, reviewPending, reviewError, reviewUnavailable, onEdit, onSubmit, onNewDraft, onLeaveUnreviewed, onMarkOnly, onCareDecision }: {
   patientFirstName: string; target: PhotoSummary | null; feedback: FeedbackState; frozen: boolean; reviewed: boolean;
-  reviewPending: boolean; reviewError: boolean; onEdit: (text: string) => void; onSubmit: () => void; onNewDraft: () => void;
+  reviewPending: boolean; reviewError: boolean; reviewUnavailable: boolean; onEdit: (text: string) => void; onSubmit: () => void; onNewDraft: () => void;
   onLeaveUnreviewed: () => void; onMarkOnly: () => void; onCareDecision: () => void;
 }) {
   const { status, text } = feedback;
   const busy = status === 'sending' || status === 'marking';
   const retrying = status === 'send-failed' || status === 'mark-failed';
-  const canSubmit = !busy && (retrying || (target !== null && text.trim().length > 0));
+  // A mark already in flight (e.g. from "Mark reviewed without reply") would make the feedback controller's own
+  // mark call a no-op the review controller reports as unconfirmed, a false partial failure. Wait for it instead.
+  const canSubmit = !busy && !reviewPending && (retrying || (target !== null && text.trim().length > 0));
   return <section aria-label="Reply about this photo" className="space-y-3 border-t border-rule pt-5">
     {target?.notes && <div className="space-y-1">
       <p className="eyebrow">Patient note on {day(target.captureDate)}</p>
@@ -31,8 +36,8 @@ export function PhotoReplyView({ patientFirstName, target, feedback, frozen, rev
     <Label htmlFor="photo-reply" className="block">Reply about this photo</Label>
     <Textarea id="photo-reply" className="min-h-28" maxLength={4000} value={text} disabled={frozen || !target} placeholder={`Write to ${patientFirstName || 'the patient'}…`} onChange={event => onEdit(event.target.value)} />
     <div className="flex flex-wrap items-center gap-3">
-      <Button type="button" disabled={!canSubmit} onClick={onSubmit}>{submitLabel(status, reviewed)}</Button>
-      {target && !reviewed && <Button type="button" variant="outline" disabled={reviewPending || frozen} onClick={onMarkOnly}>{reviewPending ? 'Saving review…' : 'Mark reviewed without reply'}</Button>}
+      <Button type="button" disabled={!canSubmit} onClick={onSubmit}>{submitLabel(status, reviewed, reviewUnavailable)}</Button>
+      {target && !reviewed && <Button type="button" variant="outline" disabled={reviewPending || frozen || reviewUnavailable} onClick={onMarkOnly}>{reviewPending ? 'Saving review…' : 'Mark reviewed without reply'}</Button>}
       <Button type="button" variant="outline" disabled={!target} onClick={onCareDecision}>Refer out or in-person…</Button>
       {target && <span className="meta-mono">Links photo {day(target.captureDate)}</span>}
     </div>

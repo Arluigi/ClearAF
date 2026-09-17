@@ -8,9 +8,11 @@ import { TemplateList } from "./TemplateList";
 
 export default function TemplatePicker({
   disabled,
+  dirty,
   onCopy,
 }: {
   disabled: Record<RoutineTimeOfDay, boolean>;
+  dirty: Record<RoutineTimeOfDay, boolean>;
   onCopy: (slot: RoutineTimeOfDay, template: Template) => void;
 }) {
   const api = useClinicalAPI();
@@ -22,7 +24,7 @@ export default function TemplatePicker({
       <p className="eyebrow">Your templates</p>
       <LoadState {...result} loading="Loading templates" />
       {result.data && (
-        <TemplateList templates={result.data.data.filter((t) => t.isActive)} disabled={disabled} onCopy={onCopy} />
+        <TemplateList templates={result.data.data.filter((t) => t.isActive)} disabled={disabled} dirty={dirty} onCopy={onCopy} />
       )}
       {result.data && result.data.pagination.totalPages > 1 && (
         <Pages page={page} totalPages={result.data.pagination.totalPages} onPage={setPage} />

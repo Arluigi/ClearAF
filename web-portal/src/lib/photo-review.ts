@@ -21,6 +21,9 @@ export class PhotoReviewController {
  /** At most two photos. Changing the selection ends the running comparison so the view reloads originals. */
  toggle(id:string) { if(!this.state.ids.includes(id))return; const selected=this.state.selected.includes(id)?this.state.selected.filter(value=>value!==id):this.state.selected.length<2?[...this.state.selected,id]:this.state.selected; if(selected===this.state.selected)return; if(this.state.comparing)this.close(); this.publish({selected}); }
  close() {this.comparison++;this.abort?.abort();this.publish({comparing:false, originals:{}});}
+ /** The signed original loaded, but the image itself failed to render (an expired or broken URL). Surfaces the
+  * failure so Retry originals appears; a no-op if a fresh compare already cleared or replaced that entry. */
+ failOriginal(id:string) { if(this.state.originals[id]?.url) this.publish({originals:{...this.state.originals,[id]:{error:true}}}); }
  /** Loads signed originals for the one or two selected photos. */
  async compare() { if(!this.state.selected.length)return; this.abort?.abort();const abort=new AbortController();this.abort=abort;const request=++this.comparison;const generation=this.generation;this.publish({comparing:true,originals:{}});
  await Promise.all(this.state.selected.map(async id=>{try {const result=await this.fetchOriginal(id,abort.signal);if(request===this.comparison&&generation===this.generation)this.publish({originals:{...this.state.originals,[id]:{url:result.photoUrl}}});}catch {if(request===this.comparison&&generation===this.generation)this.publish({originals:{...this.state.originals,[id]:{error:true}}});}}));

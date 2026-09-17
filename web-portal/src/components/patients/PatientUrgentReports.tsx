@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useClinicalAPI } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,9 +27,14 @@ export default function PatientUrgentReports({ patientId }: { patientId: string 
     setRows(newRows);
     setErrors((e) => clearStaleErrors(e, newRows, attempts));
   }, [result.data, attempts]);
-  // The worklist Flagged tab links here with #urgent; the section mounts after the patient loads.
+  // The worklist Flagged tab links here with #urgent; the section mounts after the patient loads. Scroll once,
+  // the first time data is ready — not on every later refetch/action, which would otherwise yank the page back
+  // here after an acknowledge or resolve.
+  const scrolled = useRef(false);
   useEffect(() => {
-    if (result.data && window.location.hash === '#urgent') document.getElementById('urgent')?.scrollIntoView({ block: 'start' });
+    if (scrolled.current || !result.data || window.location.hash !== '#urgent') return;
+    scrolled.current = true;
+    document.getElementById('urgent')?.scrollIntoView({ block: 'start' });
   }, [result.data]);
 
   const replace = (row: UrgentReport) => setRows((current) => current.map((r) => (r.id === row.id ? row : r)));

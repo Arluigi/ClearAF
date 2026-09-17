@@ -274,6 +274,15 @@ export class ConversationController {
   }
 }
 
+/**
+ * Applies a URL-carried reference to a live conversation, without ever discarding a draft. Only a fresh, non-null
+ * reference is linked, and only when nothing is frozen (a send in flight already owns the reference). A tab switch
+ * that drops the URL's reference param (going from set to null) must not clear the current draft or link.
+ */
+export function applyReference(controller: ConversationController, reference: MessageReference | null) {
+  if (reference && !controller.frozen) controller.link(reference);
+}
+
 const REFERENCE_ID = /^[0-9a-f-]{36}$/i;
 /** Only a photo or routine revision UUID from the URL can become a message reference. */
 export function messageReference(type: string | null, id: string | null): MessageReference | null {

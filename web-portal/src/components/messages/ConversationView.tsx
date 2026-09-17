@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import { useClinicalAPI } from "@/lib/auth";
 import {
   ConversationController,
+  applyReference,
   linkedLabel,
   type Conversation,
   type MessageRecord,
@@ -168,10 +169,14 @@ export default function ConversationView({
     [api, controller, patientId, clinicianId],
   );
   useEffect(() => {
-    controller.link(initialReference);
     void controller.load(() => api.getAssignedMessages(patientId, clinicianId));
     return () => controller.cancel();
-  }, [api, controller, patientId, clinicianId, initialReference]);
+  }, [api, controller, patientId, clinicianId]);
+  // A tab switch can drop the URL's reference param (it reverts to null); that must never wipe the draft or messages
+  // loaded above, so this reference sync is a separate effect with its own, narrower dependencies.
+  useEffect(() => {
+    applyReference(controller, initialReference);
+  }, [controller, initialReference]);
   const visible = useCallback(
     (id: string) => {
       void controller.markVisible([id], (ids) => api.acknowledgeMessages(patientId, clinicianId, ids));

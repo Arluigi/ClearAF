@@ -67,7 +67,11 @@ test('urgent reports: unresolved first, resolved folded away, words only', () =>
   assert.deepEqual([split.active.map(r => r.id), split.resolved.map(r => r.id)], [['b', 'c'], ['a']]);
   const urgent = read('src/components/patients/PatientUrgentReports.tsx');
   assert.match(urgent, /id="urgent"/);
-  assert.match(urgent, /window\.location\.hash === '#urgent'/);
+  assert.match(urgent, /window\.location\.hash !== '#urgent'/);
+  // Scrolls once (a ref guard), not on every data refetch after an acknowledge/resolve action.
+  assert.match(urgent, /const scrolled = useRef\(false\);/);
+  assert.match(urgent, /if \(scrolled\.current \|\| !result\.data \|\| window\.location\.hash !== '#urgent'\) return;/);
+  assert.match(urgent, /scrolled\.current = true;/);
   assert.doesNotMatch(urgent, /AlertTriangle|attention-|'destructive'/);
   assert.doesNotMatch(read('src/components/patients/EnrollmentStatus.tsx'), /AlertTriangle|border-error/);
 });

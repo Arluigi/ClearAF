@@ -33,7 +33,7 @@ test('compare view: uncropped originals on the photo mat with mono stamps, revie
   const html = renderToStaticMarkup(h(PhotoCompareView, { panes: [
     { photo: photos[1], original: { url: 'https://synthetic.invalid/early' } },
     { photo: photos[0], original: {}, review: reviewed },
-  ], zoom: 150, onZoom: noop, onRetry: noop }));
+  ], zoom: 150, onZoom: noop, onRetry: noop, onFail: noop }));
   assert.equal((html.match(/photo-mat/g) ?? []).length, 2);
   assert.match(html, /object-contain/);
   assert.match(html, /referrerpolicy="no-referrer"|referrerPolicy="no-referrer"/);
@@ -42,14 +42,24 @@ test('compare view: uncropped originals on the photo mat with mono stamps, revie
   assert.match(html, />Loading original</); assert.match(html, /150%/);
   assert.match(html, /Lighting and capture conditions may differ between photos\./);
   assert.equal(filled(html), 0);
-  assert.match(renderToStaticMarkup(h(PhotoCompareView, { panes: [], zoom: 100, onZoom: noop, onRetry: noop })), /Choose photos to compare/);
+  assert.match(renderToStaticMarkup(h(PhotoCompareView, { panes: [], zoom: 100, onZoom: noop, onRetry: noop, onFail: noop })), /Choose photos to compare/);
+});
+
+test('compare view: Retry originals appears for a controller-known failure; the zoom label is a plain control label, not an eyebrow', () => {
+  const clean = renderToStaticMarkup(h(PhotoCompareView, { panes: [{ photo: photos[1], original: { url: 'https://synthetic.invalid/early' } }], zoom: 100, onZoom: noop, onRetry: noop, onFail: noop }));
+  assert.doesNotMatch(clean, />Retry originals</);
+  const failed = renderToStaticMarkup(h(PhotoCompareView, { panes: [{ photo: photos[1], original: { error: true } }], zoom: 100, onZoom: noop, onRetry: noop, onFail: noop }));
+  assert.match(failed, /Original unavailable\. Use Retry originals\./);
+  assert.match(failed, />Retry originals</);
+  assert.doesNotMatch(clean, /class="eyebrow ml-auto"[^>]*>Zoom</);
+  assert.match(clean, /<label for="comparison-zoom" class="ml-auto text-\[13px\] font-medium text-ink-secondary">Zoom<\/label>/);
 });
 
 test('photo strip: selected tiles use the inset ink outline, a third choice is disabled with a reason, states in words', () => {
   const html = renderToStaticMarkup(h(PhotoStrip, {
     photos, previews: { late: { status: 'error' } }, selected: ['middle', 'late'],
     reviews: { early: { photoId: 'early', reviewerName: 'C', reviewedAt: '2026-09-03T00:00:00' } }, reviewStatus: 'ready',
-    total: 18, page: 1, totalPages: 2, onToggle: noop, onPage: noop,
+    total: 18, page: 1, totalPages: 2, frozen: false, onToggle: noop, onPage: noop,
   }));
   assert.match(html, /All photos · 18/);
   assert.equal((html.match(/aria-pressed="true"/g) ?? []).length, 2);
@@ -62,11 +72,25 @@ test('photo strip: selected tiles use the inset ink outline, a third choice is d
   assert.equal(filled(html), 0);
 });
 
+test('photo strip: every toggle is disabled while a reply send/mark is frozen, even an already-selected tile', () => {
+  const html = renderToStaticMarkup(h(PhotoStrip, {
+    photos, previews: {}, selected: ['middle'], reviews: {}, reviewStatus: 'ready',
+    total: 3, page: 1, totalPages: 1, frozen: true, onToggle: noop, onPage: noop,
+  }));
+  assert.equal((html.match(/aria-pressed="(?:true|false)"/g) ?? []).length, photos.length);
+  assert.equal((html.match(/aria-pressed="(?:true|false)"[^>]*disabled=""/g) ?? []).length, photos.length);
+  const unfrozen = renderToStaticMarkup(h(PhotoStrip, {
+    photos, previews: {}, selected: ['middle'], reviews: {}, reviewStatus: 'ready',
+    total: 3, page: 1, totalPages: 1, frozen: false, onToggle: noop, onPage: noop,
+  }));
+  assert.equal((unfrozen.match(/aria-pressed="(?:true|false)"[^>]*disabled=""/g) ?? []).length, 0);
+});
+
 const feedback = (over: Partial<FeedbackState> = {}): FeedbackState => ({ text: 'Keep going', photoId: 'late', status: 'draft', reviewed: false, ...over });
-const reply = (over: Partial<FeedbackState> = {}, isReviewed = false, target: PhotoSummary | null = photos[0]) => renderToStaticMarkup(h(PhotoReplyView, {
+const reply = (over: Partial<FeedbackState> = {}, isReviewed = false, target: PhotoSummary | null = photos[0], extra: { reviewPending?: boolean; reviewUnavailable?: boolean } = {}) => renderToStaticMarkup(h(PhotoReplyView, {
   patientFirstName: 'Ada', target, feedback: feedback(over),
   frozen: ['sending', 'marking', 'send-failed', 'mark-failed'].includes(over.status ?? 'draft'),
-  reviewed: isReviewed, reviewPending: false, reviewError: false,
+  reviewed: isReviewed, reviewPending: extra.reviewPending ?? false, reviewError: false, reviewUnavailable: extra.reviewUnavailable ?? false,
   onEdit: noop, onSubmit: noop, onNewDraft: noop, onLeaveUnreviewed: noop, onMarkOnly: noop, onCareDecision: noop,
 }));
 
@@ -92,6 +116,19 @@ test('reply: one filled action that sends and marks reviewed, with honest partia
   assert.match(reply({ text: '' }), /Write a reply to send it with this photo linked\./);
   assert.match(reply({}, false, photos[2]), /Patient note on 09 SEP[\s\S]*Chin is drier than last week\./);
   assert.match(reply({ text: '' }, false, null), /Select a photo to reply about it\./);
+});
+
+test('reply: Send is disabled (not a false failure) while a mark is already pending, and never promises a mark it cannot confirm', () => {
+  // A "Mark reviewed without reply" call is already in flight for this photo: Send must wait, not race it into a
+  // false "mark-failed" partial failure.
+  const pending = reply({}, false, photos[0], { reviewPending: true });
+  assert.match(pending, /<button[^>]*disabled=""[^>]*>Send &amp; mark reviewed<\/button>/);
+  assert.match(pending, />Saving review…</);
+  // Review status could not be loaded at all: the button is honest that it will only send, not mark reviewed.
+  const unavailable = reply({}, false, photos[0], { reviewUnavailable: true });
+  assert.match(unavailable, />Send reply</);
+  assert.doesNotMatch(unavailable, /Send &amp; mark reviewed/);
+  assert.match(unavailable, /<button[^>]*disabled=""[^>]*>Mark reviewed without reply<\/button>/);
 });
 
 const routineState = (): RoutineCareState => ({
@@ -127,5 +164,10 @@ test('the photos tab has no viewing dialogs; compare is the default and replies 
   assert.match(source, /new PhotoFeedbackController\(/);
   assert.match(source, /api\.sendAssignedMessage\(patientId, clinicianId, id, body\)/);
   assert.match(source, /await reviews\.mark\(photoId\)/);
+  assert.match(source, /onFail=\{id => reviews\.failOriginal\(id\)\}/);
+  assert.match(source, /useEffect\(\(\) => \{ feedback\.target\(targetId\); \}, \[feedback, targetId, reply\.status\]\);/);
+  assert.match(source, /frozen=\{feedback\.frozen\}/);
+  assert.match(source, /reviewUnavailable=\{reviewState\.status !== 'ready'\}/);
+  assert.match(source, /feedback\.submit\(reviewed \|\| reviewState\.status !== 'ready'\)/);
   assert.match(read('src/app/patients/[id]/page.tsx'), /rail=\{<CareRail /);
 });
