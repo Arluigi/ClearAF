@@ -264,6 +264,17 @@ class APIService {
     );
   }
 
+  async getPatientRoutineRevisions(
+    patientId: string,
+    timeOfDay: RoutineTimeOfDay,
+    page: number = 1,
+  ): Promise<PaginatedResponse<RoutineRevision>> {
+    const params = new URLSearchParams({ timeOfDay, page: String(page), limit: '20' });
+    return this.request<PaginatedResponse<RoutineRevision>>(
+      `/routines/patients/${encodeURIComponent(patientId)}/revisions?${params}`,
+    );
+  }
+
   async getTemplates(page=1):Promise<PaginatedResponse<Template>> { return this.request(`/care-support/templates?page=${page}&limit=20`); }
   async saveTemplate(templateId:string, revisionId:string, body:TemplateDraft&{expectedRevisionId:string|null}):Promise<Template> { const result=await this.request<{template:Template}>(`/care-support/templates/${encodeURIComponent(templateId)}/revisions/${encodeURIComponent(revisionId)}`,{method:'PUT',body:JSON.stringify(body)});return result.template; }
   async getPatientCalendar(patientId:string,month:string):Promise<Month>{return this.request(`/care-support/patients/${encodeURIComponent(patientId)}/calendar?${new URLSearchParams({month})}`);}

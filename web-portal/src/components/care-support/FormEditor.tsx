@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useClinicalAPI } from "@/lib/auth";
 import { RevisionEditor, type Form, type FormDraft } from "@/lib/care-support";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,11 @@ import QuestionFields from "./QuestionFields";
 export default function FormEditor({
   patientId,
   form,
+  onSaved,
 }: {
   patientId: string;
   form: Form | null;
+  onSaved?: () => void;
 }) {
   const api = useClinicalAPI();
   const [error, setError] = useState("");
@@ -38,12 +40,20 @@ export default function FormEditor({
   );
   useEffect(() => () => editor.cancel(), [editor]);
   useUnsaved(state.dirty || state.pending);
+  // The summary beside the editor reloads once a new version is saved.
+  const saved = useRef(onSaved);
+  useEffect(() => {
+    saved.current = onSaved;
+  });
+  useEffect(() => {
+    if (state.savedVersion !== null) saved.current?.();
+  }, [state.savedVersion]);
   const draft = state.draft;
   const edit = (change: Partial<FormDraft>) =>
     editor.edit({ ...draft, ...change });
   return (
     <form
-      className="space-y-4 rounded-none border bg-surface p-5"
+      className="space-y-4 border-t-2 border-ink pt-4"
       onSubmit={(e) => {
         e.preventDefault();
         setError("");
@@ -143,6 +153,7 @@ export default function FormEditor({
       {error && <p role="alert">{error}</p>}
       <SaveState
         editor={editor}
+        label={`Save as v${(state.savedVersion ?? form?.version ?? 0) + 1}`}
         rebase={async () => {
           try {
             const latest = await api.getPatientForm(patientId);

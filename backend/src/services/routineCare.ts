@@ -116,3 +116,13 @@ export async function history(userId: string, clinicianId: string, page: number,
     return {data,pagination:{page,limit,total,totalPages:Math.ceil(total/limit)}};
   });
 }
+/** Saved revisions for one slot, newest first. Read-only; same lock and assignment check as completion history. */
+export async function revisions(userId: string, clinicianId: string, timeOfDay: 'morning'|'evening', page: number, limit: number) {
+  return prisma.$transaction(async tx => {
+    await lock(tx,userId); await authorize(tx,userId,clinicianId);
+    const where = {userId,timeOfDay};
+    const total = await tx.careRoutineRevision.count({where});
+    const data = await tx.careRoutineRevision.findMany({where,orderBy:[{version:'desc'}],skip:(page-1)*limit,take:limit});
+    return {data,pagination:{page,limit,total,totalPages:Math.ceil(total/limit)}};
+  });
+}

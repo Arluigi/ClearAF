@@ -58,3 +58,27 @@ test('another patient cannot reuse a completion ID even with their own revision'
  const id=randomUUID();assert.equal((await complete(event(one.body.routine.id),id)).status,201);
  assert.equal((await complete(event(two.body.routine.id),id,B)).status,404);assert.equal(completions.length,1);
 });
+test('revision history lists one slot newest first with bounded pagination for the assigned clinician',async()=>{
+ const one=await edit();assert.equal(one.status,201);
+ const two=await edit(randomUUID(),{...definition(one.body.routine.id),name:'Second synthetic routine'});assert.equal(two.status,201);
+ assert.equal((await edit(randomUUID(),definition(),C,A,'evening')).status,201);
+ const first=await call(`/patients/${A}/revisions?timeOfDay=morning&limit=1`,C);
+ assert.equal(first.status,200);
+ assert.deepEqual(first.body.data.map((r:any)=>[r.version,r.name,r.timeOfDay]),[[2,'Second synthetic routine','morning']]);
+ assert.deepEqual(first.body.data[0].steps,[{title:'Synthetic step',instructions:'Synthetic instructions'}]);
+ assert.deepEqual(first.body.pagination,{page:1,limit:1,total:2,totalPages:2});
+ const second=await call(`/patients/${A}/revisions?timeOfDay=morning&page=2&limit=1`,C);
+ assert.deepEqual(second.body.data.map((r:any)=>r.version),[1]);
+ const evenings=await call(`/patients/${A}/revisions?timeOfDay=evening`,C);
+ assert.deepEqual(evenings.body.data.map((r:any)=>r.timeOfDay),['evening']);
+ assert.equal(evenings.body.pagination.limit,20);
+});
+test('revision history rejects patients, unassigned clinicians and invalid queries without writes',async()=>{
+ assert.equal((await edit()).status,201);
+ assert.equal((await call(`/patients/${A}/revisions?timeOfDay=morning`,A)).status,403);
+ assert.equal((await call(`/patients/${A}/revisions?timeOfDay=morning`,D)).status,404);
+ afterLock=()=>{assigned=D};assert.equal((await call(`/patients/${A}/revisions?timeOfDay=morning`,C)).status,404);assigned=C;
+ for(const query of['','timeOfDay=noon','timeOfDay=morning&limit=51','timeOfDay=morning&page=0','timeOfDay=morning&limit=2.5','timeOfDay=morning&sort=version'])assert.equal((await call(`/patients/${A}/revisions?${query}`,C)).status,400,query);
+ assert.equal((await call('/patients/not-a-uuid/revisions?timeOfDay=morning',C)).status,400);
+ assert.equal(revisions.length,1);
+});

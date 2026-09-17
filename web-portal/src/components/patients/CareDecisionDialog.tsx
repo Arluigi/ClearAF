@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -89,7 +88,7 @@ export default function CareDecisionDialog({
           }}
         >
           <fieldset disabled={disabled} className="space-y-2">
-            <legend className="text-sm font-medium">Care decision</legend>
+            <legend className="eyebrow pb-1">Care decision</legend>
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm">
                 <input type="radio" name="care-decision" value="refer_out" checked={decision === 'refer_out'} onChange={() => setDecision('refer_out')} />
@@ -139,12 +138,7 @@ export default function CareDecisionDialog({
               <p className="text-sm text-ink-secondary">Shown to the patient with next steps. A refund will be marked pending.</p>
             </div>
           )}
-          {state.status === 'error' && (
-            <p role="alert" className="flex items-center gap-1 text-sm">
-              <AlertTriangle aria-hidden className="h-4 w-4 text-error" />
-              {state.error}
-            </p>
-          )}
+          {state.status === 'error' && <p role="alert" className="text-sm text-error">{state.error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={state.status === 'saving'}>
               {state.status === 'saving' ? 'Saving…' : action.frozenBody !== null ? 'Retry same decision' : 'Save decision'}
