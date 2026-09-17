@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { activity, day, isWaiting, plural, rowAction, waited } from '@/lib/worklist';
 import type { WorklistResponse } from '@/types/api';
 import AdherenceSparkline from './AdherenceSparkline';
+import DataText from './DataText';
 
 // Spec §4.9: one ruled table merging the review queue and the patient list. Waiting rows carry data-attention
 // (rail fill + 4px attention.mark bar, from PR 2's TableRow); every row has exactly one filled action.
@@ -39,7 +40,7 @@ export default function WorklistTable({ result, context, now }: { result: Workli
                 )}
               </TableCell>
               <TableCell><AdherenceSparkline adherence={row.adherence} /></TableCell>
-              <TableCell>{activity(row).map((line) => <p key={line} className="text-xs text-ink-secondary">{line}</p>)}</TableCell>
+              <TableCell>{activity(row).map((line) => <p key={line} className="text-xs text-ink-secondary"><DataText text={line} /></p>)}</TableCell>
               <TableCell className="text-right">
                 <Button size="sm" asChild><a href={action.href} aria-label={action.ariaLabel}>{action.label}</a></Button>
               </TableCell>

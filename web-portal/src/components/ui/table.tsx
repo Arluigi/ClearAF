@@ -6,6 +6,12 @@ import { cn } from "@/lib/utils"
 // `numeric` cells use mono tabular figures. Rows: data-state="selected" → rail + 2px ink rule;
 // data-attention="true" → rail + 4px attention.mark bar (waiting). Rules sit on the first cell because
 // box-shadow on <tr> is unreliable across browsers.
+//
+// The leading-bar selector must put the data attribute on the <tr> and the child combinator in front
+// of `td:first-child`, in the SAME arbitrary variant: `[&[data-x=y]>td:first-child]:shadow-…`.
+// Stacking it as two variants instead — `data-[x=y]:[&>td:first-child]:shadow-…` — compiles to
+// `…>td:first-child[data-x=y]`, which requires the attribute on the <td>, not the <tr>, and never
+// matches (verified against Tailwind's own compiled output; see tests/table-row.test.ts).
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
@@ -62,7 +68,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b border-rule transition-colors hover:bg-rail/60 data-[state=selected]:bg-rail data-[state=selected]:[&>td:first-child]:shadow-[inset_2px_0_0_rgb(var(--ink))] data-[attention=true]:bg-rail data-[attention=true]:[&>td:first-child]:shadow-[inset_4px_0_0_rgb(var(--attention-mark))]",
+      "border-b border-rule transition-colors hover:bg-rail/60 data-[state=selected]:bg-rail [&[data-state=selected]>td:first-child]:shadow-[inset_2px_0_0_rgb(var(--ink))] data-[attention=true]:bg-rail [&[data-attention=true]>td:first-child]:shadow-[inset_4px_0_0_rgb(var(--attention-mark))]",
       className
     )}
     {...props}

@@ -29,8 +29,10 @@ test("table head is the mono eyebrow; numeric cells are mono tabular figures", (
 
 test("table rows mark selection and attention without relying on tone", () => {
   const source = read("src/components/ui/table.tsx");
-  assert.ok(source.includes("data-[state=selected]:[&>td:first-child]:shadow-[inset_2px_0_0_rgb(var(--ink))]"));
-  assert.ok(source.includes("data-[attention=true]:[&>td:first-child]:shadow-[inset_4px_0_0_rgb(var(--attention-mark))]"));
+  // The data attribute and the child combinator must be in the SAME arbitrary variant so the
+  // attribute stays keyed to the <tr>; see tests/table-row.test.ts for the compiled-selector proof.
+  assert.ok(source.includes("[&[data-state=selected]>td:first-child]:shadow-[inset_2px_0_0_rgb(var(--ink))]"));
+  assert.ok(source.includes("[&[data-attention=true]>td:first-child]:shadow-[inset_4px_0_0_rgb(var(--attention-mark))]"));
 });
 
 const tabs = (variant?: "segmented" | "underline") =>

@@ -88,6 +88,25 @@ export function dayBar(state: WorklistDayState) {
   return state === 2 ? 'block h-full w-1.5 bg-ink' : 'block h-[70%] w-1.5 bg-ink';
 }
 
+type TextSegment = { text: string; data: boolean };
+// Time (07:04), day+month (15 SEP) and bare counts — the mono figures spec §4.9 wants set in
+// font-data tabular-nums, leaving the surrounding words in the UI font. Order matters: the date/time
+// alternatives are tried before the bare `\d+` so "15 SEP" and "07:04" match whole, not digit-by-digit.
+const DATA_TOKEN = /\d{1,2}:\d{2}|\d{1,2} [A-Z]{3}\b|\d+/g;
+/** Splits a line into plain-word and mono-data segments; see `DATA_TOKEN`. */
+export function dataSegments(text: string): TextSegment[] {
+  const segments: TextSegment[] = [];
+  let last = 0;
+  for (const match of text.matchAll(DATA_TOKEN)) {
+    const index = match.index ?? 0;
+    if (index > last) segments.push({ text: text.slice(last, index), data: false });
+    segments.push({ text: match[0], data: true });
+    last = index + match[0].length;
+  }
+  if (last < text.length) segments.push({ text: text.slice(last), data: false });
+  return segments.length ? segments : [{ text, data: false }];
+}
+
 export function emptyCopy(filter: WorklistFilter, search: string): { title: string; body: string; action: 'clear-search' | 'show-all' | null } {
   if (search.trim()) return { title: 'No patients match this name', body: 'Check the spelling or clear the search.', action: 'clear-search' };
   if (filter === 'needs-review') return { title: 'No photos waiting', body: 'Shared photos appear here until you mark them reviewed.', action: 'show-all' };
@@ -101,41 +120,90 @@ export type WorklistState = {
   search: string;
   status: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported';
   result: WorklistResponse | null;
+  // The exact query that produced `result` — kept separate from the live filter/page/search so a row
+  // link (or anything else describing "what's on screen") follows the loaded data, not in-flight typing.
+  query: WorklistQuery | null;
   checkedAt: Date | null;
 };
 type Loader = (query: WorklistQuery) => Promise<WorklistResponse>;
+const SEARCH_DEBOUNCE_MS = 250;
 
 export class WorklistController {
-  private state: WorklistState = { filter: 'needs-review', page: 1, search: '', status: 'idle', result: null, checkedAt: null };
+  private state: WorklistState = { filter: 'needs-review', page: 1, search: '', status: 'idle', result: null, query: null, checkedAt: null };
   private listeners = new Set<() => void>();
   private request = 0;
   private disposed = false;
+  // The status to fall back to when a pending load is cancelled without a following load/restore —
+  // see `cancelPending`.
+  private lastSettledStatus: WorklistState['status'] = 'idle';
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private searchResolve: (() => void) | null = null;
   constructor(private readonly loader: Loader, private readonly now: () => Date = () => new Date()) {}
   snapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private publish(next: WorklistState) { if (!this.disposed) { this.state = next; this.listeners.forEach((listener) => listener()); } }
-  async load(page = this.state.page) {
+  private clearSearchTimer() {
+    if (this.searchTimer === null) return;
+    clearTimeout(this.searchTimer);
+    this.searchTimer = null;
+    // A superseded debounce never gets a load, so its promise resolves as a no-op rather than hanging.
+    this.searchResolve?.();
+    this.searchResolve = null;
+  }
+  async load(page = this.state.page): Promise<void> {
     if (this.state.status === 'unsupported') return;
     const request = ++this.request;
     const { filter, search } = this.state;
     // The previous result stays on screen while loading so the layout does not jump.
     this.publish({ ...this.state, page, status: 'loading' });
     try {
-      const result = await this.loader({ filter, page, search, localDate: localDateOf(this.now()) });
+      const query = { filter, page, search, localDate: localDateOf(this.now()) };
+      const result = await this.loader(query);
       if (request !== this.request || this.disposed) return;
-      this.publish({ ...this.state, page: result.pagination.page, result, status: 'ready', checkedAt: this.now() });
+      // A page reviewed away from under the clinician (or opened straight from a stale link) comes
+      // back with zero rows past the real last page: reload the last real page instead of publishing
+      // a false empty state. `state.page` (and the URL, via the view's existing sync effect) follow.
+      if (result.data.length === 0 && page > 1 && page > result.pagination.totalPages) {
+        return this.load(Math.max(1, result.pagination.totalPages));
+      }
+      this.lastSettledStatus = 'ready';
+      this.publish({ ...this.state, page: result.pagination.page, result, query: { ...query, page: result.pagination.page }, status: 'ready', checkedAt: this.now() });
     } catch (cause) {
       if (request !== this.request || this.disposed) return;
-      // An API deployed before GET /worklist answers 404: fall back to the separate queue and list.
-      this.publish({ ...this.state, status: cause instanceof APIError && cause.status === 404 ? 'unsupported' : 'error' });
+      // An API deployed before GET /worklist answers 404 with this exact catch-all body (server.ts);
+      // anything else — including a route's own "not found" 404 — is a real error, not a missing route.
+      const unsupported = cause instanceof APIError && cause.status === 404 && cause.message === 'Route not found';
+      this.lastSettledStatus = unsupported ? 'unsupported' : 'error';
+      this.publish({ ...this.state, status: this.lastSettledStatus });
     }
   }
   restore(filter: WorklistFilter, page: number, search: string) { this.publish({ ...this.state, filter, page, search }); return this.load(page); }
   setFilter(filter: WorklistFilter) { if (filter === this.state.filter) return Promise.resolve(); this.publish({ ...this.state, filter, page: 1 }); return this.load(1); }
-  search(search: string) { this.publish({ ...this.state, search, page: 1 }); return this.load(1); }
+  // Reloads debounce ~250ms so a fast typist doesn't fire one request per keystroke; the input itself
+  // (state.search) updates immediately. Identical text is a no-op, mirroring setFilter.
+  search(search: string) {
+    if (search === this.state.search) return Promise.resolve();
+    this.publish({ ...this.state, search, page: 1 });
+    this.clearSearchTimer();
+    return new Promise<void>((resolve) => {
+      this.searchResolve = resolve;
+      this.searchTimer = setTimeout(() => {
+        this.searchTimer = null;
+        this.searchResolve = null;
+        void this.load(1).then(resolve);
+      }, SEARCH_DEBOUNCE_MS);
+    });
+  }
   goToPage(page: number) { return this.load(page); }
   retry() { return this.load(); }
-  // Effect cleanup retires its request; subscription cleanup owns listener removal.
-  cancelPending() { this.request += 1; }
-  dispose() { this.disposed = true; this.request += 1; this.listeners.clear(); }
+  // Effect cleanup retires its request and any pending debounce; subscription cleanup owns listener
+  // removal. Not paired with a following load/restore (e.g. on unmount), so a load left mid-flight
+  // would otherwise strand the state at 'loading' forever — instead it restores the last settled
+  // status. A caller that does go on to load/restore/search simply overwrites this again.
+  cancelPending() {
+    this.request += 1;
+    this.clearSearchTimer();
+    if (this.state.status === 'loading') this.publish({ ...this.state, status: this.lastSettledStatus });
+  }
+  dispose() { this.disposed = true; this.request += 1; this.clearSearchTimer(); this.listeners.clear(); }
 }

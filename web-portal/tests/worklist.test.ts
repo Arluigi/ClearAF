@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { APIError } from '../src/types/api';
 import type { WorklistFilter, WorklistQuery, WorklistResponse, WorklistRow } from '../src/types/api';
-import { WorklistController, activity, adherenceText, dayBar, emptyCopy, localDateOf, longDate, rowAction, stamp, summaryTiles, waited } from '../src/lib/worklist';
+import { WorklistController, activity, adherenceText, dataSegments, dayBar, emptyCopy, localDateOf, longDate, rowAction, stamp, summaryTiles, waited } from '../src/lib/worklist';
 
 const NOW = new Date(2026, 8, 16, 8, 40);
 const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000).toISOString();
@@ -18,14 +18,14 @@ const row = (over: Partial<WorklistRow> = {}): WorklistRow => ({
   photos: { unreviewedCount: 0, oldestUploadAt: null }, unreadMessages: 0, latestCheckInAt: null,
   urgent: { open: 0, acknowledged: 0, oldestAt: null }, adherence: null, ...over,
 });
-const response = (filter: WorklistFilter, page = 1, data: WorklistRow[] = []): WorklistResponse => ({
-  filter, localDate: '2026-09-16', summary, data, pagination: { page, limit: 20, total: data.length, totalPages: 1 },
+const response = (filter: WorklistFilter, page = 1, data: WorklistRow[] = [], totalPages = 1): WorklistResponse => ({
+  filter, localDate: '2026-09-16', summary, data, pagination: { page, limit: 20, total: data.length, totalPages },
 });
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((ok) => { resolve = ok; }); return { promise, resolve }; };
 
 test('loads with the filter, page, search and clinician local date; filter and search reset to page one', async () => {
   const calls: WorklistQuery[] = [];
-  const controller = new WorklistController(async (query) => { calls.push(query); return response(query.filter, query.page); }, () => NOW);
+  const controller = new WorklistController(async (query) => { calls.push(query); return response(query.filter, query.page, [row()]); }, () => NOW);
   await controller.restore('all', 3, 'Ada');
   await controller.goToPage(4);
   await controller.setFilter('flagged');
@@ -50,6 +50,15 @@ test('an API without the worklist endpoint switches to the legacy lists and stop
   await controller.setFilter('all');
   assert.equal(calls, 1);
   assert.equal(controller.snapshot().status, 'unsupported');
+});
+
+test('a 404 from inside a route (not the catch-all) is a real error, not a missing route', async () => {
+  // Matches backend/src/server.ts's catch-all body exactly: only { error: 'Route not found' } means
+  // "this API predates GET /worklist". Any other 404 — a route's own "not found" — must not trigger
+  // the legacy fallback.
+  const controller = new WorklistController(async () => { throw new APIError(404, 'Patient not found'); }, () => NOW);
+  await controller.load();
+  assert.equal(controller.snapshot().status, 'error');
 });
 
 test('other failures keep the last result on screen and retry repeats the same load', async () => {
@@ -134,4 +143,87 @@ test('empty states name what is empty and offer at most one next step', () => {
   assert.deepEqual(emptyCopy('flagged', ''), { title: 'No urgent reports', body: 'Nothing your patients have reported is waiting.', action: null });
   assert.deepEqual(emptyCopy('all', ''), { title: 'No assigned patients yet', body: 'Patients assigned to you will appear here.', action: null });
   assert.deepEqual(emptyCopy('flagged', 'Zed'), { title: 'No patients match this name', body: 'Check the spelling or clear the search.', action: 'clear-search' });
+});
+
+test('a page past the end (e.g. reviewed away since it loaded) reloads the last real page', async () => {
+  const calls: number[] = [];
+  const controller = new WorklistController(async (query) => {
+    calls.push(query.page);
+    return query.page === 2 ? response(query.filter, 2, [], 1) : response(query.filter, 1, [row()], 1);
+  }, () => NOW);
+  await controller.restore('needs-review', 2, '');
+  assert.deepEqual(calls, [2, 1]);
+  assert.equal(controller.snapshot().page, 1);
+  assert.equal(controller.snapshot().result?.data.length, 1);
+  assert.equal(controller.snapshot().status, 'ready');
+});
+
+test('a page past the end with no real pages at all settles on page one, empty, without looping', async () => {
+  const calls: number[] = [];
+  const controller = new WorklistController(async (query) => { calls.push(query.page); return response(query.filter, query.page, [], 0); }, () => NOW);
+  await controller.restore('flagged', 3, '');
+  assert.deepEqual(calls, [3, 1]);
+  assert.equal(controller.snapshot().page, 1);
+  assert.equal(controller.snapshot().result?.data.length, 0);
+  assert.equal(controller.snapshot().status, 'ready');
+});
+
+test('cancelPending retires the in-flight request and, unpaired, restores the last settled status', async () => {
+  const stuck = deferred<WorklistResponse>();
+  let calls = 0;
+  const controller = new WorklistController(() => { calls += 1; return calls === 1 ? Promise.resolve(response('needs-review', 1, [row()])) : stuck.promise; }, () => NOW);
+  await controller.load();
+  assert.equal(controller.snapshot().status, 'ready');
+  const pending = controller.retry();
+  assert.equal(controller.snapshot().status, 'loading');
+  controller.cancelPending();
+  // Never left stuck at 'loading' just because nothing else followed the cancel.
+  assert.equal(controller.snapshot().status, 'ready');
+  stuck.resolve(response('needs-review', 1, [row(), row()]));
+  await pending;
+  // The cancelled response never re-applies once it does resolve.
+  assert.equal(controller.snapshot().status, 'ready');
+  assert.equal(controller.snapshot().result?.data.length, 1);
+});
+
+test('search reloads are debounced by ~250ms and skip a reload for unchanged text', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const calls: WorklistQuery[] = [];
+  const controller = new WorklistController(async (query) => { calls.push(query); return response(query.filter, query.page); }, () => NOW);
+  controller.search('A');
+  controller.search('Ad');
+  const settled = controller.search('Ada');
+  assert.equal(calls.length, 0, 'no reload before the debounce fires');
+  assert.equal(controller.snapshot().search, 'Ada', 'the field itself updates immediately');
+  t.mock.timers.tick(250);
+  await settled;
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].search, 'Ada');
+  await controller.search('Ada');
+  assert.equal(calls.length, 1, 'identical text is a no-op, like setFilter');
+});
+
+test('the published query matches the request that produced the result, not the in-flight typed search', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const controller = new WorklistController(async (query) => response(query.filter, query.page), () => NOW);
+  await controller.load();
+  assert.equal(controller.snapshot().query?.search, '');
+  const pending = controller.search('Ada');
+  assert.equal(controller.snapshot().search, 'Ada');
+  assert.equal(controller.snapshot().query?.search, '', 'rows on screen still match the old query while debouncing');
+  t.mock.timers.tick(250);
+  await pending;
+  assert.equal(controller.snapshot().query?.search, 'Ada');
+});
+
+test('mono figures (dates, times, counts) split out of prose lines for font-data tabular-nums', () => {
+  assert.deepEqual(dataSegments('No new activity'), [{ text: 'No new activity', data: false }]);
+  assert.deepEqual(dataSegments('1 unread message'), [{ text: '1', data: true }, { text: ' unread message', data: false }]);
+  assert.deepEqual(dataSegments('Check-in · 15 SEP · 07:04'), [
+    { text: 'Check-in · ', data: false },
+    { text: '15 SEP', data: true },
+    { text: ' · ', data: false },
+    { text: '07:04', data: true },
+  ]);
+  assert.deepEqual(dataSegments('14-day window'), [{ text: '14', data: true }, { text: '-day window', data: false }]);
 });

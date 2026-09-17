@@ -5,6 +5,9 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // Helpers like `dayBar` in src/lib build Tailwind class strings too; without this glob those
+    // classes are never in the generated CSS even though the guard below says they're valid syntax.
+    './src/lib/**/*.{ts,tsx}',
   ],
   theme: {
     // Letterpress radii (spec §3): 0 · 4 · 26 · 999. Replaces Tailwind's scale so nothing in between can be used.
