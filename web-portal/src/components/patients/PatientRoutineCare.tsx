@@ -74,7 +74,7 @@ function RoutineEditor({
       <div className="flex items-center justify-between gap-4 border-t pt-4">
         <div className="space-y-1">
           <Label htmlFor={`${slot}-active`}>Active assignment</Label>
-          <p className="text-sm text-muted-foreground">Turn this off and save to archive the routine.</p>
+          <p className="text-sm text-ink-secondary">Turn this off and save to archive the routine.</p>
         </div>
         <Switch
           id={`${slot}-active`}
@@ -98,7 +98,7 @@ function RoutineEditor({
             <Plus className="mr-2 h-4 w-4" /> Add step
           </Button>
         </div>
-        {editor.draft.steps.length === 0 ? <p className="text-sm text-muted-foreground">
+        {editor.draft.steps.length === 0 ? <p className="text-sm text-ink-secondary">
           No steps. Add at least one step before activating this routine.
         </p> : editor.draft.steps.map((step, index) => <div key={index} className="space-y-3 border-t pt-4">
           <div className="flex items-start justify-between gap-2">
@@ -155,7 +155,7 @@ function RoutineEditor({
         </div>)}
       </div>
 
-      {editor.error && <div role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm">
+      {editor.error && <div role="alert" className="space-y-2 rounded-none border border-error p-3 text-sm">
         <p>{editor.error}</p>
         {editor.status === 'conflict' ? <Button type="button" variant="outline" size="sm" disabled={!controller.canReloadConflict(slot)} onClick={reload}>
           <RefreshCw className="mr-2 h-4 w-4" /> Reload assignments
@@ -164,7 +164,7 @@ function RoutineEditor({
         </Button> : null}
       </div>}
 
-      <p role="status" className="text-sm text-muted-foreground">{editor.dirty ? 'Unsaved changes' : 'No unsaved changes'}</p>
+      <p role="status" className="text-sm text-ink-secondary">{editor.dirty ? 'Unsaved changes' : 'No unsaved changes'}</p>
       <Button
         type="button"
         className="w-full"
@@ -205,7 +205,7 @@ export default function PatientRoutineCare({ patientId, onDirtyChange }: { patie
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 className="flex items-center gap-2 font-medium"><ClipboardCheck className="h-4 w-4" /> Assigned routines</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Edit clinician-assigned morning and evening routines.</p>
+        <p className="mt-1 text-sm text-ink-secondary">Edit clinician-assigned morning and evening routines.</p>
       </div>
       <Button type="button" variant="outline" size="sm" disabled={reloadBlocked || Object.values(state.slots).some(editor => editor.dirty) || state.loadStatus === 'loading'} onClick={reloadAssignments}>
         <RefreshCw className="mr-2 h-4 w-4" /> Refresh assignments
@@ -227,7 +227,7 @@ export default function PatientRoutineCare({ patientId, onDirtyChange }: { patie
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-medium">Recent completion events</h2>
-          <p className="text-sm text-muted-foreground">Patient-reported completions retain the routine revision viewed at that time.</p>
+          <p className="text-sm text-ink-secondary">Patient-reported completions retain the routine revision viewed at that time.</p>
         </div>
         <Button type="button" variant="outline" size="sm" disabled={state.history.status === 'loading'} onClick={() => void controller.loadHistory(state.history.page)}>
           Refresh history
@@ -239,15 +239,15 @@ export default function PatientRoutineCare({ patientId, onDirtyChange }: { patie
         <Button type="button" variant="outline" onClick={() => void controller.loadHistory(state.history.page)}>Retry history</Button>
       </div>}
       {state.history.status === 'ready' && <>
-        {state.history.entries.length === 0 ? <p className="text-sm text-muted-foreground">No completion events on this page.</p> : <div className="space-y-3">
+        {state.history.entries.length === 0 ? <p className="text-sm text-ink-secondary">No completion events on this page.</p> : <div className="space-y-3">
           {state.history.entries.map(entry => <article key={entry.id} className="border-t pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-medium">{entry.routine.name}</p>
               <Badge variant="outline">{entry.routine.timeOfDay === 'morning' ? 'Morning' : 'Evening'} · Version {entry.routine.version}</Badge>
             </div>
             <p className="mt-2 text-sm">Completed {displayTime(entry.completedAt)}</p>
-            <p className="text-sm text-muted-foreground">Reported local date {entry.localDate} · {entry.timeZone}</p>
-            <p className="text-sm text-muted-foreground">Received {displayTime(entry.receivedAt)}</p>
+            <p className="text-sm text-ink-secondary">Reported local date {entry.localDate} · {entry.timeZone}</p>
+            <p className="text-sm text-ink-secondary">Received {displayTime(entry.receivedAt)}</p>
           </article>)}
         </div>}
         <nav aria-label="Completion history pages" className="flex flex-wrap items-center justify-between gap-2">

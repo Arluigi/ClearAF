@@ -19,7 +19,7 @@ function Templates() {
       <div className="portal-page">
         <header>
           <h1 className="editorial-title text-4xl">Routine templates</h1>
-          <p className="text-muted-foreground">
+          <p className="text-ink-secondary">
             Your reusable routines. Copy a template into a patient draft, then
             review and save the assignment.
           </p>

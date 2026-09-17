@@ -97,7 +97,7 @@ export function SaveState<D extends object>({
   );
   return (
     <div className="space-y-3">
-      <p role="status" className="text-sm text-muted-foreground">
+      <p role="status" className="text-sm text-ink-secondary">
         {state.dirty
           ? "Unsaved changes"
           : state.savedVersion

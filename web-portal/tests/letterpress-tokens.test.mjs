@@ -60,8 +60,8 @@ test('retired Care Journal and wellness values are gone', () => {
 });
 
 test('Tailwind colours keep opacity modifiers working', () => {
-  assert.match(tailwind, /primary:\s*{\s*DEFAULT:\s*'rgb\(var\(--primary\) \/ <alpha-value>\)'/);
   assert.match(tailwind, /ink:\s*{\s*DEFAULT:\s*'rgb\(var\(--ink\) \/ <alpha-value>\)'/);
+  assert.match(tailwind, /canvas:\s*'rgb\(var\(--canvas\) \/ <alpha-value>\)'/);
 });
 
 test('fonts load through next/font with swap', () => {

@@ -37,7 +37,7 @@ function Messages() {
       <div className="portal-page">
         <header>
           <h1 className="editorial-title text-4xl">Messages</h1>
-          <p className="text-muted-foreground">
+          <p className="text-ink-secondary">
             Private conversations with your assigned patients.
           </p>
         </header>
@@ -66,15 +66,16 @@ function Messages() {
                 <a
                   key={c.patientId}
                   href={"/messages?patient=" + encodeURIComponent(c.patientId)}
+                  aria-current={patientId === c.patientId ? "true" : undefined}
                   className={
-                    "block space-y-1 rounded-md border p-3 " +
-                    (patientId === c.patientId ? "bg-accent" : "")
+                    "block space-y-1 rounded-none border p-3 " +
+                    (patientId === c.patientId ? "selected-rule" : "")
                   }
                 >
                   <p className="font-medium">
                     {c.patientName || "Unnamed patient"}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-ink-secondary">
                     {c.unreadCount} unread
                   </p>
                   <p className="line-clamp-2 break-words text-sm">

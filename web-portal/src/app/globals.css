@@ -14,17 +14,6 @@
     --font-ui: var(--font-plex-sans), -apple-system, system-ui, sans-serif;
     --font-data: var(--font-plex-mono), ui-monospace, monospace;
     --radius: 4px;
-
-    /* shadcn role aliases, resolved to Letterpress. Removed as primitives migrate (PR 2). */
-    --background: var(--canvas);        --foreground: var(--ink);
-    --card: var(--surface);             --card-foreground: var(--ink);
-    --popover: var(--surface);          --popover-foreground: var(--ink);
-    --primary: var(--ink);              --primary-foreground: var(--canvas);
-    --secondary: var(--sunk);           --secondary-foreground: var(--ink);
-    --muted: var(--sunk);               --muted-foreground: var(--ink-secondary);
-    --accent-foreground: var(--ink);
-    --destructive: var(--error);        --destructive-foreground: var(--canvas);
-    --ring: var(--ink);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -48,6 +37,12 @@
   .editorial-title { font-family: var(--font-display); font-weight: 300; line-height: 1.15; }
   .font-data { font-variant-numeric: tabular-nums; }
   .portal-page { @apply mx-auto w-full max-w-7xl space-y-8 p-5 md:p-8; }
+}
+@layer utilities {
+  /* Selected row or list item: rail fill plus a 2px ink rule at the leading edge, so selection never relies on tone alone. */
+  .selected-rule { background-color: rgb(var(--rail)); box-shadow: inset 2px 0 0 rgb(var(--ink)); }
+  /* Selected cell or tile (spec §4.5): an inset ink outline, never an overlay tint. */
+  .selected-outline { outline: 2px solid rgb(var(--ink)); outline-offset: -2px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }

@@ -23,7 +23,7 @@ function DayEvents({ patientId, day }: { patientId: string; day: string }) {
         <>
           {!result.data.data.length && <p>Not recorded</p>}
           {result.data.data.map((event) => (
-            <article className="space-y-2 rounded-md border p-4" key={event.id}>
+            <article className="space-y-2 rounded-none border p-4" key={event.id}>
               <p>
                 {event.routine.name} · {event.routine.timeOfDay} · Version{" "}
                 {event.routine.version}
@@ -39,7 +39,7 @@ function DayEvents({ patientId, day }: { patientId: string; day: string }) {
                 {event.routine.steps.map((step, i) => (
                   <li key={i}>
                     <p>{step.title}</p>
-                    <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    <p className="whitespace-pre-wrap text-sm text-ink-secondary">
                       {step.instructions}
                     </p>
                   </li>
@@ -78,14 +78,14 @@ export default function CompletionCalendar({
       aria-label="Completion calendar"
     >
       <h2 className="text-xl font-medium">Completion calendar</h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-ink-secondary">
         Server-recorded patient reports by their reported local date. Days
         without events are not recorded.
       </p>
       <label className="block">
         Month
         <input
-          className="ml-3 rounded-md border bg-background p-2"
+          className="ml-3 rounded-none border border-rule-field bg-surface p-2"
           type="month"
           value={month}
           onChange={(e) => {
@@ -105,7 +105,7 @@ export default function CompletionCalendar({
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
             <span
               key={label}
-              className="hidden text-sm text-muted-foreground sm:block"
+              className="hidden text-sm text-ink-secondary sm:block"
             >
               {label}
             </span>
@@ -128,7 +128,7 @@ export default function CompletionCalendar({
                 key={date}
                 aria-label={`${date}: ${record ? `Morning ${record.morning}, evening ${record.evening}` : "Not recorded"}`}
                 aria-pressed={day === date}
-                className="min-h-24 min-w-0 rounded-md border p-2 text-left focus-visible:outline focus-visible:outline-ring aria-pressed:bg-accent"
+                className="min-h-24 min-w-0 rounded-none border p-2 text-left focus-visible:outline focus-visible:outline-ink aria-pressed:bg-rail aria-pressed:selected-outline"
                 onClick={() => setDay(date)}
               >
                 <span className="block font-medium">

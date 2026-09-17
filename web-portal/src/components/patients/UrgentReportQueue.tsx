@@ -26,11 +26,11 @@ export default function UrgentReportQueue({ context }: { context: string }) {
     <section aria-label="Urgent reports" className="space-y-4">
       <div>
         <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-          <AlertTriangle aria-hidden className="h-5 w-5 text-destructive" />
+          <AlertTriangle aria-hidden className="h-5 w-5 text-error" />
           Urgent reports
-          {result && <span className="text-sm font-normal text-muted-foreground">{result.openCount} open</span>}
+          {result && <span className="text-sm font-normal text-ink-secondary">{result.openCount} open</span>}
         </h2>
-        <p className="text-sm text-muted-foreground">Reported by assigned patients. Open reports appear first, oldest first. This is not a live alert.</p>
+        <p className="text-sm text-ink-secondary">Reported by assigned patients. Open reports appear first, oldest first. This is not a live alert.</p>
       </div>
       <Button variant="outline" size="sm" onClick={() => setRevision((value) => value + 1)}>Refresh urgent reports</Button>
       {error ? (
@@ -40,7 +40,7 @@ export default function UrgentReportQueue({ context }: { context: string }) {
       ) : (
         <>
           {result.data.length === 0 ? <p>No urgent reports.</p> : (
-            <ul className="divide-y rounded-xl bg-card">
+            <ul className="divide-y rounded-none bg-surface">
               {result.data.map((report) => (
                 <li key={report.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
                   <div className="min-w-0 space-y-1">
@@ -52,7 +52,7 @@ export default function UrgentReportQueue({ context }: { context: string }) {
                         {statusLabel(report.status)}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground">{new Date(report.createdAt).toLocaleString()}</p>
+                    <p className="text-sm text-ink-secondary">{new Date(report.createdAt).toLocaleString()}</p>
                     <p className="line-clamp-2 text-sm">{report.description}</p>
                   </div>
                   <Button variant="outline" asChild>
