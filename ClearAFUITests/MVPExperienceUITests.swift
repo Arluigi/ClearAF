@@ -73,7 +73,7 @@ final class MVPExperienceUITests: XCTestCase {
             for _ in 0..<10 where !next.isHittable { app.swipeUp() }
             XCTAssertTrue(next.isEnabled && next.isHittable)
             next.tap(); page += 1
-            XCTAssertTrue(app.staticTexts["Page \(page)"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Page \(page) of")).firstMatch.waitForExistence(timeout: 5))
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.name = "Native volume page change"
             attachment.lifetime = .keepAlways; add(attachment)
@@ -282,7 +282,7 @@ final class MVPExperienceUITests: XCTestCase {
                     }
                     guard photo.frame.minY + 50 < app.buttons["Previous"].frame.minY else { throw fixtureFailure() }
                     photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
-                    guard app.navigationBars["Photo Details"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
+                    guard app.navigationBars["Photo details"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
                     try audit(app, screen: "Photo detail")
                     let done = app.buttons["Done"]
                     XCTAssertTrue(done.isHittable)
