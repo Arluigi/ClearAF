@@ -7,7 +7,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         let suffix = UUID().uuidString.lowercased()
         let email = "clearaf-ui-\(suffix)@example.invalid"
@@ -82,7 +85,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         XCTAssertTrue(app.buttons["authMode"].waitForExistence(timeout: 15))
         let a = try await register(app, name: "Synthetic Alpha")
         try await finishOnboarding(app)
@@ -145,7 +151,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         _ = try await register(app, name: "Synthetic Photo Patient")
         try await finishOnboarding(app)
         app.tabBars.buttons["Record"].tap()
@@ -182,7 +191,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         login(app, email: email, password: password)
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
         dismissPasswordPrompt(app)
@@ -231,7 +243,10 @@ final class AccountFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         if app.buttons["Profile"].waitForExistence(timeout: 3) { signOut(app) }
-        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        if app.buttons["Sign out"].exists {
+            for _ in 0..<4 where !app.buttons["Sign out"].isHittable { app.swipeUp() }
+            app.buttons["Sign out"].tap()
+        }
         login(app, email: email, password: password)
         guard app.tabBars.buttons["Today"].waitForExistence(timeout: 15) else {
             let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -358,7 +373,7 @@ final class AccountFlowUITests: XCTestCase {
         for _ in 0..<5 where !app.tabBars.buttons["Today"].exists {
             await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: button)], timeout: 5)
             button.tap()
-            _ = app.tabBars.buttons["Today"].waitForExistence(timeout: 2)
+            _ = app.tabBars.buttons["Today"].waitForExistence(timeout: 0.5)
         }
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
     }

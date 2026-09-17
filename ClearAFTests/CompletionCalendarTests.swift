@@ -75,6 +75,13 @@ struct CompletionCalendarTests {
         #expect(CompletionCalendarCopy.missingSlots(recorded: [], date: "2026-09-14", today: "2026-09-15") == ["Morning not recorded", "Evening not recorded"])
     }
 
+    @Test func gridCellsClearThe44ptFloorOnA375ptWideDevice() {
+        // iPhone SE (3rd gen) / mini-class width (spec §8's 44pt floor, pinned per §4.1, never derived).
+        #expect(CompletionCalendarGrid.cellWidth(for: 375) >= Letterpress.minTouch)
+        // Standard-width iPhones (390pt+) already clear the floor with the wider gutter/spacing.
+        #expect(CompletionCalendarGrid.cellWidth(for: 390) >= Letterpress.minTouch)
+    }
+
     @Test func cellNumbersMeetContrastOnWhatSitsBehindThemInBothAppearances() {
         let cases: [(CalendarCell, Bool)] = [(.recorded(.both), false), (.recorded(.one), false), (.recorded(.neither), false), (.future, false),
                                              (.recorded(.both), true), (.recorded(.one), true), (.recorded(.neither), true)]

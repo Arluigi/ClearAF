@@ -36,12 +36,10 @@ struct PasswordRecoveryView: View {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s22) {
                     LetterpressLabeledField(label: "New password", isEmpty: password.isEmpty) {
                         SecureField(text: $password, prompt: nil) { Text("New password") }
-                            .textContentType(.newPassword)
                             .accessibilityIdentifier("recoveryPassword")
                     }
                     LetterpressLabeledField(label: "Confirm password", isEmpty: confirmation.isEmpty) {
                         SecureField(text: $confirmation, prompt: nil) { Text("Confirm password") }
-                            .textContentType(.newPassword)
                             .accessibilityIdentifier("recoveryConfirmation")
                     }
                 }

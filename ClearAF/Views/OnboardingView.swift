@@ -76,6 +76,10 @@ struct OnboardingView: View {
     @State private var step: OnboardingStep = .routine
     @State private var userName = ""
     @State private var reminderDraft = ReminderPreferences()
+    /// Set when a reminder save completed without observably applying (stale ticket or a save already in flight in
+    /// `ReminderRepository.apply`, which returns early and leaves `state`/`preferences` untouched). `reminders.state`
+    /// alone can't detect this: it only becomes `.failed` on a thrown error, not on a silent no-op.
+    @State private var reminderAdvanceFailed = false
     let onboardingComplete: () -> Void
 
     private var busy: Bool { saveState.isSaving || reminders.state == .saving }
@@ -92,8 +96,11 @@ struct OnboardingView: View {
                     stepContent
                     if dynamicTypeSize.isAccessibilitySize {
                         actions.padding(.top, Letterpress.Space.s28)
+                        // Pinned outside the scroll area on regular text sizes (see the fixed bottom bar below);
+                        // it scrolls with content at accessibility sizes, same as the actions above.
+                        UrgentReportEntry(horizontalPadding: 0).padding(.top, Letterpress.Space.s44)
                     }
-                    footer.padding(.top, Letterpress.Space.s44)
+                    signOutButton.padding(.top, Letterpress.Space.s44)
                 }
                 .padding(.horizontal, Letterpress.Space.s22)
                 .padding(.top, Letterpress.Space.s28)
@@ -103,14 +110,19 @@ struct OnboardingView: View {
             }
             .id(step)
             if !dynamicTypeSize.isAccessibilitySize {
-                // Kept in view below the scroll area on regular text sizes; it scrolls with content at accessibility sizes.
-                actions
-                    .padding(.horizontal, Letterpress.Space.s22)
-                    .padding(.vertical, Letterpress.Space.s14)
-                    .frame(maxWidth: 600)
-                    .frame(maxWidth: .infinity)
-                    .background(Letterpress.canvas)
-                    .overlay(alignment: .top) { LetterpressRule() }
+                // Kept in view below the scroll area on regular text sizes; it scrolls with content at accessibility
+                // sizes. The urgent-report entry is the reaction-reporting path, so it stays pinned here too instead
+                // of resetting off-screen with the rest of the content each time `.id(step)` scrolls back to the top.
+                VStack(alignment: .leading, spacing: 0) {
+                    actions
+                        .padding(.horizontal, Letterpress.Space.s22)
+                        .padding(.vertical, Letterpress.Space.s14)
+                    UrgentReportEntry()
+                }
+                .frame(maxWidth: 600)
+                .frame(maxWidth: .infinity)
+                .background(Letterpress.canvas)
+                .overlay(alignment: .top) { LetterpressRule() }
             }
         }
         .background(Letterpress.canvas.ignoresSafeArea())
@@ -118,7 +130,10 @@ struct OnboardingView: View {
             if userName.isEmpty { userName = APIService.shared.currentUser?.name ?? "" }
         }
         .onChange(of: step) { _, newStep in
-            if newStep == .reminders { reminderDraft = reminders.preferences }
+            if newStep == .reminders {
+                reminderDraft = reminders.preferences
+                reminderAdvanceFailed = false
+            }
         }
     }
 
@@ -163,7 +178,7 @@ struct OnboardingView: View {
             intro(OnboardingCopy.remindersIntro)
             ReminderRows(draft: $reminderDraft)
                 .padding(.top, Letterpress.Space.s22)
-            if reminders.state == .failed {
+            if reminders.state == .failed || reminderAdvanceFailed {
                 message(OnboardingCopy.reminderFailure, isError: true)
             } else if reminders.state == .denied {
                 message(ReminderCopy.deniedHelp, isError: false)
@@ -252,14 +267,10 @@ struct OnboardingView: View {
         }
     }
 
-    /// The urgent-report entry owns its sheet, so the sheet closes when onboarding ends.
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
-            UrgentReportEntry(horizontalPadding: 0)
-            Button("Sign out") { APIService.shared.logout() }
-                .buttonStyle(.letterpress(.underline))
-                .disabled(busy)
-        }
+    private var signOutButton: some View {
+        Button("Sign out") { APIService.shared.logout() }
+            .buttonStyle(.letterpress(.underline))
+            .disabled(busy)
     }
 
     private func advance() {
@@ -269,9 +280,18 @@ struct OnboardingView: View {
                 step = .name
                 return
             }
+            reminderAdvanceFailed = false
+            let draft = reminderDraft
             Task { @MainActor in
-                await reminders.save(reminderDraft, ticket: ticket)
-                if reminders.state != .failed { step = .name }
+                await reminders.save(draft, ticket: ticket)
+                // Only advance once the save is observably applied: `reminders.preferences` must actually match
+                // what was submitted. `state != .failed` alone isn't enough — a stale ticket or a save already in
+                // flight makes `apply` return early without touching `state` or `preferences` at all.
+                if reminders.state != .failed, reminders.preferences == draft {
+                    step = .name
+                } else {
+                    reminderAdvanceFailed = true
+                }
             }
         case .name:
             completeOnboarding()

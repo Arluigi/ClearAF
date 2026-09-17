@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// A day in the completion calendar (spec §4.6): recorded state for today and earlier, future after today.
 enum CalendarCell: Equatable {
@@ -162,6 +163,31 @@ enum CalendarCellStyle {
     }
 }
 
+/// Grid metrics for the calendar's 7-column week (spec §8: 44pt floor, pinned per §4.1, never derived from padding).
+/// On narrow screens (iPhone SE/mini-class, 375pt) the standard 22pt gutter and 6pt column spacing squeeze cells to
+/// ~42pt; tighten both there so seven columns clear the floor without clipping or horizontal scrolling.
+enum CompletionCalendarGrid {
+    static let columns = 7
+    private static let narrowScreenWidth: CGFloat = 380
+
+    static func horizontalPadding(for screenWidth: CGFloat) -> CGFloat {
+        screenWidth <= narrowScreenWidth ? Letterpress.Space.s10 : Letterpress.Space.s22
+    }
+
+    static func columnSpacing(for screenWidth: CGFloat) -> CGFloat {
+        screenWidth <= narrowScreenWidth ? Letterpress.Space.s4 : Letterpress.Space.s6
+    }
+
+    /// The natural cell edge length at a given screen width, given the padding/spacing this type chooses.
+    /// `CalendarDayCell` also pins an explicit `Letterpress.minTouch` frame floor as a backstop.
+    static func cellWidth(for screenWidth: CGFloat) -> CGFloat {
+        let padding = horizontalPadding(for: screenWidth)
+        let spacing = columnSpacing(for: screenWidth)
+        let available = screenWidth - (2 * padding) - (CGFloat(columns - 1) * spacing)
+        return available / CGFloat(columns)
+    }
+}
+
 /// Completion calendar (spec §6 #8). Pushed from Plan: no tab bar, no bottom spacer.
 struct CompletionCalendarView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -204,7 +230,7 @@ struct CompletionCalendarView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Letterpress.Space.s22)
             }
-            .padding(.horizontal, Letterpress.Space.s22)
+            .padding(.horizontal, CompletionCalendarGrid.horizontalPadding(for: UIScreen.main.bounds.width))
             .padding(.top, Letterpress.Space.s10)
             .padding(.bottom, Letterpress.Space.s28)
             .frame(maxWidth: 600, alignment: .leading)
@@ -295,7 +321,11 @@ struct CompletionCalendarView: View {
 
     private func grid(dates: [String], cells: [CalendarCell]) -> some View {
         let firstWeekday = Calendar.current.firstWeekday
-        let columns = Array(repeating: GridItem(.flexible(), spacing: Letterpress.Space.s6), count: 7)
+        let spacing = CompletionCalendarGrid.columnSpacing(for: UIScreen.main.bounds.width)
+        let columns = Array(
+            repeating: GridItem(.flexible(minimum: Letterpress.minTouch), spacing: spacing),
+            count: CompletionCalendarGrid.columns
+        )
         return LazyVGrid(columns: columns, spacing: Letterpress.Space.s14) {
             ForEach(Array(CompletionCalendarCopy.weekdaySymbols(firstWeekday: firstWeekday, locale: .current).enumerated()), id: \.offset) { _, symbol in
                 Text(symbol)
@@ -420,6 +450,7 @@ private struct CalendarDayCell: View {
                 .padding(.bottom, isSplit ? Letterpress.Space.s4 : 0)
         }
         .aspectRatio(1, contentMode: .fit)
+        .frame(minWidth: Letterpress.minTouch, minHeight: Letterpress.minTouch)
         .frame(maxWidth: .infinity)
         .overlay {
             if isToday { Rectangle().strokeBorder(Letterpress.ink, lineWidth: CalendarCellStyle.todayOutline) }

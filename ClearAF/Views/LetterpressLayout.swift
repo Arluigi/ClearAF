@@ -32,10 +32,3 @@ extension Letterpress {
     static let fieldRuleEmptyOpacity: Double = 0.5
     static var fieldRuleEmpty: Color { ink.opacity(fieldRuleEmptyOpacity) }
 }
-
-extension View {
-    /// Square surface block for content a screen still groups. Rules replace most of these in PRs 3 and 6.
-    func letterpressSurface() -> some View {
-        padding(Letterpress.Space.s18).background(Letterpress.surface)
-    }
-}

@@ -5,7 +5,7 @@ import SwiftUI
 @testable import ClearAF
 
 struct AccountProfileTests {
-    @Test func onboardingRetryUsesTheSameSubmissionGateAsContinue() {
+    @Test func accountNameCanSubmitTrimsWhitespaceAndBlocksWhileSaving() {
         #expect(!AccountName.canSubmit(" ", isSaving: false))
         #expect(!AccountName.canSubmit("Valid Patient", isSaving: true))
         #expect(AccountName.canSubmit("  Valid Patient  ", isSaving: false))

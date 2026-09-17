@@ -147,7 +147,6 @@ struct AuthenticationView: View {
                             SecureField(text: $password, prompt: nil) { Text("Password") }
                         }
                     }
-                    .textContentType(isRegistering ? .newPassword : .password)
                     .accessibilityIdentifier("authPassword")
                     Button(showingPassword ? "Hide" : "Show") { showingPassword.toggle() }
                         .buttonStyle(.letterpress(.underline))
@@ -277,6 +276,7 @@ struct AuthenticationView: View {
         email = ""
         password = ""
         name = ""
+        information = ""
         failure = nil
         showingPassword = false
     }
