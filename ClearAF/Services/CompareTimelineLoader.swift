@@ -48,6 +48,8 @@ import Foundation
             state = .ready(checkedAt: checkedAt, stale: false)
         } catch {
             guard requestID == request else { return }
+            // Assumes the only 404 reachable here is a missing route (an API build that predates this
+            // endpoint); the endpoint itself never 404s for a valid pair, so any 404 is read as "unavailable".
             if case AccountFailure.requestFailed(404) = error { cache.removeValue(forKey: key); response = nil; state = .unavailable; return }
             if (try? access.require(ticket)) != nil, !(error is CancellationError), let cached = cache[key] {
                 response = cached.response
@@ -59,11 +61,18 @@ import Foundation
         }
     }
 
-    /// Drops the visible result (no pair, or an undated photo) and keeps answers already loaded.
+    /// Drops the visible result (no pair, or an undated photo) and keeps answers already loaded, except for
+    /// cache entries whose ticket no longer validates (signed out, or a different account signed in) — those
+    /// belong to an account this loader can no longer serve, so they're dropped rather than held indefinitely.
     func clear() {
         requestID = UUID()
         response = nil
         state = .idle
+        let current = access.snapshot()?.accountID.uuidString
+        cache = cache.filter { key, _ in
+            guard let current else { return false }
+            return key.hasPrefix("\(current)|")
+        }
     }
 
     func cancel() {

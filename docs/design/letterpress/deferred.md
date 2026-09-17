@@ -40,3 +40,10 @@ Drawn in the mockups, omitted from the build (owner decision 2026-09-17). Add ea
 | iOS Onboarding | "Everything you record is private until you share it" | Photos share with the assigned clinician after upload; the copy says so |
 | iOS Compare | "Share" | No way to share clinical photos outside the record; adding one is a data-handling change |
 | iOS Compare | "by Dr. Om" on routine changes | Revisions store the author's ID, not a name |
+
+## Deferred performance work
+
+Not a missing control — the behaviour ships, but a schema or service change (out of scope for the PR that found it) would make it scale better.
+
+- **Compare timeline query** (`backend/src/services/careSupport.ts`, `timeline()`): `known` (the routine revisions up to `to`) and the per-slot completion counts are materialised as rows and counted in application code rather than aggregated in SQL. Fine at today's volumes; worth an aggregate query if a patient's routine or completion history grows large.
+- **`CareFormResponse.submittedAt`** has no supporting index. The Compare timeline query filters `careFormResponse` on `submittedAt` (`where: {userId, submittedAt: {gt: from, lte: to}}`); without an index this is a full scan per request. Add one (with `userId`) if response volume or query latency ever warrants it.

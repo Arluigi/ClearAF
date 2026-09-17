@@ -3,7 +3,10 @@ import Testing
 @testable import ClearAF
 
 @MainActor struct CompareTimelineTests {
-    static let owner = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
+    // `nonisolated` because it's used as a default argument value below: default-argument expressions run in a
+    // nonisolated context, and Swift 6 warns on a main-actor-isolated reference there even though this is just
+    // a constant UUID literal.
+    nonisolated static let owner = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
 
     static func date(_ value: String) -> Date { RoutineDates.instant(value)! }
 
@@ -68,6 +71,26 @@ import Testing
         #expect(fake.calls == 4)
         loader.cancel()
         #expect(loader.state == .idle && loader.response?.days == nil)
+    }
+
+    /// `clear()` (called on every pair change, not just on disappear) drops cache entries belonging to an
+    /// account that is no longer the active one, so switching away and back doesn't quietly keep serving an
+    /// old, unvalidated cache entry indefinitely.
+    @Test func clearDropsCacheForAnAccountThatIsNoLongerActive() async {
+        let access = AccountAccess()
+        let fake = TimelineFake()
+        let checked = Date(timeIntervalSince1970: 1_789_000_000)
+        let loader = CompareTimelineLoader(access: access, transport: fake, now: { checked })
+        let from = Self.date("2026-09-02T07:04:00.000Z"), to = Self.date("2026-09-15T07:12:00.000Z")
+        let first = access.activate(Self.owner)
+        await loader.load(from: from, to: to, timeZone: .gmt, ticket: first)
+        #expect(loader.state == .ready(checkedAt: checked, stale: false))
+        #expect(fake.calls == 1)
+        _ = access.activate(UUID()) // a different account becomes active
+        loader.clear()
+        let again = access.activate(Self.owner) // the original account signs back in with a new ticket
+        await loader.load(from: from, to: to, timeZone: .gmt, ticket: again)
+        #expect(fake.calls == 2, "the cache entry from the account's earlier, no-longer-active ticket was dropped, not silently reused")
     }
 
     @Test func loaderRefusesLongRangesForeignRecordsAndReplacedTickets() async {

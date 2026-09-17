@@ -14,6 +14,10 @@ struct ProgressView: View {
     @State private var browsingLayout = PhotoRecordLayout.grid
     @State private var sharedCount: Int?
     @State private var capturing = false
+    /// Latched when the Compare segment is selected, from `store.total` at that instant — never read live
+    /// from `store.total` afterwards, so `store.dispose()` (fired on `onDisappear`, including the one SwiftUI
+    /// fires on the presenting view when a full-screen cover appears) can't flip presentation back off.
+    @State private var comparePresentable = false
 
     var body: some View {
         NavigationStack {
@@ -45,6 +49,7 @@ struct ProgressView: View {
             }
             .onChange(of: layout) { _, next in
                 if next != .compare { browsingLayout = next }
+                if next == .compare { comparePresentable = store.total >= 2 }
             }
             .onAppear { store.bind(context: viewContext) }
             .onDisappear { store.dispose(); reviews.cancel() }
@@ -76,6 +81,7 @@ struct ProgressView: View {
             }
         } else if PhotoRecordLayout.showsCompareEmpty(layout, total: store.total) {
             CompareEmptyState(total: store.total) { capturing = true }
+                .padding(.bottom, emptyStateBottomInset)
         } else if store.photos.isEmpty {
             VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                 Text("No photos yet")
@@ -89,6 +95,7 @@ struct ProgressView: View {
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
                     .padding(.top, Letterpress.Space.s6)
             }
+            .padding(.bottom, emptyStateBottomInset)
         } else {
             let groups = PhotoMonthGroup<SkinPhoto>.group(store.photos, date: { $0.captureDate })
             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
@@ -110,14 +117,24 @@ struct ProgressView: View {
         }
     }
 
+    /// Extra room below the empty states' filled button so it clears the floating tab bar at the largest
+    /// accessibility text sizes: the button's own content can grow tall enough that it lands in the gap
+    /// between the safe area this screen is given and the taller tab bar actually drawn there (screenshots
+    /// in the PR7 verification report). Standard sizes need none — the tab bar's normal safe area is enough.
+    private var emptyStateBottomInset: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? Letterpress.Space.s44 : 0
+    }
+
     private var columns: [GridItem] {
         let count = dynamicTypeSize.isAccessibilitySize ? 1 : 3
         return Array(repeating: GridItem(.flexible(), spacing: Letterpress.Space.s6, alignment: .top), count: count)
     }
 
     /// Compare is presented while its segment is selected; closing it returns the segment to Grid or List.
+    /// `comparePresentable` (not `store.total`) decides whether it can present, so `store.dispose()` never
+    /// dismisses the cover on its own — see the comment on `comparePresentable`.
     private var comparing: Binding<Bool> {
-        Binding(get: { PhotoRecordLayout.presentsCompare(layout, total: store.total, capturing: capturing) },
+        Binding(get: { PhotoRecordLayout.presentsCompare(layout, capturing: capturing, presentable: comparePresentable) },
                 set: { if !$0 { layout = browsingLayout } })
     }
 

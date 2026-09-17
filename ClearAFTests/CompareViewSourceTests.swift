@@ -49,4 +49,55 @@ struct CompareViewSourceTests {
         #expect(text.contains("timeline.cancel()"), "cancelled on disappear, the pattern other repositories use")
         #expect(text.contains("timeline.clear()"), "cleared when the ticket no longer matches the signed-in account")
     }
+
+    /// Regression: the timeline used to render `timeline.response` for the newly-picked pair before
+    /// `.task(id: timelineKey)` got around to reloading it, so the version line, date range and recorded-days
+    /// row could briefly describe the previous pair. `timeline.clear()` inside the existing `.onChange(of:
+    /// pair)` runs synchronously with the pair change, before the next render, so the stale response can never
+    /// be shown against the new pair.
+    @Test func timelineClearsSynchronouslyWhenThePairChanges() throws {
+        let text = try Self.source()
+        let onChange = try #require(text.range(of: ".onChange(of: pair)"))
+        let after = text[onChange.upperBound...].prefix(500)
+        #expect(after.contains("timeline.clear()"), "the pair's onChange clears the timeline before the next render, not only .task(id:)")
+    }
+
+    /// Regression: an empty sheet used to render when `strip.skinPhoto(for:)` returned nil (an object ID from
+    /// a torn-down context). The sheet must say the photo can't be opened instead of showing nothing.
+    @Test func detailSheetNamesAnUnreadablePhotoInsteadOfRenderingEmpty() throws {
+        let text = try Self.source()
+        let sheet = try #require(text.range(of: ".sheet(item: $detail)"))
+        let body = text[sheet.upperBound...].prefix(400)
+        #expect(body.contains("CompareCopy.photoUnreadable"), "a missing skin photo shows the unreadable-photo copy, not an empty sheet")
+    }
+
+    /// The strip's fetch is synchronous, so its `loading` flag is never observably true; the dead branch it
+    /// used to gate must be gone rather than left unreachable.
+    @Test func noDeadLoadingBranchRemains() throws {
+        let text = try Self.source()
+        #expect(!text.contains("strip.loading && strip.photos.isEmpty"), "the dead loading sentence branch was removed")
+        #expect(!text.contains("&& !strip.loading"), "the always-true loading guard was removed")
+    }
+
+    /// Every "Try again" button reads distinctly to VoiceOver, since a screen with several says the same word.
+    @Test func tryAgainButtonsHaveDistinctAccessibilityLabels() throws {
+        let text = try Self.source()
+        let labels = text.components(separatedBy: "Button(\"Try again\")").dropFirst().compactMap { chunk -> String? in
+            guard let range = chunk.range(of: #"\.accessibilityLabel\("([^"]+)"\)"#, options: .regularExpression) else { return nil }
+            return String(chunk[range])
+        }
+        #expect(labels.count == 4, "every \"Try again\" button carries an accessibilityLabel")
+        #expect(Set(labels).count == labels.count, "no two \"Try again\" buttons share the same accessibilityLabel")
+    }
+
+    /// The header (Done + "N days apart") and the flip caption (role + stamp) squeeze at accessibility sizes
+    /// unless they use the same `adaptiveRow` layout as the other comparable rows.
+    @Test func headerAndFlipCaptionUseAdaptiveRow() throws {
+        let text = try Self.source()
+        let header = try #require(text.range(of: "private var header: some View {"))
+        #expect(text[header.upperBound...].prefix(80).contains("adaptiveRow"), "the header uses adaptiveRow")
+        let flip = try #require(text.range(of: "private func flipStage(_ ordered: Ordered) -> some View {"))
+        let flipBody = text[flip.upperBound...].prefix(1500)
+        #expect(flipBody.contains("adaptiveRow"), "the flip caption uses adaptiveRow")
+    }
 }

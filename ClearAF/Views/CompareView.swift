@@ -53,7 +53,13 @@ struct ComparePhotosView: View {
             pickDefaultPair()
         }
         .onChange(of: strip.photos) { pickDefaultPair() }
-        .onChange(of: pair) { showingLater = true }
+        .onChange(of: pair) {
+            showingLater = true
+            // Clears synchronously, in the same update as the pair change, so the render that reflects the
+            // new pair never shows the previous pair's version line, date range or recorded-days row while
+            // `.task(id: timelineKey)` is still on its way to reloading them.
+            timeline.clear()
+        }
         .task(id: timelineKey) { await loadTimeline() }
         .onDisappear {
             strip.dispose()
@@ -62,6 +68,12 @@ struct ComparePhotosView: View {
         .sheet(item: $detail) { photo in
             if let skin = strip.skinPhoto(for: photo) {
                 PhotoDetailView(photo: skin, images: strip.stageImages)
+            } else {
+                Text(CompareCopy.photoUnreadable)
+                    .font(Letterpress.ui(15, relativeTo: .body))
+                    .foregroundStyle(Letterpress.inkSecondary)
+                    .padding(Letterpress.Space.s22)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -69,10 +81,9 @@ struct ComparePhotosView: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .center, spacing: Letterpress.Space.s10) {
+        adaptiveRow {
             Button("Done") { dismiss() }
                 .buttonStyle(.letterpress(.underline))
-            Spacer(minLength: Letterpress.Space.s10)
             if let ordered, let apart = CompareCopy.apart(ordered.earlier.captureDate, ordered.later.captureDate) {
                 Text(apart)
                     .font(Letterpress.data(11, weight: .medium, relativeTo: .caption))
@@ -106,8 +117,9 @@ struct ComparePhotosView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Try again") { strip.reload() }
                     .buttonStyle(.letterpress(.outlined))
+                    .accessibilityLabel("Retry loading photos")
             }
-        } else if strip.photos.count < 2 && !strip.loading {
+        } else if strip.photos.count < 2 {
             sentence(CompareCopy.emptySentence(total: strip.photos.count))
         } else {
             sentence(CompareCopy.pickTwo)
@@ -199,10 +211,9 @@ struct ComparePhotosView: View {
             .accessibilityHint(CompareCopy.flipHint)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { showingLater.toggle() }
-            HStack(alignment: .firstTextBaseline) {
+            adaptiveRow {
                 Text(showingLater ? CompareRole.later.label : CompareRole.earlier.label)
                     .letterpressEyebrow(color: Letterpress.ink)
-                Spacer(minLength: Letterpress.Space.s10)
                 stamp(shown)
             }
             sentence(CompareCopy.flipHelp)
@@ -248,9 +259,8 @@ struct ComparePhotosView: View {
     private var filmstrip: some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
             Text(CompareCopy.pickEyebrow).letterpressEyebrow()
-            if strip.loading && strip.photos.isEmpty {
-                sentence(CompareCopy.loadingPhotos)
-            }
+            // `strip.loadMore()`'s fetch is synchronous (a local Core Data read), so `strip.loading` is set
+            // and cleared within the same call and this view never observes it as `true`. No loading state here.
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: Letterpress.Space.s6) {
                     ForEach(strip.photos) { photo in
@@ -270,6 +280,7 @@ struct ComparePhotosView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Try again") { strip.loadMore() }
                     .buttonStyle(.letterpress(.outlined))
+                    .accessibilityLabel("Retry loading more photos")
             }
             sentence(CompareCopy.pickHelp)
         }
@@ -305,6 +316,7 @@ struct ComparePhotosView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Try again") { retry += 1 }
                     .buttonStyle(.letterpress(.outlined))
+                    .accessibilityLabel("Retry loading what changed in between")
             }
         case .ready(_, let stale):
             let rows = timeline.response.map { CompareTimeline.rows($0) } ?? []
@@ -319,6 +331,7 @@ struct ComparePhotosView: View {
                     Button("Try again") { retry += 1 }
                         .buttonStyle(.letterpress(.underline))
                         .padding(.top, Letterpress.Space.s6)
+                        .accessibilityLabel("Check what changed in between again")
                 }
             }
         }

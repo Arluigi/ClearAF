@@ -93,8 +93,12 @@ enum PhotoRecordCounts {
 
 /// Compare is Record's third segment (spec §4.3). It opens full screen only with two photos and never over the camera.
 extension PhotoRecordLayout {
-    static func presentsCompare(_ layout: PhotoRecordLayout, total: Int, capturing: Bool) -> Bool {
-        layout == .compare && total >= 2 && !capturing
+    /// `presentable` is latched by the caller when the Compare segment is selected, not read live from a store
+    /// total — a live total can be zeroed by an unrelated `dispose()` (e.g. the presenting view's `onDisappear`
+    /// firing as the full-screen cover itself appears), which would otherwise flip this back to `false` and
+    /// dismiss the cover in a loop without ever running the presentation binding's setter.
+    static func presentsCompare(_ layout: PhotoRecordLayout, capturing: Bool, presentable: Bool) -> Bool {
+        layout == .compare && presentable && !capturing
     }
 
     static func showsCompareEmpty(_ layout: PhotoRecordLayout, total: Int) -> Bool {
