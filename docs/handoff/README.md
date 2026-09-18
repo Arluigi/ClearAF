@@ -6,6 +6,8 @@ Prepared September 11, 2026. T2 implementation and verification are recorded in 
 
 Worklist release (Letterpress PR 4): [verification](../features/letterpress-worklist-verification.md). Workspace release (Letterpress PR 5): [verification](../features/letterpress-workspace-verification.md). Compare release (Letterpress PR 7): [verification](../features/letterpress-compare-verification.md).
 
+Distribution: [TestFlight readiness](testflight-readiness.md) records what Route A (direct install) and Route B (TestFlight) each need; the App Store hold is unchanged.
+
 Design update: Letterpress 1.0 replaces Care Journal ([design language](../design/design-language.md), [plan](../superpowers/plans/2026-09-17-letterpress-redesign.md)); it lands in eight PRs.
 
 Client expansion: see [client expansion](../features/client-expansion.md) for the September 2026 release plan (enrollment and safety, intake and orders, follow-up and renewal).
