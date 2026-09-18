@@ -1,7 +1,31 @@
 {
   "images" : [
     {
-      "filename" : "ChatGPT Image Jul 15, 2025, 11_40_24 PM (1).png",
+      "filename" : "AppIcon-light.png",
+      "idiom" : "universal",
+      "platform" : "ios",
+      "size" : "1024x1024"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "AppIcon-dark.png",
+      "idiom" : "universal",
+      "platform" : "ios",
+      "size" : "1024x1024"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "tinted"
+        }
+      ],
+      "filename" : "AppIcon-tinted.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
