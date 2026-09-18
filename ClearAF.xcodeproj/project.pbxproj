@@ -492,7 +492,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
 				INFOPLIST_FILE = "ClearAF/Config/Release-Info.plist";
-				PRODUCT_BUNDLE_IDENTIFIER = com.aryansachdev.ClearAF;
+				PRODUCT_BUNDLE_IDENTIFIER = com.clearaf.patient;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
