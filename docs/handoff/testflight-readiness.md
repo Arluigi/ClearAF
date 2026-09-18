@@ -19,7 +19,7 @@ Best for feedback over weeks, or more than a couple of testers.
 
 **Mechanics**
 
-1. An App Store Connect app record for `com.aryansachdev.ClearAF`, with a name, a primary category and an age rating.
+1. An App Store Connect app record for `com.clearaf.patient` (the Release bundle ID; Debug stays `com.aryansachdev.ClearAF.dev`), with a name, a primary category and an age rating.
 2. An archived Release build (`xcodebuild archive`, then export with an App Store distribution profile) uploaded via Xcode or `xcrun altool`.
 3. Export compliance answers. The app uses HTTPS only, which is normally the exemption, but it must be answered per build.
 4. Testers. **Internal** (up to 100, must be App Store Connect users on your team) get builds immediately, with no review. **External** (up to 10,000) need Apple's Beta App Review, usually a day or two, and a public or emailed invite link.
