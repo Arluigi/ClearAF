@@ -90,11 +90,12 @@ test('the workspace page is tabbed, URL-addressed, keeps visited tabs mounted an
   assert.doesNotMatch(read('src/components/patients/PatientRoutineCare.tsx'), /new RoutineCareController|CompletionCalendar|Recent completion events/);
 });
 
-test('sidebar is a 200px rail: Worklist, Messages, Templates, Account; Stethoscope only as the placeholder mark', () => {
+test('sidebar is a 200px rail: Worklist, Messages, Templates, Account; the lockup heads it', () => {
   const sidebar = read('src/components/layout/Sidebar.tsx');
   assert.match(sidebar, /w-\[200px\]/);
   assert.deepEqual([...sidebar.matchAll(/name: '([^']+)'/g)].map(match => match[1]), ['Worklist', 'Messages', 'Templates', 'Account']);
-  assert.equal((sidebar.match(/<Stethoscope/g) ?? []).length, 1);
+  assert.doesNotMatch(sidebar, /Stethoscope/);
+  assert.match(sidebar, /<Lockup height=\{LOCKUP_HEIGHT\.rail\}/);
 });
 
 test('eyebrow, mono metadata and the photo mat are defined once in globals.css', () => {

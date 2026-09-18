@@ -1,12 +1,14 @@
 import * as React from 'react';
 import type { ReactNode } from 'react';
+import { LOCKUP_HEIGHT } from '@/components/brand/geometry';
+import { Lockup } from '@/components/brand/Lockup';
 
 // Split sign-in layout (portal mockup "Portal login"): paper form column and an ink quote panel.
-// The wordmark is plain text until PR 8 ships the mark; `data-placeholder` marks it for replacement.
+// Lockup at H=27 (spec §10.6); the column padding keeps 0.5 × H clear around it.
 export default function AuthShell({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
   return <main className="flex min-h-screen bg-canvas text-ink">
     <div className="flex w-full flex-col px-6 py-8 sm:px-12 lg:w-1/2 lg:px-16">
-      <p data-placeholder="wordmark" className="font-display text-[22px] font-light tracking-[0.18em]">clear<span className="italic">af</span></p>
+      <Lockup height={LOCKUP_HEIGHT.signIn} className="text-ink" />
       <div className="flex flex-1 flex-col justify-center py-10">
         <div className="w-full max-w-sm space-y-6">
           <div className="space-y-2">
