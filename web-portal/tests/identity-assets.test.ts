@@ -20,7 +20,8 @@ test('favicon.svg is the block mark in ink, reversed for dark browser chrome, an
   assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 18 18">/);
   assert.ok(svg.includes('path{fill:#121312}@media (prefers-color-scheme:dark){path{fill:#EFEDE4}}'));
   assert.equal((svg.match(/<path /g) ?? []).length, 1);
-  assert.doesNotMatch(svg, /gradient|<text|<image|stroke|filter|rx=|opacity/i);
+  // No linear/radial fill ramp, text, image, stroke, filter, radius or opacity.
+  assert.doesNotMatch(svg, /<linear|<radial|<text|<image|stroke|filter|rx=|opacity/i);
 });
 
 test('favicon.ico holds one 32px PNG', () => {

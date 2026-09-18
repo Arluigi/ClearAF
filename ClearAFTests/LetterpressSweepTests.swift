@@ -6,21 +6,21 @@ struct LetterpressSweepTests {
     static let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     static let excluded: Set<String> = ["LetterpressSweepTests.swift"]
 
-    static func sources(in folders: [String]) throws -> [(path: String, text: String)] {
+    static func sources(in folders: [String], extensions: Set<String> = ["swift"]) throws -> [(path: String, text: String)] {
         var files: [(path: String, text: String)] = []
         for folder in folders {
             let root = repoRoot.appendingPathComponent(folder)
             guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { continue }
-            for case let url as URL in walker where url.pathExtension == "swift" && !excluded.contains(url.lastPathComponent) {
+            for case let url as URL in walker where extensions.contains(url.pathExtension) && !excluded.contains(url.lastPathComponent) {
                 files.append((url.path.replacingOccurrences(of: repoRoot.path + "/", with: ""), try String(contentsOf: url, encoding: .utf8)))
             }
         }
         return files
     }
 
-    static func offences(_ pattern: String, in folders: [String]) throws -> [String] {
+    static func offences(_ pattern: String, in folders: [String], extensions: Set<String> = ["swift"]) throws -> [String] {
         let regex = try NSRegularExpression(pattern: pattern)
-        return try sources(in: folders).flatMap { file in
+        return try sources(in: folders, extensions: extensions).flatMap { file in
             file.text.components(separatedBy: "\n").enumerated().compactMap { index, line in
                 regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) == nil
                     ? nil : "\(file.path):\(index + 1): \(line.trimmingCharacters(in: .whitespaces))"
@@ -49,5 +49,14 @@ struct LetterpressSweepTests {
     @Test func noRetiredDesignSystemNamesRemain() throws {
         let retired = #"\b(CareJournal\w*|careJournal\w*|primaryPurple|primaryActionPurple|primaryActionTeal|primaryTeal|skinPeach|calmBlue|gentleGreen|warmBeige|softLavender|retainedErrorText|textPrimary|textSecondary|textTertiary|backgroundPrimary|backgroundSecondary|backgroundTertiary|borderSubtle|cardBackground|buttonPrimary|buttonSecondary|buttonDisabled|primaryGradient|glowShadow|softShadow|mediumShadow|strongShadow|wellnessCard|WellnessCardModifier|clickableBackground|ClickableBackgroundModifier|StandardTextFieldModifier|score[A-Z]\w*|space(XXS|XS|SM|MD|LG|XL|XXL|Huge|Giant|Massive)|radius(Small|Medium|Large|XL|XXL|Pill)|display(Large|Medium|Small)|headline(Large|Medium|Small)|body(Large|Medium|Small)|caption(Large|Medium|Small)|dynamic(Title|Headline|Body)|touchTarget|TodayPhotoActionAppearance|RoutineActionAppearance)\b"#
         #expect(try Self.offences(retired, in: ["ClearAF", "ClearAFTests", "ClearAFUITests"]) == [])
+    }
+
+    @Test func noRetiredValuesInSwiftOrAssetCatalogs() throws {
+        let values = #"(?i)0B4D45|C2552F|gradient|glowShadow|skinPeach|calmBlue|gentleGreen|softLavender"#
+        #expect(try Self.offences(values, in: ["ClearAF", "ClearAFTests", "ClearAFUITests"], extensions: ["swift", "json"]) == [])
+    }
+
+    @Test func retiredIconGeneratorIsGone() {
+        #expect(!FileManager.default.fileExists(atPath: Self.repoRoot.appendingPathComponent("generate_icon.py").path))
     }
 }

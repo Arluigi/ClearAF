@@ -27,3 +27,12 @@ The build document is [`letterpress/spec.md`](letterpress/spec.md). Visual groun
 - Colours: iOS asset catalog `Letterpress/lp.*` with Any/Dark; portal RGB channel variables in `globals.css`, dark values under `prefers-color-scheme`.
 - Contrast pairs to avoid in dark mode: `ink.future` text on `sunk` (4.40) or `attention.wash` (4.06); `ink.tertiary` text on `attention.wash` (4.28).
 - Token tests: `web-portal/tests/letterpress-tokens.test.mjs`, `ClearAFTests/LetterpressTests.swift`.
+
+## Identity
+
+- The mark (spec §10) is drawn from code, not a font. `ClearAF/Views/Brand/LetterpressMarkGeometry.swift` and `web-portal/src/components/brand/geometry.ts` hold the construction; `web-portal/tests/brand-mark.test.ts` keeps them equal. The "af" is an outline extracted from `Newsreader16pt-LightItalic` by `swift scripts/brand/extract-glyphs.swift` (`--check` detects drift). The wordmark `clearaf` is live text.
+- Insets follow the approved specimen: measured from the inner edge of each rule, to the end of the "af" advance and the bottom of its line box. The 24–47 stroke band is capped at 1.5. Below H=16 the letters become a solid block (favicon only).
+- App icon (light, dark, tinted), `apple-touch-icon.png`, `favicon.ico` and `favicon.svg` are rendered by `scripts/brand/render-icons.sh` from the same geometry. Re-render rather than editing the PNGs.
+- Placements: portal rail H=25, portal sign-in H=27, iOS sign-in H=28, each with 0.5 × H clear. Components: `Mark`/`Lockup` (portal), `LetterpressMark`/`LetterpressLockup` (iOS).
+- Colour is the foreground (`currentColor`, `Letterpress.ink`), which reverses in dark mode. No ochre variant ships until something sets the mark on `attention.wash`.
+- `web-portal/tests/retired-tokens-repo.test.ts` enforces the §8 retired list across the repository. Records under `docs/design/letterpress`, `docs/design/archive`, `docs/superpowers`, `docs/features` and `docs/handoff` are exempt.

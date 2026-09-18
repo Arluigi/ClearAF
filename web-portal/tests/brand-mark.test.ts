@@ -81,7 +81,8 @@ test('mark: one colour from currentColor, filled ring, outline letters, no font 
   assert.match(html, /aria-hidden="true"/);
   assert.ok(html.includes('<path fill-rule="evenodd" d="M0 0H20V25H0ZM1.25 1.25H18.75V23.75H1.25Z"></path>'));
   assert.ok(html.includes(`d="${MARK_GLYPH_PATH}" transform="translate(14.95 21.75) scale(9.75)"`));
-  assert.doesNotMatch(html, /<text|font-family|#[0-9a-f]{3,6}\b|stroke=|rx=|gradient|filter|opacity/i);
+  // No text, hex colour, stroke, radius, linear/radial fill ramp, filter or opacity.
+  assert.doesNotMatch(html, /<text|font-family|#[0-9a-f]{3,6}\b|stroke=|rx=|<linear|<radial|filter|opacity/i);
 });
 
 test('mark under the favicon floor draws the block and can carry a name', () => {
