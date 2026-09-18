@@ -21,7 +21,7 @@ struct PasswordRecoveryView: View {
         let problem = RecoveryForm.problem(password: password, confirmation: confirmation)
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ClearAFWordmark()
+                LetterpressLockup(height: LetterpressLockup.signInHeight)
                     .padding(.top, Letterpress.Space.s28)
                 Text("Choose a new password")
                     .font(Letterpress.display(34, relativeTo: .largeTitle))

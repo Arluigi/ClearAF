@@ -5,9 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import AuthShell from '../src/components/layout/AuthShell';
 import { read } from './letterpress-rules';
 
-test('auth shell: wordmark placeholder, serif title, ink quote panel and the real session behaviour in mono', () => {
+test('auth shell: lockup, serif title, ink quote panel and the real session behaviour in mono', () => {
   const html = renderToStaticMarkup(h(AuthShell, { eyebrow: 'Clinician portal', title: 'Sign in' }, h('p', null, 'Form')));
-  assert.match(html, /data-placeholder="wordmark"/);
+  assert.match(html, /data-mark-height="27"/);
+  assert.match(html, /<span class="sr-only">ClearAF<\/span>/);
   assert.match(html, /<h1 class="[^"]*editorial-title[^"]*">Sign in<\/h1>/);
   assert.match(html, /class="meta-mono">Signed-in sessions stay in this browser until you sign out or the session is revoked</);
   assert.match(html, /class="[^"]*bg-ink[^"]*text-canvas/);

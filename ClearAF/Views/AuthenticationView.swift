@@ -45,21 +45,6 @@ enum AuthForm {
     }
 }
 
-/// Text wordmark until the identity PR ships the mark (spec §10.3: Newsreader 300, lowercase, 0.18em, italic "af").
-struct ClearAFWordmark: View {
-    static let size: CGFloat = 22
-    static let trackingEm: CGFloat = 0.18
-
-    var body: some View {
-        Text("clear\(Text("af").font(Letterpress.display(Self.size, italic: true, relativeTo: .title2)))")
-            .font(Letterpress.display(Self.size, relativeTo: .title2))
-            .tracking(Self.size * Self.trackingEm)
-            .foregroundStyle(Letterpress.ink)
-            .accessibilityLabel("ClearAF")
-            .accessibilityAddTraits(.isHeader)
-    }
-}
-
 /// Sign in and create account (spec §6 #1). Errors are inline and keep what was typed.
 struct AuthenticationView: View {
     @StateObject private var supabaseService = SupabaseService.shared
@@ -80,7 +65,7 @@ struct AuthenticationView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ClearAFWordmark()
+                LetterpressLockup(height: LetterpressLockup.signInHeight)
                     .padding(.top, Letterpress.Space.s28)
                 Text(AuthForm.title(registering: isRegistering))
                     .font(Letterpress.display(34, relativeTo: .largeTitle))

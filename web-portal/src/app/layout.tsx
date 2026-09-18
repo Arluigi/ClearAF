@@ -10,6 +10,10 @@ const plexMono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], dis
 export const metadata: Metadata = {
   title: "Clear AF - Dermatologist Portal",
   description: "Professional dermatology platform for patient management and care",
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 };
 
 export default function RootLayout({

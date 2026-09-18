@@ -38,9 +38,4 @@ struct AuthPresentationTests {
         #expect(RecoveryForm.problem(password: "long-enough", confirmation: "long-enougH") == "The two passwords don't match yet.")
         #expect(RecoveryForm.problem(password: "long-enough", confirmation: "long-enough") == nil)
     }
-
-    @Test func wordmarkFollowsTheLockupType() {
-        #expect(ClearAFWordmark.size == 22)
-        #expect(ClearAFWordmark.trackingEm == 0.18)
-    }
 }
