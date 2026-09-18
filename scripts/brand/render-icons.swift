@@ -22,8 +22,11 @@ struct RenderIcons {
     /// The favicon reproduces the 18px specimen: a 13px frame in an 18px square (letters become the block).
     static let faviconFrameRatio: CGFloat = 13.0 / 18.0
 
-    static func render(side: Int, mark: RGB, background: RGB?, frameRatio: CGFloat) -> CGImage {
-        let alpha: CGImageAlphaInfo = background == nil ? .premultipliedLast : .noneSkipLast
+    static func render(side: Int, mark: RGB, background: RGB?, frameRatio: CGFloat, usesBlock: Bool? = nil, forceAlpha: Bool = false) -> CGImage {
+        // `forceAlpha` renders an opaque image (every pixel alpha 255) as RGBA rather than RGB: Turbopack's
+        // ICO decoder (Rust `image`/`ico` crate) requires the embedded PNG to actually be RGBA, whatever bit
+        // count the header declares — a correctly-declared-but-still-RGB payload is rejected too.
+        let alpha: CGImageAlphaInfo = (background == nil || forceAlpha) ? .premultipliedLast : .noneSkipLast
         let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: alpha.rawValue)!
         let size = CGFloat(side)
@@ -35,7 +38,7 @@ struct RenderIcons {
         context.translateBy(x: 0, y: size)
         context.scaleBy(x: 1, y: -1)
         let placement = LetterpressMarkGeometry.iconPlacement(side: size, frameRatio: frameRatio)
-        context.addPath(LetterpressMarkGeometry.path(height: placement.height, origin: placement.origin))
+        context.addPath(LetterpressMarkGeometry.path(height: placement.height, origin: placement.origin, usesBlock: usesBlock))
         context.setFillColor(mark.cg)
         context.fillPath(using: .winding)
         return context.makeImage()!
@@ -54,10 +57,14 @@ struct RenderIcons {
         print("wrote \(path)")
     }
 
-    /// An .ico holding one 32px PNG (read by every current browser).
+    /// An .ico holding one 32px PNG (read by every current browser). The ICONDIRENTRY's declared bit count must
+    /// match the embedded PNG's actual colour type or strict decoders (Turbopack's Rust `image`/`ico` crate) reject
+    /// it outright: colour type 2 (RGB, no alpha) is 24bpp; colour type 6 (RGBA) is 32bpp.
     static func ico(_ png: Data) -> Data {
+        let colourType = png[25] // PNG IHDR: 8-byte signature + 4-byte length + 4-byte "IHDR" + 4 width + 4 height + 1 bit depth
+        let bitCount: UInt8 = colourType == 6 ? 32 : 24
         var data = Data([0, 0, 1, 0, 1, 0])
-        data.append(contentsOf: [32, 32, 0, 0, 1, 0, 32, 0])
+        data.append(contentsOf: [32, 32, 0, 0, 1, 0, bitCount, 0])
         withUnsafeBytes(of: UInt32(png.count).littleEndian) { data.append(contentsOf: $0) }
         withUnsafeBytes(of: UInt32(22).littleEndian) { data.append(contentsOf: $0) }
         data.append(png)
@@ -94,7 +101,10 @@ struct RenderIcons {
         try write(pngData(render(side: 1024, mark: inkDark, background: canvasDark, frameRatio: frame)), "\(appIcon)/AppIcon-dark.png")
         try write(pngData(render(side: 1024, mark: tintSource, background: nil, frameRatio: frame)), "\(appIcon)/AppIcon-tinted.png")
         try write(pngData(render(side: 180, mark: ink, background: canvas, frameRatio: frame)), "web-portal/public/apple-touch-icon.png")
-        try write(ico(pngData(render(side: 32, mark: ink, background: canvas, frameRatio: faviconFrameRatio))), "web-portal/src/app/favicon.ico")
+        // Force the block: at side 32 the frame height (~23px) clears blockBelowHeight, but §4a is explicit that
+        // small sizes show the solid block, not the letters, and favicon.svg (an 18-unit viewBox) already does.
+        // forceAlpha: true so the embedded PNG is genuinely RGBA (see render()'s comment on Turbopack's decoder).
+        try write(ico(pngData(render(side: 32, mark: ink, background: canvas, frameRatio: faviconFrameRatio, usesBlock: true, forceAlpha: true))), "web-portal/src/app/favicon.ico")
         try write(Data(faviconSVG().utf8), "web-portal/public/favicon.svg")
     }
 }

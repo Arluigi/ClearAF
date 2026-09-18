@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import AuthShell from '../src/components/layout/AuthShell';
 import { read } from './letterpress-rules';
 
-test('auth shell: wordmark placeholder, serif title, ink quote panel and the real session behaviour in mono', () => {
+test('auth shell: lockup, serif title, ink quote panel and the real session behaviour in mono', () => {
   const html = renderToStaticMarkup(h(AuthShell, { eyebrow: 'Clinician portal', title: 'Sign in' }, h('p', null, 'Form')));
   assert.match(html, /data-mark-height="27"/);
   assert.match(html, /<span class="sr-only">ClearAF<\/span>/);

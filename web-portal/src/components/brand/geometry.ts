@@ -12,7 +12,9 @@ export const MARK = {
   cornerRadius: 0,
   hairline: 0.75,
   midBandMaximum: 1.5,
-  blockBelowHeight: 16,
+  // Raised from 16 to 20 so there's no dead band above the 18px specimen where the monogram is mush
+  // (docs/design/design-language.md, Identity). Kept equal to LetterpressMarkGeometry.swift by brand-mark.test.ts.
+  blockBelowHeight: 20,
   blockSideRatio: 0.31,
   blockRightInsetRatio: 0.1,
   clearSpaceRatio: 0.5,

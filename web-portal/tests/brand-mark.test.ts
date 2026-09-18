@@ -53,7 +53,8 @@ test('monogram sits 0.19 × width and 0.08 × H inside the rules; small marks us
   near(favicon.block.side, 4.03);
   near(favicon.block.x, 4.58);
   near(favicon.block.y, 7.18);
-  assert.equal(markLayout(16).block, null);
+  assert.ok(markLayout(19).block, 'still below blockBelowHeight');
+  assert.equal(markLayout(20).block, null, 'blockBelowHeight itself draws letters');
 });
 
 test('lockup gap, clear space, wordmark size and the 96px minimum', () => {

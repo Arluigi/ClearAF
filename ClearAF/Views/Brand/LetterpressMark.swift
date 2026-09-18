@@ -32,6 +32,12 @@ struct LetterpressLockup: View {
                     .fixedSize()
             }
         }
+        // Fixed to Letterpress.ink (not the view's inherited foreground) because every current placement — portal
+        // rail, portal sign-in, iOS sign-in — sits on paper/canvas, and Letterpress.ink already reverses for dark
+        // mode via the asset catalog's Any/Dark pair. The portal's Mark/Lockup instead inherit `currentColor` from
+        // a `className`, because CSS has no equivalent of a colour-set asset to reverse automatically. A reversed
+        // placement on ink (e.g. an ochre wash or a dark plate) would need this lockup to take an explicit colour
+        // parameter instead of hardcoding Letterpress.ink; nothing in the current spec needs that yet.
         .foregroundStyle(Letterpress.ink)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("ClearAF")

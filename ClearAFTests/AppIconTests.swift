@@ -40,7 +40,10 @@ struct AppIconTests {
     }
 
     @Test func iconSetHoldsOnlyTheRenderedIcons() throws {
-        let names = try FileManager.default.contentsOfDirectory(atPath: Self.iconSet.path).sorted()
+        // Filtered to .png/.json so an incidental .DS_Store (Finder) doesn't fail this on a real Mac checkout.
+        let names = try FileManager.default.contentsOfDirectory(atPath: Self.iconSet.path)
+            .filter { $0.hasSuffix(".png") || $0.hasSuffix(".json") }
+            .sorted()
         #expect(names == ["AppIcon-dark.png", "AppIcon-light.png", "AppIcon-tinted.png", "Contents.json"])
     }
 

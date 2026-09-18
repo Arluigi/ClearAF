@@ -77,11 +77,23 @@ struct LetterpressMarkTests {
 
     @Test func marksUnderTheFaviconFloorBecomeASolidBlock() {
         #expect(G.usesBlock(height: 13))
-        #expect(!G.usesBlock(height: 16))
+        #expect(G.usesBlock(height: 19))
+        #expect(!G.usesBlock(height: 20))
         let block = G.block(height: 13)
         #expect(Self.near(block.width, 4.03) && Self.near(block.height, 4.03))
         #expect(Self.near(block.minX, 4.58))
         #expect(Self.near(block.minY, 7.18))
+    }
+
+    @Test func usesBlockOverrideForcesTheBlockRegardlessOfHeight() {
+        // The 32px favicon renders above blockBelowHeight but must still show the block (§4a); the .ico renderer
+        // passes usesBlock: true explicitly rather than relying on the size-derived rule.
+        let letters = G.path(height: 72)
+        let forcedBlock = G.path(height: 72, usesBlock: true)
+        #expect(!G.usesBlock(height: 72), "height 72 would draw letters by the default rule")
+        let center = CGPoint(x: G.block(height: 72).midX, y: G.block(height: 72).midY)
+        #expect(forcedBlock.contains(center, using: .winding), "forced block fills its own bounds")
+        #expect(letters != forcedBlock)
     }
 
     @Test func lockupSpacingAndMinimumWidth() {

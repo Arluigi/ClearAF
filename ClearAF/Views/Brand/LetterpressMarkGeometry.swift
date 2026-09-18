@@ -15,7 +15,9 @@ enum LetterpressMarkGeometry {
     /// The 24–47 band is 0.05 × H, held to the spec's stated 1.2–1.5px.
     static let midBandMaximum: CGFloat = 1.5
     /// Below this height the letters become a solid block (logo-directions §4a, 18px specimen).
-    static let blockBelowHeight: CGFloat = 16
+    /// Raised from 16 to 20 so there's no dead band above the 18px specimen where the monogram is mush
+    /// (docs/design/design-language.md, Identity).
+    static let blockBelowHeight: CGFloat = 20
     static let blockSideRatio: CGFloat = 0.31
     static let blockRightInsetRatio: CGFloat = 0.10
     static let clearSpaceRatio: CGFloat = 0.5
@@ -61,7 +63,10 @@ enum LetterpressMarkGeometry {
     }
 
     /// The whole mark as one path for a non-zero fill: frame ring (outer and inner wound in opposite directions) plus the letters.
-    static func path(height: CGFloat, origin: CGPoint = .zero) -> CGPath {
+    /// `usesBlock` overrides the size-derived rule (`Self.usesBlock(height:)`) when non-nil: the favicon renders
+    /// at a height above `blockBelowHeight` (its 32px .ico bitmap needs a large enough frame to read at all) but
+    /// still must show the approved block specimen, not a smear of "af" (logo-directions §4a).
+    static func path(height: CGFloat, origin: CGPoint = .zero, usesBlock: Bool? = nil) -> CGPath {
         let path = CGMutablePath()
         let w = width(height: height), s = stroke(height: height)
         let outer = CGRect(x: origin.x, y: origin.y, width: w, height: height)
@@ -76,7 +81,7 @@ enum LetterpressMarkGeometry {
         path.addLine(to: CGPoint(x: inner.maxX, y: inner.maxY))
         path.addLine(to: CGPoint(x: inner.maxX, y: inner.minY))
         path.closeSubpath()
-        if usesBlock(height: height) {
+        if usesBlock ?? Self.usesBlock(height: height) {
             path.addRect(block(height: height).offsetBy(dx: origin.x, dy: origin.y))
         } else {
             let anchor = monogramAnchor(height: height), size = monogramSize(height: height)
