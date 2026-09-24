@@ -1,23 +1,30 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { useRead } from '@/components/care-support/shared';
 import { useAuth, useClinicalAPI } from '@/lib/auth';
 import { sessionBoundary } from '@/lib/api';
 import { PhotoFeedbackController } from '@/lib/photo-feedback';
 import { PhotoHistoryController } from '@/lib/photo-history';
 import { PhotoReviewController } from '@/lib/photo-review';
 import { PrivateThumbnailController } from '@/lib/private-thumbnail';
+import { activeRoutineVersion, type RoutineCareState } from '@/lib/routine-care';
 import { comparePanes, defaultPair, firstName, replyTarget } from '@/lib/workspace';
+import { writtenDay } from '@/lib/worklist';
 import CareDecisionDialog from './CareDecisionDialog';
 import { PhotoCompareView } from './workspace/PhotoCompareView';
 import { PhotoReplyView } from './workspace/PhotoReplyView';
 import { PhotoStrip } from './workspace/PhotoStrip';
 
-export default function PatientPhotoHistory({ patientId, patientName, onCareDecision, rail }: { patientId: string; patientName: string; onCareDecision?: () => void; rail?: ReactNode }) {
+export default function PatientPhotoHistory({ patientId, patientName, routine, onCareDecision, rail }: { patientId: string; patientName: string; routine: RoutineCareState; onCareDecision?: () => void; rail?: ReactNode }) {
   const api = useClinicalAPI();
   const { user } = useAuth();
   const clinicianId = user?.id ?? '';
+  // The workspace rail's own data source: best-effort, so an unavailable check-in day just omits that quick-reply
+  // chip rather than blocking or guessing (see docs/design/design-language.md, "Clinician quick replies").
+  const checkInFetch = useCallback(() => api.getPatientResponses(patientId, 1), [api, patientId]);
+  const checkIns = useRead(checkInFetch);
   const history = useMemo(() => new PhotoHistoryController(page => api.getPatientPhotoSummaries(patientId, page, 12)), [api, patientId]);
   const thumbnails = useMemo(() => new PrivateThumbnailController((id, signal) => api.getPhotoThumbnail(id, signal)), [api]);
   const reviews = useMemo(() => new PhotoReviewController(ids => api.getPhotoReviewStatus(ids), id => api.markPhotoReviewed(id), (id, signal) => api.getPhotoOriginal(id, signal)), [api]);
@@ -73,6 +80,8 @@ export default function PatientPhotoHistory({ patientId, patientName, onCareDeci
   const replyPhoto = state.photos.find(photo => photo.id === reply.photoId) ?? null;
   const reviewed = replyPhoto ? Boolean(reviewState.reviews[replyPhoto.id]) : false;
   const name = firstName(patientName);
+  const latestCheckIn = checkIns.data?.data[0] ?? null;
+  const quickReplyContext = { activeVersion: activeRoutineVersion(routine), checkInDay: latestCheckIn ? writtenDay(latestCheckIn.submittedAt) : null };
   const refresh = () => { void history.load(state.page); };
 
   return <section aria-label="Patient photos" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -105,6 +114,7 @@ export default function PatientPhotoHistory({ patientId, patientName, onCareDeci
           reviewPending={replyPhoto ? Boolean(reviewState.pending[replyPhoto.id]) : false}
           reviewError={replyPhoto ? Boolean(reviewState.errors[replyPhoto.id]) : false}
           reviewUnavailable={reviewState.status !== 'ready'}
+          quickReplyContext={quickReplyContext}
           onEdit={text => feedback.edit(text)}
           onSubmit={() => void feedback.submit(reviewed || reviewState.status !== 'ready')}
           onNewDraft={() => feedback.newDraft()}

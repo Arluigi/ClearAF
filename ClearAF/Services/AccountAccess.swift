@@ -20,6 +20,7 @@ final class AccountAccess: @unchecked Sendable {
 
 enum AccountFailure: LocalizedError {
     case accountChanged, profileUnavailable, patientRequired, requestFailed(Int), enrollmentRequired, noAssignedClinician
+    case patientMessageLimit(nextAllowedAt: String?)
     var errorDescription: String? {
         switch self {
         case .enrollmentRequired: return "Finish your eligibility and consent steps to continue."
@@ -30,6 +31,7 @@ enum AccountFailure: LocalizedError {
         case .patientRequired: return "This app is for patient accounts. Clinicians should use the practice portal."
         case .requestFailed(let status):
             return status == 401 ? "Your session has ended. Please sign in again." : "The request could not be completed. Please try again."
+        case .patientMessageLimit: return "You've already sent this week's message."
         }
     }
 }
@@ -37,9 +39,11 @@ enum AccountFailure: LocalizedError {
 extension AccountFailure {
     /// Maps a non-2xx API response to the failure the app acts on, using the server's `code` when present.
     static func from(status: Int, body: Data) -> AccountFailure {
-        switch (try? JSONDecoder().decode(ErrorCode.self, from: body))?.code {
+        let decoded = try? JSONDecoder().decode(ErrorCode.self, from: body)
+        switch decoded?.code {
         case "ENROLLMENT_REQUIRED": return .enrollmentRequired
         case "NO_ASSIGNED_CLINICIAN": return .noAssignedClinician
+        case "PATIENT_MESSAGE_LIMIT": return .patientMessageLimit(nextAllowedAt: decoded?.nextAllowedAt)
         default: return .requestFailed(status)
         }
     }
@@ -49,5 +53,5 @@ extension AccountFailure {
         if case AccountFailure.requestFailed(let status) = error { return status == 408 || status == 429 || status >= 500 }
         return false
     }
-    private struct ErrorCode: Decodable { let code: String? }
+    private struct ErrorCode: Decodable { let code: String?; let nextAllowedAt: String? }
 }

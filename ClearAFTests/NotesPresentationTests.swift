@@ -45,4 +45,35 @@ struct NotesPresentationTests {
         #expect(NotesCopy.disabledSendReason == "Write a note to send")
         #expect(NotesCopy.unreadEyebrow(clinicianName: "Synthetic Clinician") == "Unread · Synthetic Clinician")
     }
+
+    @Test func limitSentenceRendersTheRealDateAndFallsBackWithoutOne() {
+        #expect(NotesCopy.limitSentence("2026-09-24T09:00:00.000Z", locale: Self.us, timeZone: Self.utc)
+                == "You've sent this week's message. You can write again from 24 Sep.")
+        #expect(NotesCopy.limitSentence(nil, locale: Self.us, timeZone: Self.utc)
+                == "You've sent this week's message. Check back soon.")
+        #expect(NotesCopy.limitSentence("not-a-date", locale: Self.us, timeZone: Self.utc)
+                == "You've sent this week's message. Check back soon.")
+        #expect(NotesCopy.limitReportPrompt == "Report a reaction any time")
+    }
+
+    @Test func missingLimitFieldDecodesAsCanSendAndBlockedStateDisablesComposing() throws {
+        let (patient, clinician) = (UUID(), UUID())
+        let withoutLimit = """
+        {"patientId":"\(patient.uuidString)","clinicianId":"\(clinician.uuidString)","patientName":null,\
+        "clinicianName":"Synthetic Clinician","lastMessage":null,"unreadCount":0}
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(AssignedConversation.self, from: withoutLimit)
+        #expect(decoded.limit == nil)
+        #expect(decoded.canSendMessage) // Older API with no `limit` field: treat missing as "can send".
+
+        let blocked = AssignedConversation(patientId: patient, clinicianId: clinician, patientName: nil,
+            clinicianName: "Synthetic Clinician", lastMessage: nil, unreadCount: 0,
+            limit: MessageLimit(canSend: false, nextAllowedAt: "2026-09-24T09:00:00.000Z", reason: "weekly"))
+        #expect(!blocked.canSendMessage)
+
+        let repliable = AssignedConversation(patientId: patient, clinicianId: clinician, patientName: nil,
+            clinicianName: "Synthetic Clinician", lastMessage: nil, unreadCount: 0,
+            limit: MessageLimit(canSend: true, nextAllowedAt: nil, reason: "reply-window"))
+        #expect(repliable.canSendMessage)
+    }
 }

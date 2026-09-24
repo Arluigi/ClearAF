@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth, useClinicalAPI } from '@/lib/auth';
 import { messageReference } from '@/lib/assigned-messaging';
 import { patientListContext, patientListQuery } from '@/lib/patient-navigation';
+import { activeRoutineVersion } from '@/lib/routine-care';
 import { TAB_LABEL, WORKSPACE_TABS, sinceLabel, workspaceHref, workspaceTab, type WorkspaceTab } from '@/lib/workspace';
 import type { User } from '@/types/api';
 
@@ -71,10 +72,10 @@ function Workspace() {
         <PatientUrgentReports key={'urgent-' + id} patientId={id} />
         <Tabs value={tab} onValueChange={value => openTab(value as WorkspaceTab)} activationMode="manual">
           <TabsList variant="underline" aria-label="Patient record">{WORKSPACE_TABS.map(value => <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>)}</TabsList>
-          {panel('photos', <PatientPhotoHistory key={'photos-' + id} patientId={id} patientName={patient.name} onCareDecision={() => setCareRefresh(value => value + 1)} rail={<CareRail patientId={id} routine={routine.state} onOpen={openTab} />} />)}
+          {panel('photos', <PatientPhotoHistory key={'photos-' + id} patientId={id} patientName={patient.name} routine={routine.state} onCareDecision={() => setCareRefresh(value => value + 1)} rail={<CareRail patientId={id} routine={routine.state} onOpen={openTab} />} />)}
           {panel('routine', <PatientRoutineCare patientId={id} patientName={patient.name} controller={routine.controller} state={routine.state} onFeedback={revisionId => openTab('messages', { referenceType: 'routineRevision', referenceId: revisionId })} />)}
           {panel('check-ins', <PatientCheckIns key={'check-ins-' + id} patientId={id} patientName={patient.name} onReply={() => openTab('messages')} />)}
-          {panel('messages', user ? <ConversationView key={'messages-' + id + '-' + user.id} patientId={id} clinicianId={user.id} initialReference={reference} onConversationChange={ignoreConversation} /> : null)}
+          {panel('messages', user ? <ConversationView key={'messages-' + id + '-' + user.id} patientId={id} clinicianId={user.id} initialReference={reference} onConversationChange={ignoreConversation} activeVersion={activeRoutineVersion(routine.state)} /> : null)}
           {panel('history', <div className="space-y-12">
             <CareStatusCard key={'care-' + id} patientId={id} refresh={careRefresh} />
             <CompletionCalendar key={'calendar-' + id} patientId={id} />

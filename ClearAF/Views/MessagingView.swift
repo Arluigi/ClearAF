@@ -25,6 +25,17 @@ enum NotesCopy {
     static func unreadHeader(_ count: Int) -> String? { count > 0 ? "\(count) unread" : nil }
     static let disabledSendReason = "Write a note to send"
     static func unreadEyebrow(clinicianName: String) -> String { "Unread · \(clinicianName)" }
+
+    /// Shown beneath a disabled composer once the weekly patient-started-message limit has been reached
+    /// (`AssignedConversation.canSendMessage == false`). Falls back to date-free copy if `nextAllowedAt` is
+    /// missing or unparseable, which should not happen but must never crash the compose screen.
+    static func limitSentence(_ nextAllowedAt: String?, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        guard let nextAllowedAt, let date = RoutineDates.instant(nextAllowedAt) else {
+            return "You've sent this week's message. Check back soon."
+        }
+        return "You've sent this week's message. You can write again from \(LetterpressFormat.dayMonth(date, locale: locale, timeZone: timeZone))."
+    }
+    static let limitReportPrompt = "Report a reaction any time"
 }
 
 /// Notes (spec §6 #10, §4.7): clinician words in the display serif with a 2pt ink rule, own replies in a sunk block,
@@ -34,6 +45,7 @@ struct MessagingView: View {
     @State private var selected: AssignedMessage?
     @State private var visible: Set<UUID> = []
     @State private var active = false
+    @State private var showingLimitReport = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -146,23 +158,36 @@ struct MessagingView: View {
     private var composer: some View {
         let content = repository.draft?.content ?? ""
         let isEmpty = content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let canSend = repository.conversation?.canSendMessage ?? true
         let stack = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: Letterpress.Space.s10))
             : AnyLayout(HStackLayout(alignment: .bottom, spacing: Letterpress.Space.s10))
         return VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
             LetterpressRule()
             stack {
+                // Stays visible but disabled once the weekly limit is hit, so the typed draft is never hidden or lost.
                 TextField("Write a note", text: Binding(get: { repository.draft?.content ?? "" }, set: { try? repository.edit($0) }), axis: .vertical)
                     .lineLimit(1...5)
                     .letterpressField(isEmpty: content.isEmpty)
-                    .disabled(repository.sending)
+                    .disabled(repository.sending || !canSend)
                 Button(NotesCopy.sendLabel(sending: repository.sending, attempted: repository.draft?.attempted == true)) {
                     Task { await repository.send() }
                 }
                 .buttonStyle(.letterpress(.filled))
-                .disabled(repository.sending || isEmpty)
+                .disabled(repository.sending || isEmpty || !canSend)
             }
-            if isEmpty && !repository.sending {
+            if !canSend {
+                VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
+                    Text(NotesCopy.limitSentence(repository.conversation?.limit?.nextAllowedAt))
+                        .font(Letterpress.ui(12, relativeTo: .caption))
+                        .foregroundStyle(Letterpress.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(NotesCopy.limitReportPrompt) { showingLimitReport = true }
+                        .buttonStyle(.letterpress(.underline))
+                        .accessibilityIdentifier("messagesLimitReport")
+                }
+                .accessibilityIdentifier("messagesLimitNotice")
+            } else if isEmpty && !repository.sending {
                 Text(NotesCopy.disabledSendReason)
                     .font(Letterpress.ui(12, relativeTo: .caption))
                     .foregroundStyle(Letterpress.inkSecondary)
@@ -180,6 +205,7 @@ struct MessagingView: View {
         }
         .padding(.horizontal, Letterpress.Space.s22)
         .padding(.bottom, Letterpress.Space.s10)
+        .sheet(isPresented: $showingLimitReport) { UrgentReportView() }
     }
 
     @ViewBuilder private var statusLines: some View {

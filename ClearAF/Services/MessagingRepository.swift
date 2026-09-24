@@ -7,10 +7,16 @@ struct AssignedMessage: Codable, Equatable, Identifiable {
     let recipientId: UUID; let recipientType: String; let content: String; let sentAt: String
     var unreadForMe: Bool; let reference: MessageReference?; let origin: String
 }
+/// Additive on `AssignedConversation`. `reason` mirrors the API's `'reply-window' | 'weekly'`, kept as a plain
+/// string (same convention as `MessageReference.type`) rather than an enum that would fail to decode a future value.
+struct MessageLimit: Codable, Equatable { let canSend: Bool; let nextAllowedAt: String?; let reason: String }
 struct AssignedConversation: Codable, Equatable {
     let patientId: UUID; let clinicianId: UUID; let patientName: String?; let clinicianName: String
     let lastMessage: AssignedMessage?; var unreadCount: Int
+    // Optional so an older API with no `limit` field decodes to `nil`; `canSendMessage` then treats that as "can send".
+    var limit: MessageLimit? = nil
     var path: String { "/assigned-messages/patients/\(patientId.uuidString.lowercased())/clinicians/\(clinicianId.uuidString.lowercased())" }
+    var canSendMessage: Bool { limit?.canSend ?? true }
     func matches(_ other: Self) -> Bool { patientId == other.patientId && clinicianId == other.clinicianId }
 }
 struct AssignedMessagePage: Decodable { let conversation: AssignedConversation; let messages: [AssignedMessage]; let nextCursor: String? }
@@ -115,7 +121,17 @@ struct MessageReferenceDetail: Decodable {
             let response = try await transport.putMessage(draft, ticket: ticket); try require(ticket, e)
             guard valid(response, pair: pair), response.id == draft.id, response.senderType == "patient", response.content == draft.content, response.reference == nil, response.origin == "native" else { throw RoutineFailure.invalidData }
             try save(nil); merge([response]); error = nil
-        } catch { if (try? require(ticket, e)) != nil { self.error = "Message was not confirmed. Your original message is saved. Retry explicitly when connected." } }
+        } catch {
+            if (try? require(ticket, e)) != nil {
+                // The limit state changed underneath (e.g. another device already sent this week's message):
+                // reflect the block and keep the typed draft — never lose what they wrote.
+                if case AccountFailure.patientMessageLimit(let nextAllowedAt) = error {
+                    conversation?.limit = MessageLimit(canSend: false, nextAllowedAt: nextAllowedAt, reason: "weekly")
+                } else {
+                    self.error = "Message was not confirmed. Your original message is saved. Retry explicitly when connected."
+                }
+            }
+        }
         if epoch == e { sending = false }
     }
     func acknowledgeVisible(_ ids: Set<UUID>) async {

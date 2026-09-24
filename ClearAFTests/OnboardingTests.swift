@@ -43,4 +43,27 @@ struct OnboardingTests {
         #expect(OnboardingCopy.primary(.name, remindersChanged: false, saving: false) == "Finish")
         #expect(OnboardingCopy.primary(.name, remindersChanged: false, saving: true) == "Saving…")
     }
+
+    /// The onboarding reminders step arrives pre-ticked so a patient opts out rather than in, but this must be a
+    /// property of onboarding's own starting draft only: `ReminderPreferences()` — what `ReminderSettingsView`
+    /// and existing accounts get — must stay off by default.
+    @Test func onboardingReminderDraftStartsEnabledButReminderPreferencesItselfDoesNot() {
+        let plain = ReminderPreferences()
+        #expect(!plain.morning.enabled); #expect(!plain.evening.enabled); #expect(!plain.photo.enabled)
+        #expect(!plain.anyEnabled)
+
+        let onboarding = ReminderPreferences.onboardingDefault
+        #expect(onboarding.morning.enabled); #expect(onboarding.evening.enabled); #expect(onboarding.photo.enabled)
+        #expect(onboarding.anyEnabled)
+        // Pre-ticked at the existing default times, not new ones.
+        #expect(onboarding.morning.hour == plain.morning.hour); #expect(onboarding.evening.hour == plain.evening.hour)
+        #expect(onboarding.photo.hour == plain.photo.hour); #expect(onboarding.weekday == plain.weekday)
+
+        // A patient who unticks everything ends up with the same value `ReminderPreferences()` accounts start
+        // with, so `remindersChanged` (`reminderDraft != reminders.preferences`) is false and no save fires —
+        // no silent re-enabling on a no-op continue.
+        var unticked = onboarding
+        unticked.morning.enabled = false; unticked.evening.enabled = false; unticked.photo.enabled = false
+        #expect(unticked == plain)
+    }
 }

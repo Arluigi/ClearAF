@@ -69,13 +69,24 @@ enum OnboardingCopy {
     }
 }
 
+extension ReminderPreferences {
+    /// Onboarding's reminders step arrives with morning, evening and photo pre-ticked at their existing default
+    /// times, so a patient opts out rather than in. `ReminderPreferences()` itself still defaults to everything
+    /// off — `ReminderSettingsView` and existing accounts must be unaffected.
+    static var onboardingDefault: ReminderPreferences {
+        var value = ReminderPreferences()
+        value.morning.enabled = true; value.evening.enabled = true; value.photo.enabled = true
+        return value
+    }
+}
+
 struct OnboardingView: View {
     @StateObject private var saveState = AccountSaveState()
     @ObservedObject private var reminders = APIService.shared.reminders
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var step: OnboardingStep = .routine
     @State private var userName = ""
-    @State private var reminderDraft = ReminderPreferences()
+    @State private var reminderDraft = ReminderPreferences.onboardingDefault
     /// Set when a reminder save completed without observably applying (stale ticket or a save already in flight in
     /// `ReminderRepository.apply`, which returns early and leaves `state`/`preferences` untouched). `reminders.state`
     /// alone can't detect this: it only becomes `.failed` on a thrown error, not on a silent no-op.
@@ -131,7 +142,11 @@ struct OnboardingView: View {
         }
         .onChange(of: step) { _, newStep in
             if newStep == .reminders {
-                reminderDraft = reminders.preferences
+                // Only pull in the repository's preferences once the account genuinely has some saved — a fresh
+                // account's `preferences` is the untouched `ReminderPreferences()` default, and overwriting with
+                // it here would silently clobber the pre-ticked onboarding draft (or a patient's own unticking)
+                // every time this step is revisited, before anything has actually been saved.
+                if reminders.preferences.anyEnabled { reminderDraft = reminders.preferences }
                 reminderAdvanceFailed = false
             }
         }

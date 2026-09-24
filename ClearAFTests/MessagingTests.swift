@@ -101,6 +101,22 @@ import Testing
         try repo.resume(ticket); transport.onFetch = { access.invalidate(); repo.cancel() }
         await repo.openCurrent(); #expect(repo.messages.isEmpty); #expect(repo.conversation == nil)
     }
+    /// The limit state can change underneath a send already in flight (e.g. another device sent first). The
+    /// composer must fall back to the disabled, date-shown state and the typed draft must survive — never lost.
+    @Test func sendBlockedByLimitDisablesComposingAndKeepsTheTypedDraft() async throws {
+        let access = AccountAccess(); let ticket = access.activate(UUID()); let transport = MessagingFake(patient: ticket.accountID)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repo = MessagingRepository(access: access, transport: transport, directory: directory)
+        try repo.resume(ticket); await repo.openCurrent(); try repo.edit("still writing this")
+        #expect(repo.conversation?.canSendMessage == true)
+        transport.limitError = "2026-09-24T09:00:00.000Z"
+        await repo.send()
+        #expect(repo.conversation?.canSendMessage == false)
+        #expect(repo.conversation?.limit?.nextAllowedAt == "2026-09-24T09:00:00.000Z")
+        #expect(repo.draft?.content == "still writing this") // Never lost.
+        #expect(repo.error == nil)
+    }
 }
 @MainActor private final class MessagingFake: MessagingTransport {
     let pair: AssignedConversation
@@ -110,6 +126,7 @@ import Testing
     var readContinuations: [CheckedContinuation<MessageReadResponse, any Error>] = []
     var currentOverride: AssignedConversation?; var wrongResponse = false
     var failSend = true; var sentIDs: [UUID] = []; var acked: [UUID] = []; var onFetch: (() -> Void)?
+    var limitError: String?
     init(patient: UUID) {
         let clinician = UUID()
         pair = AssignedConversation(patientId: patient, clinicianId: clinician, patientName: nil, clinicianName: "Dr Test", lastMessage: nil, unreadCount: 2)
@@ -121,7 +138,9 @@ import Testing
         onFetch?(); requestedCursors.append(before); if let pageOverride { return pageOverride }; return AssignedMessagePage(conversation: pair, messages: before == nil ? [newest] : [oldest], nextCursor: before == nil ? "older" : nil)
     }
     func putMessage(_ draft: MessageDraft, ticket: AccountAccess.Ticket) async throws -> AssignedMessage {
-        sentIDs.append(draft.id); if failSend { throw URLError(.networkConnectionLost) }
+        sentIDs.append(draft.id)
+        if let limitError { throw AccountFailure.patientMessageLimit(nextAllowedAt: limitError) }
+        if failSend { throw URLError(.networkConnectionLost) }
         return AssignedMessage(id: wrongResponse ? UUID() : draft.id, patientId: pair.patientId, clinicianId: pair.clinicianId, senderId: pair.patientId, senderType: "patient", recipientId: pair.clinicianId, recipientType: "dermatologist", content: draft.content, sentAt: "2026-09-13T13:00:00.000Z", unreadForMe: false, reference: nil, origin: "native")
     }
     func readMessages(pair: AssignedConversation, ids: [UUID], ticket: AccountAccess.Ticket) async throws -> MessageReadResponse {

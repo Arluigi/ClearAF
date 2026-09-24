@@ -20,6 +20,8 @@ export const localDateOf = (date: Date) => `${date.getFullYear()}-${pad(date.get
 export const clock = (date: Date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 /** `02 SEP` */
 export const day = (iso: string) => { const date = new Date(iso); return `${pad(date.getDate())} ${MONTHS[date.getMonth()]}`; };
+/** Patient-facing date per spec §7: `2 Sep`, not the clinician mono stamp. */
+export const writtenDay = (iso: string) => { const date = new Date(iso); return `${date.getDate()} ${MONTH_NAMES[date.getMonth()].slice(0, 3)}`; };
 /** `02 SEP · 07:04` */
 export const stamp = (iso: string) => `${day(iso)} · ${clock(new Date(iso))}`;
 /** `Wednesday 16 September · 08:40` (rendered as an uppercase eyebrow) */

@@ -9,8 +9,9 @@ import { PhotoReplyView } from '../src/components/patients/workspace/PhotoReplyV
 import { CareRailView } from '../src/components/patients/workspace/CareRailView';
 import type { PhotoSummary } from '../src/types/api';
 import type { FeedbackState } from '../src/lib/photo-feedback';
-import type { RoutineCareState } from '../src/lib/routine-care';
+import { activeRoutineVersion, type RoutineCareState } from '../src/lib/routine-care';
 import type { CheckInResponse } from '../src/lib/care-support';
+import type { QuickReplyContext } from '../src/lib/quick-replies';
 import { read } from './letterpress-rules';
 
 const photo = (id: string, captureDate: string, notes?: string): PhotoSummary => ({ id, userId: 'p', skinScore: 0, captureDate, createdAt: captureDate, updatedAt: captureDate, notes });
@@ -87,10 +88,12 @@ test('photo strip: every toggle is disabled while a reply send/mark is frozen, e
 });
 
 const feedback = (over: Partial<FeedbackState> = {}): FeedbackState => ({ text: 'Keep going', photoId: 'late', status: 'draft', reviewed: false, ...over });
-const reply = (over: Partial<FeedbackState> = {}, isReviewed = false, target: PhotoSummary | null = photos[0], extra: { reviewPending?: boolean; reviewUnavailable?: boolean } = {}) => renderToStaticMarkup(h(PhotoReplyView, {
+const noContext: QuickReplyContext = { activeVersion: null, checkInDay: null };
+const reply = (over: Partial<FeedbackState> = {}, isReviewed = false, target: PhotoSummary | null = photos[0], extra: { reviewPending?: boolean; reviewUnavailable?: boolean; quickReplyContext?: QuickReplyContext } = {}) => renderToStaticMarkup(h(PhotoReplyView, {
   patientFirstName: 'Ada', target, feedback: feedback(over),
   frozen: ['sending', 'marking', 'send-failed', 'mark-failed'].includes(over.status ?? 'draft'),
   reviewed: isReviewed, reviewPending: extra.reviewPending ?? false, reviewError: false, reviewUnavailable: extra.reviewUnavailable ?? false,
+  quickReplyContext: extra.quickReplyContext ?? noContext,
   onEdit: noop, onSubmit: noop, onNewDraft: noop, onLeaveUnreviewed: noop, onMarkOnly: noop, onCareDecision: noop,
 }));
 
@@ -155,6 +158,22 @@ test('care rail keeps the current routine and the latest check-in in view', () =
   assert.match(html, /Missed doses[\s\S]*Not answered/);
   assert.equal(filled(html), 0);
   assert.match(renderToStaticMarkup(h(CareRailView, { routine: routineState(), latest: null, checkInStatus: 'ready', onRetry: noop, onOpen: noop })), /No check-ins submitted yet\./);
+});
+
+test('reply: quick-reply chips sit above the textarea, fill rather than send, and omit a chip whose token is unavailable', () => {
+  const context: QuickReplyContext = { activeVersion: activeRoutineVersion(routineState()), checkInDay: '14 Sep' };
+  const html = reply({}, false, photos[0], { quickReplyContext: context });
+  assert.match(html, /Reviewed — no change to your routine\. Keep it up!/);
+  assert.match(html, /Reviewed\. Stay with v4 as written — you&#x27;re doing the right things\./);
+  assert.match(html, /Photos are coming through clearly\. Keep them coming!/);
+  assert.match(html, /Recorded\. Next check-in is 14 Sep — see you then\./);
+  assert.match(html, /Reviewed\. Could I get a closer photo in better light next time\?/);
+  assert.equal((html.match(/<button[^>]*type="button"/g) ?? []).length >= 6, true); // 5 chips + at least one action button
+  assert.equal(filled(html), 1); // still exactly one filled action (Send & mark reviewed); chips are outlined
+  const omitted = reply({}, false, photos[0], { quickReplyContext: noContext });
+  assert.doesNotMatch(omitted, /Stay with v/);
+  assert.doesNotMatch(omitted, /Next check-in is/);
+  assert.match(omitted, /Reviewed — no change to your routine\. Keep it up!/);
 });
 
 test('the photos tab has no viewing dialogs; compare is the default and replies go through the feedback controller', () => {
