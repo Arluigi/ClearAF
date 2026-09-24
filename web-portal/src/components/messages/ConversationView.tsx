@@ -21,6 +21,7 @@ import { stamp } from "@/lib/worklist";
 import type { PhotoSummary } from "@/types/api";
 import { MessageTurn } from "./MessageTurn";
 import PhotoReferencePicker from "./PhotoReferencePicker";
+import { QuickReplyChips } from "./QuickReplyChips";
 
 function VisibleTurn({
   message,
@@ -140,12 +141,18 @@ export default function ConversationView({
   initialReference,
   onConversationChange,
   recordHref,
+  activeVersion = null,
 }: {
   patientId: string;
   clinicianId: string;
   initialReference: MessageReference | null;
   onConversationChange: (conversation: Conversation) => void;
   recordHref?: string;
+  // The routine controller's version, when the caller already has it mounted (the patient workspace's Messages
+  // tab). The standalone Messages page has no routine controller on the page, so it stays null there — the
+  // check-in day is never available here either way (only the workspace rail on the Photos tab has it), so a
+  // quick reply needing either token is simply omitted rather than guessed.
+  activeVersion?: number | null;
 }) {
   const api = useClinicalAPI();
   const source = useMemo(() => ({ api, controller: new ConversationController(patientId, clinicianId) }), [api, patientId, clinicianId]);
@@ -237,6 +244,7 @@ export default function ConversationView({
           </div>
         )}
         <Label htmlFor={composer} className="block">Message</Label>
+        <QuickReplyChips context={{ activeVersion, checkInDay: null }} text={state.text} disabled={controller.frozen} onFill={value => controller.edit(value)} />
         <Textarea
           id={composer}
           className="min-h-28"

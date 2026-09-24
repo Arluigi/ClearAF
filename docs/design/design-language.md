@@ -15,6 +15,10 @@ The build document is [`letterpress/spec.md`](letterpress/spec.md). Visual groun
 5. Radii 0 · 4 · 26 · 999 only. Glass only on floating iOS chrome and sheets; never on the portal.
 6. No scores, streaks, grades, targets, celebrations, emoji or promised outcomes.
 
+## Clinician quick replies — exception to spec §7
+
+The quick-reply chips above the photo-reply box and the message composer (`web-portal/src/lib/quick-replies.ts`) are the one place spec §7 (sentence case, no exclamation marks, no motivational copy) is deliberately not followed: their approved copy may carry brief encouragement, but only after a factual clause ("Reviewed — no change to your routine. Keep it up!"). They never assess the skin — no "looking great," no grading — an assessment stays something the clinician types by hand. This exception is scoped to those five approved strings only; every other screen keeps §7 as written.
+
 ## Project decisions (2026-09-17)
 
 - Controls with no backing capability are omitted until built; see [`letterpress/deferred.md`](letterpress/deferred.md).

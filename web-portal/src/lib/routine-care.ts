@@ -430,6 +430,21 @@ export function draftChanges(routine: RoutineRevision | null, draft: RoutineDraf
   return { name, active, steps, removed, count };
 }
 
+/**
+ * The single version number a quick reply can honestly say "v{n}" about. Morning and evening are versioned
+ * independently, so this only resolves when every currently-active slot agrees on one version — one assigned
+ * slot, or two assigned slots at the same version. Anything else (nothing assigned, or slots at different
+ * versions) is genuinely ambiguous and returns null so the caller omits the chip rather than guessing.
+ */
+export function activeRoutineVersion(state: RoutineCareState): number | null {
+  const versions = (['morning', 'evening'] as const)
+    .map(slot => state.slots[slot].routine)
+    .filter((routine): routine is RoutineRevision => routine !== null && routine.isActive)
+    .map(routine => routine.version);
+  const unique = [...new Set(versions)];
+  return unique.length === 1 ? unique[0] : null;
+}
+
 export function slotBadges(editor: RoutineEditorState): { label: string; variant: 'outline' | 'secondary' }[] {
   const routine = editor.routine;
   const badges: { label: string; variant: 'outline' | 'secondary' }[] = [

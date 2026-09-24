@@ -3,7 +3,9 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { QuickReplyChips } from '@/components/messages/QuickReplyChips';
 import type { FeedbackState } from '@/lib/photo-feedback';
+import type { QuickReplyContext } from '@/lib/quick-replies';
 import { day } from '@/lib/worklist';
 import type { PhotoSummary } from '@/types/api';
 
@@ -17,9 +19,9 @@ const submitLabel = (status: FeedbackState['status'], reviewed: boolean, reviewU
         : status === 'mark-failed' ? 'Retry marking reviewed'
           : (reviewed || reviewUnavailable) ? 'Send reply' : 'Send & mark reviewed';
 
-export function PhotoReplyView({ patientFirstName, target, feedback, frozen, reviewed, reviewPending, reviewError, reviewUnavailable, onEdit, onSubmit, onNewDraft, onLeaveUnreviewed, onMarkOnly, onCareDecision }: {
+export function PhotoReplyView({ patientFirstName, target, feedback, frozen, reviewed, reviewPending, reviewError, reviewUnavailable, quickReplyContext, onEdit, onSubmit, onNewDraft, onLeaveUnreviewed, onMarkOnly, onCareDecision }: {
   patientFirstName: string; target: PhotoSummary | null; feedback: FeedbackState; frozen: boolean; reviewed: boolean;
-  reviewPending: boolean; reviewError: boolean; reviewUnavailable: boolean; onEdit: (text: string) => void; onSubmit: () => void; onNewDraft: () => void;
+  reviewPending: boolean; reviewError: boolean; reviewUnavailable: boolean; quickReplyContext: QuickReplyContext; onEdit: (text: string) => void; onSubmit: () => void; onNewDraft: () => void;
   onLeaveUnreviewed: () => void; onMarkOnly: () => void; onCareDecision: () => void;
 }) {
   const { status, text } = feedback;
@@ -34,6 +36,7 @@ export function PhotoReplyView({ patientFirstName, target, feedback, frozen, rev
       <p className="max-w-prose whitespace-pre-wrap break-words font-display text-lg font-light">“{target.notes}”</p>
     </div>}
     <Label htmlFor="photo-reply" className="block">Reply about this photo</Label>
+    <QuickReplyChips context={quickReplyContext} text={text} disabled={frozen || !target} onFill={onEdit} />
     <Textarea id="photo-reply" className="min-h-28" maxLength={4000} value={text} disabled={frozen || !target} placeholder={`Write to ${patientFirstName || 'the patient'}…`} onChange={event => onEdit(event.target.value)} />
     <div className="flex flex-wrap items-center gap-3">
       <Button type="button" disabled={!canSubmit} onClick={onSubmit}>{submitLabel(status, reviewed, reviewUnavailable)}</Button>
