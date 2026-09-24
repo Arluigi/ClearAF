@@ -7,6 +7,10 @@ interface AppError extends Error {
   code?: string;
 }
 
+// Explicit allow-list of extra error detail fields safe to forward to the client. Add to this only
+// for machine-readable, non-sensitive details (never message content, tokens or internal identifiers).
+const ALLOWED_ERROR_DETAILS = ['nextAllowedAt'] as const;
+
 export const errorHandler = (
   error: AppError,
   req: Request,
@@ -55,11 +59,18 @@ export const errorHandler = (
     });
   }
 
-  // Custom app errors
+  // Custom app errors. Only an explicitly allow-listed set of extra detail fields (e.g. the
+  // machine-readable `nextAllowedAt`) is forwarded; anything else attached to the error is dropped.
   if (error.statusCode) {
+    const details = Object.fromEntries(
+      ALLOWED_ERROR_DETAILS
+        .filter(key => key in error)
+        .map(key => [key, (error as unknown as Record<string, unknown>)[key]])
+    );
     return res.status(error.statusCode).json({
       error: error.message,
-      code: error.code || 'APP_ERROR'
+      code: error.code || 'APP_ERROR',
+      ...details
     });
   }
 

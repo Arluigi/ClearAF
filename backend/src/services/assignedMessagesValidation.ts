@@ -1,4 +1,6 @@
 import {z} from 'zod';
+export const MESSAGE_LIMIT_WINDOW_DAYS=7;
+export const MESSAGE_LIMIT_WINDOW_MS=MESSAGE_LIMIT_WINDOW_DAYS*86_400_000;
 export const uuid=z.string().uuid().transform(v=>v.toLowerCase());
 export const referenceInput=z.object({type:z.enum(['photo','routineRevision']),id:uuid}).strict();
 export const messageInput=z.object({content:z.string().trim().min(1).max(4000),reference:referenceInput.nullable()}).strict();
