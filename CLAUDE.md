@@ -28,7 +28,7 @@ This machine is set up with skills, plugins, agents and CLIs for this stack. Use
 
 ## Layout
 
-- `ClearAF/` - SwiftUI app (iOS 17+). `Services/*Repository.swift` call the API; `Config/` selects endpoints (Debug = local stack, app ID `com.aryansachdev.ClearAF.dev`; Release = production, `com.aryansachdev.ClearAF`). Tests: `ClearAFTests/`, `ClearAFUITests/`.
+- `ClearAF/` - SwiftUI app (iOS 17+). `Services/*Repository.swift` call the API; `Config/` selects endpoints (Debug = local stack, app ID `com.aryansachdev.ClearAF.dev`; Release = production, `com.clearaf.patient`). Tests: `ClearAFTests/`, `ClearAFUITests/`.
 - `backend/` - Express + TypeScript, deployed to Vercel project `clearaf-api`. `src/routes/` are thin; logic and zod validation live in `src/services/`; `src/middleware/auth.ts` verifies the Supabase session and resolves roles from the database. Prisma is used as a **query client only**.
 - `web-portal/` - Next.js 15 App Router, React 19, Tailwind, shadcn/ui. Vercel project `clearaf-portal`, auto-deploys from `main`. Per-feature API code in `src/lib/*.ts`; shared types in `src/types/api.ts`.
 - `supabase/migrations/` - the only active migration chain. `supabase/legacy-migrations/` is archived and must never be replayed.
