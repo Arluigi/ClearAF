@@ -1,5 +1,7 @@
 # New-laptop handoff
 
+September 25 session record: [Letterpress 1.0, distribution prep and the clinician feedback round](2026-09-25-session.md) — what shipped, where to pick up, and the machine gotchas (one xcodebuild at a time; the axe tap channel and Simulator photo picker are broken here).
+
 September 13 update: PRs #1–5 are merged; T0–T4 are complete with the documented T4 limitations. The hosted routine migration and API are deployed, and the physical Release app passed the synthetic phone/portal demo. See [demo release and reinstall instructions](../mvp/release-2026-09-13.md), [MVP verification](../mvp/README.md), and [new-Mac verification](2026-09-12-new-mac.md). T5 pilot readiness remains separate; distribution is on hold. Historical stacked-branch and no-deployment statements below describe the September 11 transfer snapshot.
 
 Prepared September 11, 2026. T2 implementation and verification are recorded in the [account reliability report](../accounts/README.md). No T2 production deployment occurred. See the [T2 plan](../superpowers/plans/2026-09-10-account-reliability.md), [baseline and recovery procedure](../baseline/README.md), and [security notes](../security/README.md).
