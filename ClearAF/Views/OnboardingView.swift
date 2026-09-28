@@ -88,7 +88,8 @@ struct OnboardingView: View {
     @State private var step: OnboardingStep = .routine
     /// Which way the last step change went, so the new step slides in from the side you're heading to.
     @State private var forward = true
-    @AccessibilityFocusState private var titleFocused: Bool
+    /// Keyed by step, so the outgoing step's title (still on screen while it slides away) never holds focus.
+    @AccessibilityFocusState private var focusedStep: OnboardingStep?
     @State private var userName = ""
     @State private var reminderDraft = ReminderPreferences.onboardingDefault
     /// Set when a reminder save completed without observably applying (stale ticket or a save already in flight in
@@ -161,7 +162,7 @@ struct OnboardingView: View {
                 reminderAdvanceFailed = false
             }
             // VoiceOver lands on the new step's title; the focus move is the announcement.
-            titleFocused = true
+            focusedStep = newStep
         }
         // Set only by a save that didn't apply, so arriving on a step that already shows the sentence stays quiet.
         .announcing(reminderAdvanceFailed ? OnboardingCopy.reminderFailure : nil)
@@ -194,7 +195,7 @@ struct OnboardingView: View {
             .foregroundStyle(Letterpress.ink)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)
-            .accessibilityFocused($titleFocused)
+            .accessibilityFocused($focusedStep, equals: step)
         switch step {
         case .routine:
             intro(OnboardingCopy.routineIntro)

@@ -74,8 +74,10 @@ private struct LetterpressCheckToggleBody: View {
         }
         .buttonStyle(CheckPressStyle())
         // Read as the native toggle it is: one element, the label once, the switch trait and its on/off value.
+        // The explicit `.switch` keeps the representation from picking up `.letterpressCheck` again and recursing.
         .accessibilityRepresentation {
             Toggle(isOn: configuration.$isOn) { configuration.label }
+                .toggleStyle(.switch)
         }
     }
 }

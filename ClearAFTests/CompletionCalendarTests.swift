@@ -105,6 +105,7 @@ struct CompletionCalendarTests {
         let text = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/CompletionCalendarView.swift"), encoding: .utf8)
         #expect(!text.contains("calendar = nil"))
         #expect(text.contains(".opacity(loading ? 0.4 : 1)") && text.contains(".allowsHitTesting(!loading)"))
+        #expect(text.contains(".disabled(loading)") && text.contains(".accessibilityHidden(loading)"))
         #expect(text.contains("let month = calendar.month"), "a dimmed month is drawn from its own data")
         #expect(text.contains(".contentTransition(reduceMotion ? .opacity : .numericText())"))
         #expect(text.contains(".animation(.snappy, value: tally.recorded)"))

@@ -137,7 +137,7 @@ private struct ReadyTabs: View {
             .badge(messaging.conversation?.unreadCount ?? 0)
         }
         .tint(Letterpress.ink)
-        .sheet(isPresented: $capturing) { DurablePhotoCaptureView() }
+        .photoCaptureSheet(isPresented: $capturing)
     }
 }
 

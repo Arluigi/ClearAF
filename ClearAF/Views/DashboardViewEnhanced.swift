@@ -219,7 +219,7 @@ private struct TodayPhotoRail: View {
                 .padding(.horizontal, Letterpress.Space.s22)
             }
         }
-        .sheet(isPresented: $capturing) { DurablePhotoCaptureView() }
+        .photoCaptureSheet(isPresented: $capturing)
         .onDisappear { images.clear() }
     }
 
@@ -261,20 +261,24 @@ private struct TodayRoutineSection: View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
             LetterpressRule()
             if let slot, let routine = repository.routine(for: slot) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("\(slot.title) routine").letterpressEyebrow()
-                    Spacer()
-                    Text("V\(routine.version)")
-                        .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
-                        .foregroundStyle(Letterpress.inkTertiary)
+                VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("\(slot.title) routine").letterpressEyebrow()
+                        Spacer()
+                        Text("V\(routine.version)")
+                            .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
+                            .foregroundStyle(Letterpress.inkTertiary)
+                    }
+                    .padding(.top, Letterpress.Space.s10)
+                    RoutineChecklist(steps: routine.steps, routineID: routine.id, localDate: repository.localDate, ticked: Binding(
+                        get: { tickBook.ticked(revisionID: routine.id, localDate: repository.localDate) },
+                        set: { tickBook.setTicked($0, revisionID: routine.id, localDate: repository.localDate) }))
+                    RoutineRecordPanel(routine: routine, repository: repository, identifierPrefix: "today-routine",
+                                       showsVersionNote: false, actionError: $actionError)
+                        .padding(.top, Letterpress.Space.s6)
                 }
-                .padding(.top, Letterpress.Space.s10)
-                RoutineChecklist(steps: routine.steps, ticked: Binding(
-                    get: { tickBook.ticked(revisionID: routine.id, localDate: repository.localDate) },
-                    set: { tickBook.setTicked($0, revisionID: routine.id, localDate: repository.localDate) }))
-                RoutineRecordPanel(routine: routine, repository: repository, identifierPrefix: "today-routine",
-                                   showsVersionNote: false, actionError: $actionError)
-                    .padding(.top, Letterpress.Space.s6)
+                // The slot rolling over at 14:00, or a new day, is a different checklist, not an edit of this one.
+                .id("\(routine.id)|\(repository.localDate)")
             } else {
                 Text("Routine").letterpressEyebrow().padding(.top, Letterpress.Space.s10)
                 Text(repository.snapshot == nil ? "Your routine hasn't loaded yet." : "No routine assigned yet.")

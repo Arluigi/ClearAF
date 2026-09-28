@@ -116,10 +116,13 @@ struct CheckInFlowTests {
                 + "insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity), "
                 + "removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))"), "\(file)")
             #expect(text.contains("withAnimation(.smooth) { \(key) = new"), "\(file)")
-            #expect(text.contains("@AccessibilityFocusState private var titleFocused: Bool"), "\(file)")
-            #expect(text.contains(".accessibilityFocused($titleFocused)"), "\(file)")
-            #expect(text.contains("titleFocused = true"), "\(file)")
-            #expect(!text.contains("AccessibilityNotification.Announcement"), "\(file): the focus move is the announcement")
+            let focus = file == "OnboardingView.swift" ? "focusedStep" : "focusedPage"
+            #expect(text.contains("@AccessibilityFocusState private var \(focus): "), "\(file)")
+            #expect(text.contains(".accessibilityFocused($\(focus), equals: \(key))"), "\(file)")
+            #expect(text.contains("\(focus) = new"), "\(file)")
+            // The focus move is the announcement: the only posts are check-in's send outcome, not page changes.
+            let pages = text.components(separatedBy: "private struct CheckInSendFeedback").first ?? text
+            #expect(!pages.contains("AccessibilityNotification.Announcement"), "\(file)")
         }
     }
 }

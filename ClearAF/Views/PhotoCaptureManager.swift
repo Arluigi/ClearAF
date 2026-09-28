@@ -132,6 +132,8 @@ struct PhotoCaptureView: View {
 // Save to record commits it on the device and the existing upload worker shares it.
 struct DurablePhotoCaptureView: View {
     var onSaved: (SkinPhoto) throws -> Void = { _ in }
+    /// Called once the photo is saved to the record, just before the sheet dismisses itself.
+    var didSave: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var errorMessage: String?
     @State private var attachmentFailed = false
@@ -139,7 +141,6 @@ struct DurablePhotoCaptureView: View {
     @State private var captureTicket = APIService.shared.access.snapshot()
     @State private var review: PhotoReviewDraft?
     @State private var saving = false
-    @State private var saved = false
 
     var body: some View {
         Group {
@@ -163,7 +164,7 @@ struct DurablePhotoCaptureView: View {
                isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { finishAlert() } })) {
             Button(attachmentFailed ? "Done" : "OK") { finishAlert() }
         } message: { Text(errorMessage ?? "") }
-        .sensoryFeedback(.success, trigger: saved) { _, new in new }
+        // Success is played by the presenter (`photoCaptureSheet`), which stays on screen; this sheet is leaving.
         // A photo kept in Photos but not attached here is not a failed save.
         .sensoryFeedback(.error, trigger: errorMessage) { _, new in new != nil && !attachmentFailed }
     }
@@ -176,7 +177,7 @@ struct DurablePhotoCaptureView: View {
             let completion = try session.capture(draft.bytes, date: draft.capturedAt, notes: draft.trimmedNote,
                 repository: APIService.shared.photos, ticket: captureTicket, onSaved: onSaved)
             if completion == .saved {
-                saved = true
+                didSave()
                 dismiss()
             } else {
                 attachmentFailed = true
@@ -193,6 +194,26 @@ struct DurablePhotoCaptureView: View {
         errorMessage = nil
         // Attachment failure does not invite another capture: the durable photo already exists.
         if attachmentFailed { dismiss() }
+    }
+}
+
+extension View {
+    /// Presents the durable capture sheet. The success haptic is played here, on the presenter that stays on screen,
+    /// because the sheet dismisses itself in the same update that saves the photo.
+    func photoCaptureSheet(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil) -> some View {
+        modifier(PhotoCaptureSheet(isPresented: isPresented, onDismiss: onDismiss))
+    }
+}
+
+private struct PhotoCaptureSheet: ViewModifier {
+    @Binding var isPresented: Bool
+    let onDismiss: (() -> Void)?
+    @State private var saves = 0
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $isPresented, onDismiss: onDismiss) { DurablePhotoCaptureView(didSave: { saves += 1 }) }
+            .sensoryFeedback(.success, trigger: saves)
     }
 }
 

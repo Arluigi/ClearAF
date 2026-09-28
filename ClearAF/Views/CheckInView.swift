@@ -10,6 +10,19 @@ enum CheckInFlow {
     static let readers = "Your clinician reads these alongside your photos."
     static let sentAnnouncement = "Check-in sent"
 
+    enum SendOutcome: Equatable { case sent, failed }
+
+    /// Only a send made on this screen is felt and announced. Resuming a check-in that was already sent or had
+    /// failed restores that status from disk without passing through `.sending`, so it stays quiet.
+    static func sendOutcome(from old: CheckInRepository.Status, to new: CheckInRepository.Status) -> SendOutcome? {
+        guard old == .sending else { return nil }
+        switch new {
+        case .sent: return .sent
+        case .failed: return .failed
+        default: return nil
+        }
+    }
+
     static func answer(for question: CheckInQuestion, in answers: [CheckInAnswer]) -> CheckInAnswer? {
         answers.first { $0.questionId == question.id }
     }
@@ -96,7 +109,8 @@ struct CheckInView: View {
     @State private var returningToReview = false
     /// Which way the last page change went, so the new page slides in from the side you're heading to.
     @State private var forward = true
-    @AccessibilityFocusState private var titleFocused: Bool
+    /// Keyed by page, so the outgoing page's title (still on screen while it slides away) never holds focus.
+    @AccessibilityFocusState private var focusedPage: Int?
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
@@ -133,12 +147,9 @@ struct CheckInView: View {
             positionedDraft = id
         }
         // VoiceOver lands on the new page's title; the focus move is the announcement.
-        .onChange(of: index) { titleFocused = true }
-        .modifier(CheckInSendFeedback(status: repository.status))
+        .onChange(of: index) { _, new in focusedPage = new }
+        .modifier(CheckInSendFeedback(status: repository.status, failure: repository.error))
         .announcing(error)
-        // Keyed on the status too, so a second failed send with the same sentence is announced again.
-        .announcing(repository.status == .failed ? repository.error : nil)
-        .announcing(repository.status == .sent ? CheckInFlow.sentAnnouncement : nil)
     }
 
     @ViewBuilder private func content(_ ticket: AccountAccess.Ticket?) -> some View {
@@ -215,7 +226,7 @@ struct CheckInView: View {
                 .foregroundStyle(Letterpress.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-                .accessibilityFocused($titleFocused)
+                .accessibilityFocused($focusedPage, equals: index)
             reason(CheckInFlow.requirement(question))
         }
         .padding(.top, Letterpress.Space.s22)
@@ -287,7 +298,7 @@ struct CheckInView: View {
                 .font(Letterpress.display(28, relativeTo: .title))
                 .foregroundStyle(Letterpress.ink)
                 .accessibilityAddTraits(.isHeader)
-                .accessibilityFocused($titleFocused)
+                .accessibilityFocused($focusedPage, equals: index)
         }
         .padding(.top, Letterpress.Space.s22)
         newerFormNote(draft)
@@ -468,13 +479,28 @@ struct CheckInView: View {
 }
 
 /// Only a send made here buzzes: resuming a check-in that was already sent, or failed earlier, stays quiet.
+/// The send's outcome, felt and spoken once, keyed on the status transition so a second failure with the same
+/// sentence is still heard.
 private struct CheckInSendFeedback: ViewModifier {
-    typealias Status = CheckInRepository.Status
-    let status: Status
+    let status: CheckInRepository.Status
+    let failure: String?
+
     func body(content: Content) -> some View {
         content
-            .sensoryFeedback(.success, trigger: status) { old, new in old == Status.sending && new == Status.sent }
-            .sensoryFeedback(.error, trigger: status) { old, new in old == Status.sending && new == Status.failed }
+            .sensoryFeedback(trigger: status) { old, new in
+                switch CheckInFlow.sendOutcome(from: old, to: new) {
+                case .sent: SensoryFeedback.success
+                case .failed: SensoryFeedback.error
+                case nil: nil
+                }
+            }
+            .onChange(of: status) { old, new in
+                switch CheckInFlow.sendOutcome(from: old, to: new) {
+                case .sent: AccessibilityNotification.Announcement(CheckInFlow.sentAnnouncement).post()
+                case .failed: if let failure { AccessibilityNotification.Announcement(failure).post() }
+                case nil: break
+                }
+            }
     }
 }
 

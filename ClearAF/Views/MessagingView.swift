@@ -37,6 +37,14 @@ enum NotesCopy {
     }
     static let limitReportPrompt = "Report a reaction any time"
 
+    /// Spoken only when the limit newly applies (a send allowed a moment ago no longer is), never on opening Notes
+    /// while it already applies: loading the conversation moves from no conversation (nil) to false.
+    static func limitAnnouncement(from wasAllowed: Bool?, to isAllowed: Bool?, nextAllowedAt: String?,
+                                  locale: Locale = .current, timeZone: TimeZone = .current) -> String? {
+        guard wasAllowed == true, isAllowed == false else { return nil }
+        return limitSentence(nextAllowedAt, locale: locale, timeZone: timeZone)
+    }
+
     /// Stamp on the patient's own note while it waits for the server; the draft stays until the server confirms.
     static let pendingStamp = "SENDING…"
     static func pendingLabel(_ content: String) -> String { "You, sending: \(content)" }
@@ -169,10 +177,10 @@ struct MessagingView: View {
             }
             // Quiet while a send is in flight, so a retry that fails with the same sentence is announced again.
             .announcing(repository.sending ? nil : repository.error)
-            .announcing(repository.conversation?.canSendMessage == false
-                        ? NotesCopy.limitSentence(repository.conversation?.limit?.nextAllowedAt) : nil)
             .modifier(NoteSendFeedback(lastOwnID: repository.messages.last { $0.senderType == "patient" }?.id, sendingID: sendingID,
-                                       sending: repository.sending, draftHeld: repository.draft != nil))
+                                       sending: repository.sending, draftHeld: repository.draft != nil,
+                                       canSend: repository.conversation?.canSendMessage,
+                                       nextAllowedAt: repository.conversation?.limit?.nextAllowedAt))
         }
     }
 
@@ -397,11 +405,18 @@ private struct NoteSendFeedback: ViewModifier {
     let sendingID: UUID?
     let sending: Bool
     let draftHeld: Bool
+    let canSend: Bool?
+    let nextAllowedAt: String?
 
     func body(content: Content) -> some View {
         content
             .sensoryFeedback(.success, trigger: lastOwnID) { (_: UUID?, new: UUID?) in new != nil && new == sendingID }
             .sensoryFeedback(.error, trigger: sending) { old, new in old && !new && draftHeld }
+            .onChange(of: canSend) { old, new in
+                if let sentence = NotesCopy.limitAnnouncement(from: old, to: new, nextAllowedAt: nextAllowedAt) {
+                    AccessibilityNotification.Announcement(sentence).post()
+                }
+            }
     }
 }
 

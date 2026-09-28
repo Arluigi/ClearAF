@@ -92,22 +92,51 @@ struct RoutineTickBook: Equatable {
     }
 }
 
+/// Routine haptics come from the patient's own taps, never from state that changes under them: a slot switch,
+/// midnight, a refresh, or the same slot recorded on another (kept-alive) tab.
+enum RoutineFeedback {
+    /// One tap, keyed by the routine revision and day it was made on.
+    struct Action: Equatable {
+        let routineID: UUID
+        let localDate: String
+        let serial: Int
+    }
+
+    static func next(after last: Action?, routineID: UUID, localDate: String) -> Action {
+        Action(routineID: routineID, localDate: localDate, serial: (last?.serial ?? 0) + 1)
+    }
+
+    /// A newer tap made on the routine and day now on screen.
+    static func fires(from old: Action?, to new: Action?, routineID: UUID, localDate: String) -> Bool {
+        guard let new, new.routineID == routineID, new.localDate == localDate else { return false }
+        return new.serial > (old?.serial ?? 0)
+    }
+}
+
 /// Ruled checklist (spec §4.4). Ticks are local and reversible; recording is the filled button.
 struct RoutineChecklist: View {
     let steps: [CareRoutineStep]
+    let routineID: UUID
+    let localDate: String
     @Binding var ticked: Set<Int>
+    @State private var lastTick: RoutineFeedback.Action?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 RoutineChecklistRow(step: step, isTicked: Binding(
                     get: { ticked.contains(index) },
-                    set: { isOn in if isOn { ticked.insert(index) } else { ticked.remove(index) } }))
+                    set: { isOn in
+                        if isOn { ticked.insert(index) } else { ticked.remove(index) }
+                        lastTick = RoutineFeedback.next(after: lastTick, routineID: routineID, localDate: localDate)
+                    }))
                 .overlay(alignment: .top) { LetterpressRule() }
             }
             LetterpressRule()
         }
-        .sensoryFeedback(.selection, trigger: ticked)
+        .sensoryFeedback(.selection, trigger: lastTick) { old, new in
+            RoutineFeedback.fires(from: old, to: new, routineID: routineID, localDate: localDate)
+        }
     }
 }
 
@@ -173,6 +202,8 @@ struct RoutineRecordPanel: View {
     let identifierPrefix: String
     var showsVersionNote = true
     @Binding var actionError: String?
+    /// Only a record made here buzzes; Today and Plan both show this panel and stay alive in the tab view.
+    @State private var lastRecord: RoutineFeedback.Action?
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
@@ -184,6 +215,7 @@ struct RoutineRecordPanel: View {
                 do {
                     _ = try repository.recordCompletion(revision: routine, ticket: ticket)
                     actionError = nil
+                    lastRecord = RoutineFeedback.next(after: lastRecord, routineID: routine.id, localDate: repository.localDate)
                 } catch { actionError = error.localizedDescription }
             }
             .buttonStyle(.letterpress(.filled, fullWidth: true))
@@ -201,6 +233,8 @@ struct RoutineRecordPanel: View {
             }
         }
         // Saved on this device counts: the patient's part is done even while the upload waits.
-        .sensoryFeedback(.success, trigger: status) { old, new in old == .unrecorded && new != .unrecorded }
+        .sensoryFeedback(.success, trigger: lastRecord) { old, new in
+            RoutineFeedback.fires(from: old, to: new, routineID: routine.id, localDate: repository.localDate)
+        }
     }
 }

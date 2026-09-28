@@ -223,6 +223,9 @@ struct CompletionCalendarView: View {
                     }
                     .opacity(loading ? 0.4 : 1)
                     .allowsHitTesting(!loading)
+                    // The dimmed month is out of date: VoiceOver skips it and hears the header's loading line instead.
+                    .disabled(loading)
+                    .accessibilityHidden(loading)
                 } else {
                     HStack(spacing: Letterpress.Space.s10) {
                         SwiftUI.ProgressView().tint(Letterpress.inkTertiary)

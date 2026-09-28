@@ -89,7 +89,9 @@ import Testing
         #expect(ReminderCopy.saveNote(edited, saved: saved, state: .saving) == nil)
         let view = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/ReminderSettingsView.swift"), encoding: .utf8)
         #expect(view.contains("if !edited { draft = repository.preferences }"), "the load never clobbers an edit")
-        #expect(view.contains("Toggle(isOn: time.enabled.animation(reduceMotion ? nil : .snappy))"))
+        #expect(view.contains("Toggle(isOn: time.enabled.animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy))"))
+        #expect(view.contains("@State private var draft = APIService.shared.reminders.preferences"), "seeded before the async load")
+        #expect(view.contains(".disabled(!loaded || !ReminderCopy.canSave("), "Save waits for the first load")
     }
 }
 @MainActor private final class FakeReminderScheduler: ReminderScheduling {

@@ -112,13 +112,15 @@ struct RoutineView: View {
                     .font(Letterpress.ui(13, relativeTo: .footnote))
                     .foregroundStyle(Letterpress.inkSecondary)
             }
-            RoutineChecklist(steps: routine.steps, ticked: Binding(
+            RoutineChecklist(steps: routine.steps, routineID: routine.id, localDate: repository.localDate, ticked: Binding(
                 get: { tickBook.ticked(revisionID: routine.id, localDate: repository.localDate) },
                 set: { tickBook.setTicked($0, revisionID: routine.id, localDate: repository.localDate) }))
             RoutineRecordPanel(routine: routine, repository: repository,
                                identifierPrefix: "routine-\(routine.timeOfDay.rawValue)", actionError: $actionError)
                 .padding(.top, Letterpress.Space.s4)
         }
+        // A slot switch or a new day is a different checklist, not an edit of this one.
+        .id("\(routine.id)|\(repository.localDate)")
     }
 
     private func emptyState(title: String, sentence: String) -> some View {

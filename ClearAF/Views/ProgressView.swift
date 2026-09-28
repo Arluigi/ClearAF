@@ -43,7 +43,7 @@ struct ProgressView: View {
             .background(Letterpress.canvas.ignoresSafeArea())
             .navigationTitle("Record")
             .refreshable { store.refresh() }
-            .sheet(isPresented: $capturing, onDismiss: { if layout == .compare { layout = browsingLayout } }) { DurablePhotoCaptureView() }
+            .photoCaptureSheet(isPresented: $capturing, onDismiss: { if layout == .compare { layout = browsingLayout } })
             .fullScreenCover(isPresented: comparing) {
                 ComparePhotosView().environment(\.managedObjectContext, viewContext)
             }
