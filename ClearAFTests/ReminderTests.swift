@@ -71,6 +71,26 @@ import Testing
         #expect(scheduler.requests.isEmpty)
         #expect(repo.state == .disabled)
     }
+    /// Design audit B6: unsaved edits are named beside Save, and Save without a change says why it is disabled,
+    /// except while the saved preferences still need applying (paused, permission off, failed).
+    @Test func saveNamesUnsavedChangesAndWhyItIsDisabled() throws {
+        let saved = ReminderPreferences()
+        var edited = saved; edited.morning.enabled = true
+        #expect(ReminderCopy.canSave(edited, saved: saved, state: .disabled))
+        #expect(ReminderCopy.saveNote(edited, saved: saved, state: .enabled) == "Not saved yet.")
+        #expect(!ReminderCopy.canSave(saved, saved: saved, state: .disabled))
+        #expect(!ReminderCopy.canSave(saved, saved: saved, state: .enabled))
+        #expect(ReminderCopy.saveNote(saved, saved: saved, state: .enabled) == "Nothing to save.")
+        for state in [ReminderRepository.State.paused, .denied, .failed] {
+            #expect(ReminderCopy.canSave(saved, saved: saved, state: state), "\(state)")
+            #expect(ReminderCopy.saveNote(saved, saved: saved, state: state) == nil, "\(state)")
+        }
+        #expect(!ReminderCopy.canSave(edited, saved: saved, state: .saving))
+        #expect(ReminderCopy.saveNote(edited, saved: saved, state: .saving) == nil)
+        let view = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/ReminderSettingsView.swift"), encoding: .utf8)
+        #expect(view.contains("if !edited { draft = repository.preferences }"), "the load never clobbers an edit")
+        #expect(view.contains("Toggle(isOn: time.enabled.animation(reduceMotion ? nil : .snappy))"))
+    }
 }
 @MainActor private final class FakeReminderScheduler: ReminderScheduling {
     var requests:[String:ReminderRequest]=[:]

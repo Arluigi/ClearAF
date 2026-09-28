@@ -10,6 +10,22 @@ struct ReminderSummaryRow: Equatable, Identifiable {
 enum ReminderCopy {
     static let intro = "Choose reminders that work for you. They stay on this device and pause when you sign out."
     static let deniedHelp = "Allow notifications for ClearAF in iPhone Settings, then try saving again."
+    static let unsaved = "Not saved yet."
+    static let nothingToSave = "Nothing to save."
+
+    /// Save is for changes. Without one it stays available only while the saved preferences still need applying:
+    /// paused after sign-in, blocked by permission, or a failed schedule.
+    static func canSave(_ draft: ReminderPreferences, saved: ReminderPreferences, state: ReminderRepository.State) -> Bool {
+        guard state != .saving else { return false }
+        return draft != saved || [.paused, .denied, .failed].contains(state)
+    }
+
+    /// The sentence beside Save: unsaved edits, or why Save is disabled (spec §5).
+    static func saveNote(_ draft: ReminderPreferences, saved: ReminderPreferences, state: ReminderRepository.State) -> String? {
+        guard state != .saving else { return nil }
+        if draft != saved { return unsaved }
+        return canSave(draft, saved: saved, state: state) ? nil : nothingToSave
+    }
 
     static func time(_ reminder: ReminderTime) -> String { String(format: "%02d:%02d", reminder.hour, reminder.minute) }
 
@@ -42,6 +58,7 @@ enum ReminderCopy {
 /// Toggle and time rows shared by Reminders and onboarding. Changes stay in `draft` until the screen saves.
 struct ReminderRows: View {
     @Binding var draft: ReminderPreferences
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -69,7 +86,8 @@ struct ReminderRows: View {
 
     private func row(_ title: String, schedule: String, time: Binding<ReminderTime>) -> some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
-            Toggle(isOn: time.enabled) {
+            // The time picker slides in with the switch.
+            Toggle(isOn: time.enabled.animation(reduceMotion ? nil : .snappy)) {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                     Text(title)
                         .font(Letterpress.ui(16, weight: .medium, relativeTo: .body))
@@ -104,6 +122,8 @@ struct ReminderSettingsView: View {
     @ObservedObject private var api = APIService.shared
     @ObservedObject private var repository = APIService.shared.reminders
     @State private var draft = ReminderPreferences()
+    /// Set by the patient's first change; the initial load never overwrites an edit made while it was running.
+    @State private var edited = false
     /// What the last save ended as, for VoiceOver; cleared when a save starts so the same result is heard again.
     @State private var saveResult: String?
 
@@ -114,7 +134,7 @@ struct ReminderSettingsView: View {
                     .font(Letterpress.ui(15, relativeTo: .body))
                     .foregroundStyle(Letterpress.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                ReminderRows(draft: $draft)
+                ReminderRows(draft: Binding(get: { draft }, set: { draft = $0; edited = true }))
                     .padding(.top, Letterpress.Space.s22)
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Button(repository.state == .saving ? "Saving…" : "Save reminders") {
@@ -126,8 +146,15 @@ struct ReminderSettingsView: View {
                         }
                     }
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
-                    .disabled(repository.state == .saving)
+                    .disabled(!ReminderCopy.canSave(draft, saved: repository.preferences, state: repository.state))
                     .accessibilityIdentifier("reminderSave")
+                    if let note = ReminderCopy.saveNote(draft, saved: repository.preferences, state: repository.state) {
+                        Text(note)
+                            .font(Letterpress.ui(13, relativeTo: .footnote))
+                            .foregroundStyle(Letterpress.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("reminderSaveNote")
+                    }
                     Text(ReminderCopy.status(repository.state))
                         .font(Letterpress.ui(13, relativeTo: .footnote))
                         .foregroundStyle(repository.state == .failed ? Letterpress.error : Letterpress.inkSecondary)
@@ -155,7 +182,7 @@ struct ReminderSettingsView: View {
         .toolbar(.hidden, for: .tabBar)
         .task {
             if let ticket = api.access.snapshot() { await repository.resume(ticket: ticket) }
-            draft = repository.preferences
+            if !edited { draft = repository.preferences }
             await repository.refreshPermission()
         }
         .announcing(saveResult)
