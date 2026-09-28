@@ -100,9 +100,9 @@ struct RoutineChecklist: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                RoutineChecklistRow(step: step, isTicked: ticked.contains(index)) {
-                    if ticked.contains(index) { ticked.remove(index) } else { ticked.insert(index) }
-                }
+                RoutineChecklistRow(step: step, isTicked: Binding(
+                    get: { ticked.contains(index) },
+                    set: { isOn in if isOn { ticked.insert(index) } else { ticked.remove(index) } }))
                 .overlay(alignment: .top) { LetterpressRule() }
             }
             LetterpressRule()
@@ -111,23 +111,13 @@ struct RoutineChecklist: View {
     }
 }
 
+/// One native toggle per step: the whole row taps, and VoiceOver reads the title once with on/off.
 private struct RoutineChecklistRow: View {
     let step: CareRoutineStep
-    let isTicked: Bool
-    let toggle: () -> Void
+    @Binding var isTicked: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: Letterpress.Space.s10) {
-            Button(action: toggle) {
-                RoutineCheckbox(isTicked: isTicked)
-                    .frame(width: Letterpress.minTouch, height: Letterpress.minTouch, alignment: .topLeading)
-                    .padding(.top, 2)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(step.title)
-            .accessibilityValue(isTicked ? "Ticked" : "Not ticked")
-            .accessibilityHint("Ticks this step on this device. Recording the routine is separate.")
+        Toggle(isOn: $isTicked) {
             VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                 Text(step.title)
                     .font(Letterpress.ui(17, weight: .medium, relativeTo: .headline))
@@ -140,30 +130,38 @@ private struct RoutineChecklistRow: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, Letterpress.Space.s4)
         }
+        .toggleStyle(.letterpressCheck)
         .padding(.vertical, Letterpress.Space.s10)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: toggle)
+        .accessibilityHint("Ticks this step on this device. Recording the routine is separate.")
     }
 }
 
 struct RoutineCheckbox: View {
     static let size: CGFloat = 22
+    static let markSize: CGFloat = 12
     let isTicked: Bool
+    var isEnabled = true
 
     var body: some View {
+        let ink = isEnabled ? Letterpress.ink : Letterpress.inkTertiary
         ZStack {
-            Rectangle().fill(isTicked ? Letterpress.ink : Color.clear)
-            Rectangle().strokeBorder(Letterpress.ink, lineWidth: 1.5)
+            Rectangle().fill(isTicked ? ink : Color.clear)
+            Rectangle().strokeBorder(ink, lineWidth: 1.5)
             if isTicked {
+                // Drawn at a fixed size inside the fixed 22pt box, so it never outgrows it at large text sizes.
                 Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .resizable()
+                    .scaledToFit()
+                    .fontWeight(.bold)
+                    .frame(width: Self.markSize, height: Self.markSize)
                     .foregroundStyle(Letterpress.canvas)
             }
         }
         .frame(width: Self.size, height: Self.size)
+        // The mark only exists while ticked, so there is no symbol to replace: the fill and mark fade together.
+        .animation(.snappy(duration: 0.2), value: isTicked)
         .accessibilityHidden(true)
     }
 }

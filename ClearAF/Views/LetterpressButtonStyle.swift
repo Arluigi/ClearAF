@@ -52,6 +52,8 @@ private struct LetterpressButtonBody: View {
             .contentShape(shape)
             .modifier(UnderlineHitArea(isActive: variant == .underline))
             .opacity(configuration.isPressed ? 0.7 : 1)
+            // SwiftUI applies the press immediately; only the release eases back.
+            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }
 }
 

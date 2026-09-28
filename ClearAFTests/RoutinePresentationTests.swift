@@ -100,4 +100,17 @@ struct RoutinePresentationTests {
         #expect(book.ticked(revisionID: revision, localDate: "2026-09-15") == [0, 1])
         #expect(book.ticked(revisionID: revision, localDate: "2026-09-16") == [2])
     }
+
+    /// Design audit B2: each step is one native toggle, so the row taps as a whole and VoiceOver reads the title once.
+    @Test func routineStepsAreSingleNativeToggles() throws {
+        let text = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/RoutineChecklist.swift"), encoding: .utf8)
+        let row = try #require(text.components(separatedBy: "private struct RoutineChecklistRow").last?.components(separatedBy: "struct RoutineCheckbox").first)
+        #expect(row.contains("Toggle(isOn: $isTicked)"))
+        #expect(row.contains(".toggleStyle(.letterpressCheck)"))
+        #expect(!row.contains(".onTapGesture"))
+        #expect(!row.contains("Button("))
+        #expect(!text.contains("\"Ticked\"") && !text.contains("\"Not ticked\""), "the toggle trait speaks on/off")
+        #expect(!text.contains(".system("))
+        #expect(text.contains(".animation(.snappy(duration: 0.2), value: isTicked)"))
+    }
 }
