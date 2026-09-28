@@ -138,6 +138,9 @@ import Testing
         #expect(text.contains("Link(UrgentReportCopy.call911"))
         #expect(text.contains("URL(string: \"tel:911\")"))
         #expect(text.contains("@FocusState private var detailsFocused"))
+        #expect(text.contains(".focused($detailsFocused)"))
+        #expect(text.contains(".onChange(of: repository.draft.category) { _, chosen in"))
+        #expect(text.contains("if chosen != nil && !frozen { detailsFocused = true }"))
         #expect(text.contains(".scrollDismissesKeyboard(.interactively)"))
     }
     @Test func careDecisionFromAnotherAccountIsIgnored() async throws {

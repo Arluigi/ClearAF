@@ -47,9 +47,7 @@ struct ContentView: View {
             }
         }
         // Announced once here; each tab only draws the banner, so VoiceOver never hears it twice.
-        .onReceive(apiService.photos.$lastError.removeDuplicates()) { error in
-            if let error { AccessibilityNotification.Announcement(error).post() }
-        }
+        .modifier(PhotoErrorAnnouncer(repository: apiService.photos))
         .onOpenURL { url in
             Task { @MainActor in
                 do { try await SupabaseService.shared.handleCallback(url) }
@@ -126,6 +124,17 @@ private struct PhotoErrorInset: ViewModifier {
                 }
             }
             .animation(.snappy, value: repository.lastError)
+        }
+    }
+}
+
+/// Posts the photo-save error to VoiceOver when it changes. `onChange` (not a publisher built in `body`) so a redraw
+/// never re-announces an error that is already showing.
+private struct PhotoErrorAnnouncer: ViewModifier {
+    @ObservedObject var repository: PhotoRepository
+    func body(content: Content) -> some View {
+        content.onChange(of: repository.lastError) { _, new in
+            if let new { AccessibilityNotification.Announcement(new).post() }
         }
     }
 }

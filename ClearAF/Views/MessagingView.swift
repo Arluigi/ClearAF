@@ -107,8 +107,9 @@ struct MessagingView: View {
                             .scrollDismissesKeyboard(.interactively)
                             .refreshable { await refresh() }
                             // Keyed on the newest note only, so "Load older" (which prepends) never jumps to the end.
-                            .onChange(of: repository.messages.last?.id) { _, id in
-                                if let id { scrollToEnd(id, proxy: proxy) }
+                            // The first load is placed by `defaultScrollAnchor(.initialOffset)`; only later arrivals scroll.
+                            .onChange(of: repository.messages.last?.id) { old, id in
+                                if old != nil, let id { scrollToEnd(id, proxy: proxy) }
                             }
                             .onChange(of: repository.sending) { _, sending in
                                 if sending, let id = repository.draft?.id { scrollToEnd(id, proxy: proxy) }

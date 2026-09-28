@@ -29,6 +29,9 @@ struct AppTabTests {
         #expect(text.contains("repository.lastError = nil"))
         #expect(text.contains("reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)"))
         #expect(text.components(separatedBy: "AccessibilityNotification.Announcement(").count - 1 == 1)
+        #expect(text.contains(".modifier(PhotoErrorAnnouncer(repository: apiService.photos))"))
+        #expect(text.contains(".onChange(of: repository.lastError) { _, new in"))
+        #expect(!text.contains("$lastError"))
         #expect(!text.contains(".font(.callout)"))
     }
 }
