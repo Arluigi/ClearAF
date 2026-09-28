@@ -99,4 +99,25 @@ struct CompletionCalendarTests {
             }
         }
     }
+
+    /// Design audit B7: the previous month stays in place, dimmed, while the next loads; only the first load is full-page.
+    @Test func calendarKeepsItsLayoutWhileAMonthLoads() throws {
+        let text = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/CompletionCalendarView.swift"), encoding: .utf8)
+        #expect(!text.contains("calendar = nil"))
+        #expect(text.contains(".opacity(loading ? 0.4 : 1)") && text.contains(".allowsHitTesting(!loading)"))
+        #expect(text.contains("let month = calendar.month"), "a dimmed month is drawn from its own data")
+        #expect(text.contains(".contentTransition(reduceMotion ? .opacity : .numericText())"))
+        #expect(text.contains(".animation(.snappy, value: tally.recorded)"))
+        #expect(!text.contains("UIScreen"))
+        #expect(text.contains(".onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }"))
+        #expect(text.components(separatedBy: "DateFormatter()").count - 1 == 1, "one parser, built once")
+    }
+
+    @Test func datesAndTimesParseAndFormatWithCachedFormatters() throws {
+        let date = try #require(CompletionCalendarCopy.date("2026-09-03"))
+        #expect(CompletionCalendarCopy.date("2026-09-31") == nil, "not lenient")
+        #expect(CompletionCalendarCopy.eyebrow("2026-09-03", locale: Self.us) == "3 Sep")
+        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
+        #expect(LetterpressFormat.time24(date.addingTimeInterval(7 * 3600 + 12 * 60), timeZone: tokyo) == "16:12")
+    }
 }

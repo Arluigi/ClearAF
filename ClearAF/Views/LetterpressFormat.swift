@@ -75,6 +75,11 @@ enum LetterpressFormat {
         return "\(day) · \(formatter("HH:mm", locale: locale, timeZone: timeZone).string(from: date))"
     }
 
+    /// "07:12" in every locale, for times set in the mono data face.
+    static func time24(_ date: Date, timeZone: TimeZone = .current) -> String {
+        formatter("HH:mm", locale: Locale(identifier: "en_US_POSIX"), timeZone: timeZone).string(from: date)
+    }
+
     /// "7:12 am" where the locale uses a 12-hour clock, "07:12" where it uses 24 hours.
     static func clock(_ date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
         // ICU inserts a narrow no-break space before the period; copy uses a plain space.
