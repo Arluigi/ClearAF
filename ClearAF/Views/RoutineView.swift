@@ -66,6 +66,7 @@ struct RoutineView: View {
                 await repository.refresh()
             }
             .onChange(of: selectedSlot) { _, _ in actionError = nil }
+            .announcing(actionError ?? repository.lastError)
         }
     }
 

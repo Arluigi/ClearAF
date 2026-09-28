@@ -163,6 +163,9 @@ struct OnboardingView: View {
             // VoiceOver lands on the new step's title; the focus move is the announcement.
             titleFocused = true
         }
+        // Set only by a save that didn't apply, so arriving on a step that already shows the sentence stays quiet.
+        .announcing(reminderAdvanceFailed ? OnboardingCopy.reminderFailure : nil)
+        .announcing(saveState.errorMessage)
     }
 
     private var header: some View {

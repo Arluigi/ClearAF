@@ -104,6 +104,8 @@ struct ReminderSettingsView: View {
     @ObservedObject private var api = APIService.shared
     @ObservedObject private var repository = APIService.shared.reminders
     @State private var draft = ReminderPreferences()
+    /// What the last save ended as, for VoiceOver; cleared when a save starts so the same result is heard again.
+    @State private var saveResult: String?
 
     var body: some View {
         ScrollView {
@@ -117,7 +119,11 @@ struct ReminderSettingsView: View {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Button(repository.state == .saving ? "Saving…" : "Save reminders") {
                         guard let ticket = api.access.snapshot() else { return }
-                        Task { await repository.save(draft, ticket: ticket) }
+                        saveResult = nil
+                        Task {
+                            await repository.save(draft, ticket: ticket)
+                            saveResult = ReminderCopy.status(repository.state)
+                        }
                     }
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
                     .disabled(repository.state == .saving)
@@ -152,5 +158,6 @@ struct ReminderSettingsView: View {
             draft = repository.preferences
             await repository.refreshPermission()
         }
+        .announcing(saveResult)
     }
 }

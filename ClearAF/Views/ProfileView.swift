@@ -69,6 +69,8 @@ struct ProfileView: View {
             Text(ProfileCopy.removalMessage)
         }
         .onAppear { name = api.currentUser?.name ?? "" }
+        .announcing(saveState.errorMessage)
+        .announcing(saveState.successMessage)
     }
 
     private var header: some View {

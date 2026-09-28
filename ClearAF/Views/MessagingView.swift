@@ -167,6 +167,10 @@ struct MessagingView: View {
             .onChange(of: selected?.id) { _, id in
                 if id == nil && active && scenePhase == .active { Task { await repository.acknowledgeVisible(visible) } }
             }
+            // Quiet while a send is in flight, so a retry that fails with the same sentence is announced again.
+            .announcing(repository.sending ? nil : repository.error)
+            .announcing(repository.conversation?.canSendMessage == false
+                        ? NotesCopy.limitSentence(repository.conversation?.limit?.nextAllowedAt) : nil)
             .modifier(NoteSendFeedback(lastOwnID: repository.messages.last { $0.senderType == "patient" }?.id, sendingID: sendingID,
                                        sending: repository.sending, draftHeld: repository.draft != nil))
         }

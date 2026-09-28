@@ -122,6 +122,7 @@ struct AuthenticationView: View {
         // Swapping SecureField and TextField drops focus; put it back so typing can continue.
         .onChange(of: showingPassword) { focus = .password }
         .sensoryFeedback(.error, trigger: failure) { _, new in new != nil }
+        .announcing(failure)
     }
 
     private var fields: some View {

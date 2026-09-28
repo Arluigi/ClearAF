@@ -8,6 +8,7 @@ enum CheckInFlow {
     static let sendReason = "Answer every required question before sending."
     static let footnote = "Answers are sent together at the end. Your draft stays on this device until you send it."
     static let readers = "Your clinician reads these alongside your photos."
+    static let sentAnnouncement = "Check-in sent"
 
     static func answer(for question: CheckInQuestion, in answers: [CheckInAnswer]) -> CheckInAnswer? {
         answers.first { $0.questionId == question.id }
@@ -134,6 +135,10 @@ struct CheckInView: View {
         // VoiceOver lands on the new page's title; the focus move is the announcement.
         .onChange(of: index) { titleFocused = true }
         .modifier(CheckInSendFeedback(status: repository.status))
+        .announcing(error)
+        // Keyed on the status too, so a second failed send with the same sentence is announced again.
+        .announcing(repository.status == .failed ? repository.error : nil)
+        .announcing(repository.status == .sent ? CheckInFlow.sentAnnouncement : nil)
     }
 
     @ViewBuilder private func content(_ ticket: AccountAccess.Ticket?) -> some View {
