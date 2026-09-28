@@ -132,6 +132,14 @@ import Testing
         await repo.send(category: .painOrInfection, description: "Swollen", ticket: ticket)
         #expect(repo.reports.isEmpty && repo.sent == nil)
     }
+    @Test func urgentSheetOffersATappable911AndFocusesTheDetails() throws {
+        let text = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/UrgentReportView.swift"), encoding: .utf8)
+        #expect(UrgentReportCopy.call911 == "Call 911")
+        #expect(text.contains("Link(UrgentReportCopy.call911"))
+        #expect(text.contains("URL(string: \"tel:911\")"))
+        #expect(text.contains("@FocusState private var detailsFocused"))
+        #expect(text.contains(".scrollDismissesKeyboard(.interactively)"))
+    }
     @Test func careDecisionFromAnotherAccountIsIgnored() async throws {
         let access = AccountAccess(), ticket = access.activate(UUID())
         let decision = CareDecision(id: UUID(), patientId: UUID(), clinicianId: UUID(), clinicianName: "Fixture", decision: "refer_out",

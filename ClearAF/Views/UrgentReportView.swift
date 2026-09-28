@@ -2,6 +2,7 @@ import SwiftUI
 
 enum UrgentReportCopy {
     static let emergency = "If you have trouble breathing, swelling of your face, lips or throat, or feel seriously unwell, call 911 now."
+    static let call911 = "Call 911"
     static let sent = "Sent. It's flagged as urgent at the top of your care team's queue."
     static let disabledReason = "Choose what's happening and describe it to send."
     static func status(_ status: String) -> String {
@@ -58,13 +59,17 @@ struct UrgentReportEntry: View {
 struct UrgentReportView: View {
     @ObservedObject private var repository = APIService.shared.urgentReports
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var detailsFocused: Bool
     private let question = "What's happening?"
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s22) {
-                    emergencyNotice
+                    VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
+                        emergencyNotice
+                        call911
+                    }
                     if repository.sent != nil {
                         Text(UrgentReportCopy.sent)
                             .font(Letterpress.ui(16, relativeTo: .body))
@@ -85,6 +90,7 @@ struct UrgentReportView: View {
                 .padding(Letterpress.Space.s22)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Something's wrong?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
@@ -115,6 +121,13 @@ struct UrgentReportView: View {
         .overlay(alignment: .leading) { Rectangle().fill(Letterpress.ink).frame(width: 2) }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("urgentEmergencyNotice")
+    }
+
+    /// Its own element (not merged into the notice) so VoiceOver reaches it as a button.
+    private var call911: some View {
+        Link(UrgentReportCopy.call911, destination: URL(string: "tel:911")!)
+            .buttonStyle(.letterpress(.outlined, fullWidth: true))
+            .accessibilityIdentifier("urgentCall911")
     }
 
     // The draft lives in the account-scoped repository, so closing the sheet or a phase change never loses it.
@@ -160,11 +173,16 @@ struct UrgentReportView: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("urgentCategory")
+            .onChange(of: repository.draft.category) { _, chosen in
+                // Straight to the details once a category is picked, unless the attempt is frozen for a retry.
+                if chosen != nil && !frozen { detailsFocused = true }
+            }
             VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
                 Text("Details").letterpressEyebrow()
                 TextField("Describe what's happening", text: details, axis: .vertical)
                     .lineLimit(3...8)
                     .letterpressField(isEmpty: repository.draft.description.isEmpty)
+                    .focused($detailsFocused)
                     .accessibilityIdentifier("urgentDescription")
                     .disabled(frozen)
                 Text("\(count) / 2000")
