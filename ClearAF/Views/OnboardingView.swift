@@ -119,6 +119,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: 600, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
+            .scrollDismissesKeyboard(.interactively)
             .id(step)
             if !dynamicTypeSize.isAccessibilitySize {
                 // Kept in view below the scroll area on regular text sizes; it scrolls with content at accessibility
@@ -203,6 +204,8 @@ struct OnboardingView: View {
             LetterpressLabeledField(label: "Your name", isEmpty: userName.isEmpty, message: OnboardingCopy.nameHint) {
                 TextField(text: $userName, prompt: nil) { Text("Your name") }
                     .textContentType(.name)
+                    .submitLabel(.done)
+                    .onSubmit { if canAdvance { advance() } }
                     .accessibilityIdentifier("onboardingName")
             }
             .padding(.top, Letterpress.Space.s22)

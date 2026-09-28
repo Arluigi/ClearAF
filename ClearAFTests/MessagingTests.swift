@@ -117,6 +117,27 @@ import Testing
         #expect(repo.draft?.content == "still writing this") // Never lost.
         #expect(repo.error == nil)
     }
+    /// Sign-out or account switch mid-send: the pending row's state (`sending` + draft) goes at once, and the old
+    /// send's late confirmation must not bring either back or add the message.
+    @Test func cancelDuringSendClearsPendingStateAndIgnoresTheLateConfirmation() async throws {
+        let access = AccountAccess(); let ticket = access.activate(UUID()); let transport = MessagingFake(patient: ticket.accountID)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repo = MessagingRepository(access: access, transport: transport, directory: directory)
+        try repo.resume(ticket); await repo.openCurrent(); try repo.edit("in flight")
+        transport.failSend = false; transport.suspendSends = true
+        let send = Task { await repo.send() }
+        while transport.sendContinuations.isEmpty { await Task.yield() }
+        #expect(repo.sending); #expect(repo.draft?.content == "in flight")
+        let before = repo.messages
+        repo.cancel()
+        #expect(!repo.sending); #expect(repo.draft == nil)
+        transport.sendContinuations[0].resume()
+        await send.value
+        #expect(!repo.sending); #expect(repo.draft == nil)
+        #expect(repo.messages.isEmpty); #expect(repo.conversation == nil)
+        #expect(!before.isEmpty)
+    }
 }
 @MainActor private final class MessagingFake: MessagingTransport {
     let pair: AssignedConversation
@@ -127,6 +148,7 @@ import Testing
     var currentOverride: AssignedConversation?; var wrongResponse = false
     var failSend = true; var sentIDs: [UUID] = []; var acked: [UUID] = []; var onFetch: (() -> Void)?
     var limitError: String?
+    var suspendSends = false; var sendContinuations: [CheckedContinuation<Void, Never>] = []
     init(patient: UUID) {
         let clinician = UUID()
         pair = AssignedConversation(patientId: patient, clinicianId: clinician, patientName: nil, clinicianName: "Dr Test", lastMessage: nil, unreadCount: 2)
@@ -139,6 +161,7 @@ import Testing
     }
     func putMessage(_ draft: MessageDraft, ticket: AccountAccess.Ticket) async throws -> AssignedMessage {
         sentIDs.append(draft.id)
+        if suspendSends { await withCheckedContinuation { sendContinuations.append($0) } }
         if let limitError { throw AccountFailure.patientMessageLimit(nextAllowedAt: limitError) }
         if failSend { throw URLError(.networkConnectionLost) }
         return AssignedMessage(id: wrongResponse ? UUID() : draft.id, patientId: pair.patientId, clinicianId: pair.clinicianId, senderId: pair.patientId, senderType: "patient", recipientId: pair.clinicianId, recipientType: "dermatologist", content: draft.content, sentAt: "2026-09-13T13:00:00.000Z", unreadForMe: false, reference: nil, origin: "native")

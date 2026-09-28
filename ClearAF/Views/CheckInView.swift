@@ -40,6 +40,12 @@ enum CheckInFlow {
         index >= count ? "REVIEW" : "\(index + 1) OF \(count)"
     }
 
+    /// A question opened from the review list goes straight back there instead of on to the next question.
+    static func advanceLabel(position: Int, count: Int, returningToReview: Bool) -> String {
+        if returningToReview { return "Back to review" }
+        return position == count - 1 ? "Review answers" : "Next question"
+    }
+
     static func eyebrow(_ form: CheckInForm) -> String { "\(form.title) · V\(form.version)" }
 
     static func requirement(_ question: CheckInQuestion) -> String {
@@ -85,6 +91,7 @@ struct CheckInView: View {
     @State private var error: String?
     @State private var index = 0
     @State private var positionedDraft: UUID?
+    @State private var returningToReview = false
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
@@ -98,6 +105,7 @@ struct CheckInView: View {
             .frame(maxWidth: 600, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(Letterpress.canvas.ignoresSafeArea())
         .navigationTitle("Check-in")
         .navigationBarTitleDisplayMode(.inline)
@@ -108,6 +116,7 @@ struct CheckInView: View {
         .onChange(of: repository.draft?.id, initial: true) { _, id in
             guard let draft = repository.draft, positionedDraft != id else { return }
             index = CheckInFlow.resumeIndex(draft)
+            returningToReview = false
             positionedDraft = id
         }
     }
@@ -222,11 +231,17 @@ struct CheckInView: View {
                 : AnyLayout(HStackLayout(spacing: Letterpress.Space.s10))
             layout {
                 if position > 0 {
-                    Button("Back") { index = position - 1 }
+                    Button("Back") {
+                        index = position - 1
+                        returningToReview = false
+                    }
                         .buttonStyle(.letterpress(.outlined, fullWidth: dynamicTypeSize.isAccessibilitySize))
                         .accessibilityIdentifier("checkInBack")
                 }
-                Button(position == draft.form.questions.count - 1 ? "Review answers" : "Next question") { index = position + 1 }
+                Button(CheckInFlow.advanceLabel(position: position, count: draft.form.questions.count, returningToReview: returningToReview)) {
+                    index = returningToReview ? draft.form.questions.count : position + 1
+                    returningToReview = false
+                }
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
                     .disabled(!CheckInFlow.canAdvance(question, in: answers))
                     .accessibilityIdentifier("checkInNext")
@@ -255,7 +270,10 @@ struct CheckInView: View {
         newerFormNote(draft)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(draft.form.questions.enumerated()), id: \.element.id) { position, question in
-                Button { index = position } label: {
+                Button {
+                    index = position
+                    returningToReview = true
+                } label: {
                     HStack(alignment: .firstTextBaseline, spacing: Letterpress.Space.s10) {
                         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                             Text(question.prompt)

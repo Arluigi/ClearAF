@@ -52,7 +52,7 @@ struct PhotoCaptureView: View {
     @State private var pickerError: String?
     @State private var requestingAccess = false
 
-    init(title: String = "Take Photo", subtitle: String = "Capture a photo", onPhotoTaken: @escaping (Data) -> Void) {
+    init(title: String = "Take photo", subtitle: String = "Capture a photo", onPhotoTaken: @escaping (Data) -> Void) {
         self.title = title; self.subtitle = subtitle; self.onPhotoTaken = onPhotoTaken
     }
 
@@ -63,7 +63,7 @@ struct PhotoCaptureView: View {
                     Text(title).font(Letterpress.display(34, relativeTo: .largeTitle)).foregroundStyle(Letterpress.ink).multilineTextAlignment(.center)
                     Text(subtitle).foregroundStyle(Letterpress.inkSecondary).multilineTextAlignment(.center)
                     Button(action: requestCamera) {
-                        Label("Take Photo", systemImage: "camera")
+                        Label("Take photo", systemImage: "camera")
                     }
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
                     .disabled(requestingAccess)
@@ -84,7 +84,7 @@ struct PhotoCaptureView: View {
                         }
                     }
                     Button { pickerError = nil; showingPhotoLibrary = true } label: {
-                        Label("Choose from Library", systemImage: "photo.on.rectangle")
+                        Label("Choose from library", systemImage: "photo.on.rectangle")
                     }.buttonStyle(.letterpress(.outlined, fullWidth: true))
                     if let pickerError { Text(pickerError).foregroundStyle(Letterpress.inkSecondary).accessibilityIdentifier("photoPickerError") }
                 }.padding(24)
