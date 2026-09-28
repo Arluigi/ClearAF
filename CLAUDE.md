@@ -14,7 +14,7 @@ This machine is set up with skills, plugins, agents and CLIs for this stack. Use
 | Picking up past work or "what did we do about X" | claude-mem `mem-search` / `timeline-report` before re-investigating |
 | SQL, RLS, Auth, Storage, Supabase CLI | `supabase` and `supabase-postgres-best-practices` skills; schema changes via `/new-migration` |
 | Portal React/Next.js code | `vercel-react-best-practices`, `vercel-composition-patterns`; `frontend-design` for new or reshaped UI (within Letterpress, docs/design/design-language.md) |
-| SwiftUI | `swiftui-expert` skill (target is iOS 17: gate iOS 26 APIs such as Liquid Glass with `#available`) |
+| SwiftUI | `swiftui-expert` skill (target is iOS 18.5; built with Xcode 27. Gate iOS 26/27 APIs such as Liquid Glass and `.crossFade` with `#available`) |
 | Build, test or run iOS; Simulator screenshots and UI taps | `xcodebuildmcp-cli` skill + `xcodebuildmcp` CLI; pipe raw `xcodebuild` through `xcbeautify` |
 | Checking portal UI | Playwright plugin browser tools against http://localhost:3000 |
 | Navigating code | LSP (swift-lsp, typescript-lsp) for definitions, references and diagnostics before grepping |
@@ -28,7 +28,7 @@ This machine is set up with skills, plugins, agents and CLIs for this stack. Use
 
 ## Layout
 
-- `ClearAF/` - SwiftUI app (iOS 17+). `Services/*Repository.swift` call the API; `Config/` selects endpoints (Debug = local stack, app ID `com.aryansachdev.ClearAF.dev`; Release = production, `com.clearaf.patient`). Tests: `ClearAFTests/`, `ClearAFUITests/`.
+- `ClearAF/` - SwiftUI app (iOS 18.5+). `Services/*Repository.swift` call the API; `Config/` selects endpoints (Debug = local stack, app ID `com.aryansachdev.ClearAF.dev`; Release = production, `com.clearaf.patient`). Tests: `ClearAFTests/`, `ClearAFUITests/`.
 - `backend/` - Express + TypeScript, deployed to Vercel project `clearaf-api`. `src/routes/` are thin; logic and zod validation live in `src/services/`; `src/middleware/auth.ts` verifies the Supabase session and resolves roles from the database. Prisma is used as a **query client only**.
 - `web-portal/` - Next.js 15 App Router, React 19, Tailwind, shadcn/ui. Vercel project `clearaf-portal`, auto-deploys from `main`. Per-feature API code in `src/lib/*.ts`; shared types in `src/types/api.ts`.
 - `supabase/migrations/` - the only active migration chain. `supabase/legacy-migrations/` is archived and must never be replayed.
