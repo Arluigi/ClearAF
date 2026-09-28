@@ -86,26 +86,38 @@ struct CheckInView: View {
     @ObservedObject private var repository = APIService.shared.checkIns
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var form: CheckInForm?
     @State private var loaded = false
     @State private var error: String?
     @State private var index = 0
     @State private var positionedDraft: UUID?
     @State private var returningToReview = false
+    /// Which way the last page change went, so the new page slides in from the side you're heading to.
+    @State private var forward = true
+    @AccessibilityFocusState private var titleFocused: Bool
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                content(ticket)
+        // The ZStack holds the outgoing and incoming pages on top of each other while they slide. `.id(index)` also
+        // starts each question at the top.
+        ZStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    content(ticket)
+                }
+                .padding(.horizontal, Letterpress.Space.s22)
+                .padding(.top, Letterpress.Space.s10)
+                .padding(.bottom, Letterpress.Space.s28)
+                .frame(maxWidth: 600, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, Letterpress.Space.s22)
-            .padding(.top, Letterpress.Space.s10)
-            .padding(.bottom, Letterpress.Space.s28)
-            .frame(maxWidth: 600, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .scrollDismissesKeyboard(.interactively)
+            .id(index)
+            .transition(reduceMotion ? .opacity : .asymmetric(
+                insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+                removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
         }
-        .scrollDismissesKeyboard(.interactively)
         .background(Letterpress.canvas.ignoresSafeArea())
         .navigationTitle("Check-in")
         .navigationBarTitleDisplayMode(.inline)
@@ -119,6 +131,8 @@ struct CheckInView: View {
             returningToReview = false
             positionedDraft = id
         }
+        // VoiceOver lands on the new page's title; the focus move is the announcement.
+        .onChange(of: index) { titleFocused = true }
         .modifier(CheckInSendFeedback(status: repository.status))
     }
 
@@ -196,6 +210,7 @@ struct CheckInView: View {
                 .foregroundStyle(Letterpress.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($titleFocused)
             reason(CheckInFlow.requirement(question))
         }
         .padding(.top, Letterpress.Space.s22)
@@ -234,14 +249,14 @@ struct CheckInView: View {
             layout {
                 if position > 0 {
                     Button("Back") {
-                        index = position - 1
+                        go(to: position - 1)
                         returningToReview = false
                     }
                         .buttonStyle(.letterpress(.outlined, fullWidth: dynamicTypeSize.isAccessibilitySize))
                         .accessibilityIdentifier("checkInBack")
                 }
                 Button(CheckInFlow.advanceLabel(position: position, count: draft.form.questions.count, returningToReview: returningToReview)) {
-                    index = returningToReview ? draft.form.questions.count : position + 1
+                    go(to: returningToReview ? draft.form.questions.count : position + 1)
                     returningToReview = false
                 }
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
@@ -267,13 +282,14 @@ struct CheckInView: View {
                 .font(Letterpress.display(28, relativeTo: .title))
                 .foregroundStyle(Letterpress.ink)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($titleFocused)
         }
         .padding(.top, Letterpress.Space.s22)
         newerFormNote(draft)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(draft.form.questions.enumerated()), id: \.element.id) { position, question in
                 Button {
-                    index = position
+                    go(to: position)
                     returningToReview = true
                 } label: {
                     HStack(alignment: .firstTextBaseline, spacing: Letterpress.Space.s10) {
@@ -405,6 +421,18 @@ struct CheckInView: View {
         guard let ticket else { return }
         do { try repository.update(answer, ticket: ticket); error = nil }
         catch { self.error = "Your edit couldn't be saved. Try again." }
+    }
+
+    /// A leaving page keeps the transition it was last drawn with, so when the direction flips it is redrawn with the
+    /// new direction first and the page changes on the next turn of the run loop.
+    private func go(to newIndex: Int) {
+        let isForward = newIndex > index
+        guard isForward != forward else {
+            withAnimation(.smooth) { index = newIndex }
+            return
+        }
+        forward = isForward
+        DispatchQueue.main.async { withAnimation(.smooth) { index = newIndex } }
     }
 
     private func send(_ ticket: AccountAccess.Ticket?) {

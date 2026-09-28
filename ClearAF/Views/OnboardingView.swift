@@ -84,7 +84,11 @@ struct OnboardingView: View {
     @StateObject private var saveState = AccountSaveState()
     @ObservedObject private var reminders = APIService.shared.reminders
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var step: OnboardingStep = .routine
+    /// Which way the last step change went, so the new step slides in from the side you're heading to.
+    @State private var forward = true
+    @AccessibilityFocusState private var titleFocused: Bool
     @State private var userName = ""
     @State private var reminderDraft = ReminderPreferences.onboardingDefault
     /// Set when a reminder save completed without observably applying (stale ticket or a save already in flight in
@@ -102,25 +106,31 @@ struct OnboardingView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    stepContent
-                    if dynamicTypeSize.isAccessibilitySize {
-                        actions.padding(.top, Letterpress.Space.s28)
-                        // Pinned outside the scroll area on regular text sizes (see the fixed bottom bar below);
-                        // it scrolls with content at accessibility sizes, same as the actions above.
-                        UrgentReportEntry(horizontalPadding: 0).padding(.top, Letterpress.Space.s44)
+            // The ZStack holds the outgoing and incoming steps on top of each other while they slide.
+            ZStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        stepContent
+                        if dynamicTypeSize.isAccessibilitySize {
+                            actions.padding(.top, Letterpress.Space.s28)
+                            // Pinned outside the scroll area on regular text sizes (see the fixed bottom bar below);
+                            // it scrolls with content at accessibility sizes, same as the actions above.
+                            UrgentReportEntry(horizontalPadding: 0).padding(.top, Letterpress.Space.s44)
+                        }
+                        signOutButton.padding(.top, Letterpress.Space.s44)
                     }
-                    signOutButton.padding(.top, Letterpress.Space.s44)
+                    .padding(.horizontal, Letterpress.Space.s22)
+                    .padding(.top, Letterpress.Space.s28)
+                    .padding(.bottom, Letterpress.Space.s28)
+                    .frame(maxWidth: 600, alignment: .leading)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, Letterpress.Space.s22)
-                .padding(.top, Letterpress.Space.s28)
-                .padding(.bottom, Letterpress.Space.s28)
-                .frame(maxWidth: 600, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                .scrollDismissesKeyboard(.interactively)
+                .id(step)
+                .transition(reduceMotion ? .opacity : .asymmetric(
+                    insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+                    removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
             }
-            .scrollDismissesKeyboard(.interactively)
-            .id(step)
             if !dynamicTypeSize.isAccessibilitySize {
                 // Kept in view below the scroll area on regular text sizes; it scrolls with content at accessibility
                 // sizes. The urgent-report entry is the reaction-reporting path, so it stays pinned here too instead
@@ -150,6 +160,8 @@ struct OnboardingView: View {
                 if reminders.preferences.anyEnabled { reminderDraft = reminders.preferences }
                 reminderAdvanceFailed = false
             }
+            // VoiceOver lands on the new step's title; the focus move is the announcement.
+            titleFocused = true
         }
     }
 
@@ -161,7 +173,7 @@ struct OnboardingView: View {
                 .accessibilityLabel("Step \(step.rawValue + 1) of \(OnboardingStep.allCases.count)")
             LetterpressProgressRule(completed: step.rawValue + 1, total: OnboardingStep.allCases.count)
             if step.canSkip {
-                Button("Skip") { step = OnboardingStep.skipTarget }
+                Button("Skip") { go(to: OnboardingStep.skipTarget) }
                     .buttonStyle(.letterpress(.underline))
                     .disabled(busy)
                     .accessibilityHint("Goes to the last step")
@@ -179,6 +191,7 @@ struct OnboardingView: View {
             .foregroundStyle(Letterpress.ink)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($titleFocused)
         switch step {
         case .routine:
             intro(OnboardingCopy.routineIntro)
@@ -267,7 +280,7 @@ struct OnboardingView: View {
         return VStack(spacing: Letterpress.Space.s10) {
             layout {
                 if let previous = step.previous {
-                    Button("Back") { step = previous }
+                    Button("Back") { go(to: previous) }
                         .buttonStyle(.letterpress(.outlined, fullWidth: dynamicTypeSize.isAccessibilitySize))
                         .disabled(busy)
                         .accessibilityIdentifier("onboardingBack")
@@ -295,7 +308,7 @@ struct OnboardingView: View {
         switch step {
         case .reminders:
             guard remindersChanged, let ticket = APIService.shared.access.snapshot() else {
-                step = .name
+                go(to: .name)
                 return
             }
             reminderAdvanceFailed = false
@@ -306,7 +319,7 @@ struct OnboardingView: View {
                 // what was submitted. `state != .failed` alone isn't enough — a stale ticket or a save already in
                 // flight makes `apply` return early without touching `state` or `preferences` at all.
                 if reminders.state != .failed, reminders.preferences == draft {
-                    step = .name
+                    go(to: .name)
                 } else {
                     reminderAdvanceFailed = true
                 }
@@ -314,8 +327,20 @@ struct OnboardingView: View {
         case .name:
             completeOnboarding()
         default:
-            if let next = step.next { step = next }
+            if let next = step.next { go(to: next) }
         }
+    }
+
+    /// A leaving step keeps the transition it was last drawn with, so when the direction flips it is redrawn with the
+    /// new direction first and the step changes on the next turn of the run loop.
+    private func go(to newStep: OnboardingStep) {
+        let isForward = newStep.rawValue > step.rawValue
+        guard isForward != forward else {
+            withAnimation(.smooth) { step = newStep }
+            return
+        }
+        forward = isForward
+        DispatchQueue.main.async { withAnimation(.smooth) { step = newStep } }
     }
 
     private func completeOnboarding() {
