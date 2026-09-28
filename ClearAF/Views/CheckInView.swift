@@ -119,6 +119,7 @@ struct CheckInView: View {
             returningToReview = false
             positionedDraft = id
         }
+        .modifier(CheckInSendFeedback(status: repository.status))
     }
 
     @ViewBuilder private func content(_ ticket: AccountAccess.Ticket?) -> some View {
@@ -213,6 +214,7 @@ struct CheckInView: View {
                     }
                     LetterpressRule()
                 }
+                .sensoryFeedback(.selection, trigger: CheckInFlow.answer(for: question, in: answers)?.optionId)
             case .text:
                 let text = CheckInFlow.answer(for: question, in: answers)?.text ?? ""
                 LetterpressLabeledField(label: "Your answer", isEmpty: text.isEmpty, message: CheckInFlow.count(text),
@@ -429,6 +431,17 @@ struct CheckInView: View {
             guard APIService.shared.access.snapshot() == ticket else { return }
             self.error = "Check your connection, then try again. Any draft stays on this device."
         }
+    }
+}
+
+/// Only a send made here buzzes: resuming a check-in that was already sent, or failed earlier, stays quiet.
+private struct CheckInSendFeedback: ViewModifier {
+    typealias Status = CheckInRepository.Status
+    let status: Status
+    func body(content: Content) -> some View {
+        content
+            .sensoryFeedback(.success, trigger: status) { old, new in old == Status.sending && new == Status.sent }
+            .sensoryFeedback(.error, trigger: status) { old, new in old == Status.sending && new == Status.failed }
     }
 }
 

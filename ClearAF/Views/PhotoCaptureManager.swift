@@ -139,6 +139,7 @@ struct DurablePhotoCaptureView: View {
     @State private var captureTicket = APIService.shared.access.snapshot()
     @State private var review: PhotoReviewDraft?
     @State private var saving = false
+    @State private var saved = false
 
     var body: some View {
         Group {
@@ -162,6 +163,9 @@ struct DurablePhotoCaptureView: View {
                isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { finishAlert() } })) {
             Button(attachmentFailed ? "Done" : "OK") { finishAlert() }
         } message: { Text(errorMessage ?? "") }
+        .sensoryFeedback(.success, trigger: saved) { _, new in new }
+        // A photo kept in Photos but not attached here is not a failed save.
+        .sensoryFeedback(.error, trigger: errorMessage) { _, new in new != nil && !attachmentFailed }
     }
 
     private func save() {
@@ -172,7 +176,7 @@ struct DurablePhotoCaptureView: View {
             let completion = try session.capture(draft.bytes, date: draft.capturedAt, notes: draft.trimmedNote,
                 repository: APIService.shared.photos, ticket: captureTicket, onSaved: onSaved)
             if completion == .saved {
-                HapticManager.success()
+                saved = true
                 dismiss()
             } else {
                 attachmentFailed = true

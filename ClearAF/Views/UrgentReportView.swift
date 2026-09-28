@@ -99,6 +99,8 @@ struct UrgentReportView: View {
                 guard let ticket = APIService.shared.access.snapshot() else { return }
                 await repository.load(ticket: ticket)
             }
+            .sensoryFeedback(.success, trigger: repository.sent?.id) { _, new in new != nil }
+            .sensoryFeedback(.error, trigger: repository.error) { _, new in new != nil }
         }
         .letterpressSheetBackground()
     }

@@ -107,6 +107,7 @@ struct RoutineChecklist: View {
             }
             LetterpressRule()
         }
+        .sensoryFeedback(.selection, trigger: ticked)
     }
 }
 
@@ -201,5 +202,7 @@ struct RoutineRecordPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        // Saved on this device counts: the patient's part is done even while the upload waits.
+        .sensoryFeedback(.success, trigger: status) { old, new in old == .unrecorded && new != .unrecorded }
     }
 }

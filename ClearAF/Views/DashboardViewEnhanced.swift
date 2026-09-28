@@ -102,7 +102,6 @@ private struct TodayGreeting: View {
                 Text(LetterpressFormat.weekdayDayMonth(now)).letterpressEyebrow()
                 Spacer()
                 Button {
-                    HapticManager.light()
                     showingProfile = true
                 } label: {
                     Group {

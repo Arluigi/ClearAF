@@ -59,6 +59,8 @@ struct MessagingView: View {
     @State private var visible: Set<UUID> = []
     @State private var active = false
     @State private var showingLimitReport = false
+    /// The note whose send the patient started here; the success haptic waits for the server to confirm this id.
+    @State private var sendingID: UUID?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -112,7 +114,10 @@ struct MessagingView: View {
                                 if old != nil, let id { scrollToEnd(id, proxy: proxy) }
                             }
                             .onChange(of: repository.sending) { _, sending in
-                                if sending, let id = repository.draft?.id { scrollToEnd(id, proxy: proxy) }
+                                if sending, let id = repository.draft?.id {
+                                    sendingID = id
+                                    scrollToEnd(id, proxy: proxy)
+                                }
                             }
                             .coordinateSpace(name: "messageViewport")
                             .onPreferenceChange(VisibleMessageFrames.self) { frames in
@@ -162,6 +167,8 @@ struct MessagingView: View {
             .onChange(of: selected?.id) { _, id in
                 if id == nil && active && scenePhase == .active { Task { await repository.acknowledgeVisible(visible) } }
             }
+            .modifier(NoteSendFeedback(lastOwnID: repository.messages.last { $0.senderType == "patient" }?.id, sendingID: sendingID,
+                                       sending: repository.sending, draftHeld: repository.draft != nil))
         }
     }
 
@@ -376,6 +383,21 @@ private struct OwnNote: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(label)
+    }
+}
+
+/// Success once the server confirms the note sent from here. A send that ends with the draft still held failed
+/// (unconfirmed, or the weekly limit); success clears the draft, and an account switch clears both, so neither buzzes.
+private struct NoteSendFeedback: ViewModifier {
+    let lastOwnID: UUID?
+    let sendingID: UUID?
+    let sending: Bool
+    let draftHeld: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .sensoryFeedback(.success, trigger: lastOwnID) { (_: UUID?, new: UUID?) in new != nil && new == sendingID }
+            .sensoryFeedback(.error, trigger: sending) { old, new in old && !new && draftHeld }
     }
 }
 

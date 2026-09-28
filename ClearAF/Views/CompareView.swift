@@ -53,6 +53,8 @@ struct ComparePhotosView: View {
             pickDefaultPair()
         }
         .onChange(of: strip.photos) { pickDefaultPair() }
+        // A tap changes the pair by one photo; the default pair (none to two) arrives on its own and stays quiet.
+        .sensoryFeedback(.selection, trigger: pair) { old, new in abs(old.picks.count - new.picks.count) < 2 }
         .onChange(of: pair) {
             showingLater = true
             // Clears synchronously, in the same update as the pair change, so the render that reflects the
@@ -201,6 +203,7 @@ struct ComparePhotosView: View {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showingLater)
             }
             .contentShape(Rectangle())
+            .sensoryFeedback(.selection, trigger: showingLater)
             .onTapGesture { showingLater.toggle() }
             .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
                 let width = abs(value.translation.width)
