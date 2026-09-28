@@ -92,6 +92,12 @@ import Testing
         #expect(view.contains("Toggle(isOn: time.enabled.animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy))"))
         #expect(view.contains("@State private var draft = APIService.shared.reminders.preferences"), "seeded before the async load")
         #expect(view.contains(".disabled(!loaded || !ReminderCopy.canSave("), "Save waits for the first load")
+        #expect(view.contains("ReminderRows(draft: Binding(get: { draft }, set: { draft = $0; edited = true }))\n                    // No edit before this account's preferences are in place, so nothing is saved over defaults.\n                    .disabled(!loaded)"),
+                "the rows wait for the first load too")
+        let squashed = view.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        #expect(squashed.contains("if let ticket = api.access.snapshot() { await repository.resume(ticket: ticket) if api.access.snapshot() == ticket { if !edited { draft = repository.preferences } loaded = true } }"),
+                "loaded only after this account's preferences arrive, never with no or a stale ticket")
+        #expect(view.components(separatedBy: "loaded = true").count - 1 == 1)
     }
 }
 @MainActor private final class FakeReminderScheduler: ReminderScheduling {

@@ -138,6 +138,8 @@ struct ReminderSettingsView: View {
                     .foregroundStyle(Letterpress.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ReminderRows(draft: Binding(get: { draft }, set: { draft = $0; edited = true }))
+                    // No edit before this account's preferences are in place, so nothing is saved over defaults.
+                    .disabled(!loaded)
                     .padding(.top, Letterpress.Space.s22)
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Button(repository.state == .saving ? "Saving…" : "Save reminders") {
@@ -184,9 +186,15 @@ struct ReminderSettingsView: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .task {
-            if let ticket = api.access.snapshot() { await repository.resume(ticket: ticket) }
-            if !edited { draft = repository.preferences }
-            loaded = true
+            // Loaded only once this account's preferences are in: with no ticket, or one that went stale while
+            // resuming, the rows and Save stay disabled rather than working over defaults.
+            if let ticket = api.access.snapshot() {
+                await repository.resume(ticket: ticket)
+                if api.access.snapshot() == ticket {
+                    if !edited { draft = repository.preferences }
+                    loaded = true
+                }
+            }
             await repository.refreshPermission()
         }
         .announcing(saveResult)
