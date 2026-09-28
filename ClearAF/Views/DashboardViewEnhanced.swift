@@ -31,6 +31,42 @@ enum TodayCopy {
         guard let latest else { return true }
         return !calendar.isDate(latest, inSameDayAs: now)
     }
+
+    /// One VoiceOver element per photo-rail tile: what it is, when, and where it stands.
+    static func photoLabel(_ date: Date?, state: PhotoTileState, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        guard let date else { return "Photo, \(state.label)" }
+        return "Photo, \(LetterpressFormat.dayMonth(date, locale: locale, timeZone: timeZone)), \(state.label)"
+    }
+}
+
+/// The ink initials circle on Today and Profile. It grows with body text, capped at accessibility2 by its callers so
+/// it never crowds out the greeting or the name beside it.
+struct InitialsAvatar: View {
+    let name: String?
+    let textSize: CGFloat
+    let iconSize: CGFloat
+    @ScaledMetric private var size: CGFloat
+
+    init(name: String?, size: CGFloat, textSize: CGFloat, iconSize: CGFloat) {
+        self.name = name
+        self.textSize = textSize
+        self.iconSize = iconSize
+        _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+    }
+
+    var body: some View {
+        Group {
+            let initials = TodayCopy.initials(name)
+            if initials.isEmpty {
+                Image(systemName: "person").font(Letterpress.ui(iconSize, relativeTo: .body))
+            } else {
+                Text(initials).font(Letterpress.data(textSize, relativeTo: .body))
+            }
+        }
+        .foregroundStyle(Letterpress.canvas)
+        .frame(width: size, height: size)
+        .background(Letterpress.ink, in: Circle())
+    }
 }
 
 /// Today (spec §6 #3): greeting → photo rail → checklist → unread note → check-in row, rule-separated.
@@ -72,6 +108,7 @@ struct DashboardViewEnhanced: View {
             }
             .background(Letterpress.canvas.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .refreshable { await refresh() }
             .task { await refresh() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active && selectedTab == .today { Task { await refresh() } }
@@ -96,7 +133,13 @@ private struct TodayGreeting: View {
     @Binding var showingProfile: Bool
 
     var body: some View {
-        let now = Date()
+        // Redrawn each minute so the date and the time-of-day greeting stay current while Today is open.
+        TimelineView(.everyMinute) { context in
+            content(now: context.date)
+        }
+    }
+
+    private func content(now: Date) -> some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
             HStack {
                 Text(LetterpressFormat.weekdayDayMonth(now)).letterpressEyebrow()
@@ -104,19 +147,10 @@ private struct TodayGreeting: View {
                 Button {
                     showingProfile = true
                 } label: {
-                    Group {
-                        let initials = TodayCopy.initials(name)
-                        if initials.isEmpty {
-                            Image(systemName: "person").font(Letterpress.ui(13, relativeTo: .caption))
-                        } else {
-                            Text(initials).font(Letterpress.data(11, relativeTo: .caption))
-                        }
-                    }
-                    .foregroundStyle(Letterpress.canvas)
-                    .frame(width: 30, height: 30)
-                    .background(Letterpress.ink, in: Circle())
-                    .frame(width: Letterpress.minTouch, height: Letterpress.minTouch)
-                    .contentShape(Rectangle())
+                    InitialsAvatar(name: name, size: 30, textSize: 11, iconSize: 13)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                        .frame(minWidth: Letterpress.minTouch, minHeight: Letterpress.minTouch)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibleButton(label: "Profile", hint: "Open your profile settings")
@@ -164,12 +198,9 @@ private struct TodayPhotoRail: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Letterpress.Space.s6) {
                     if needsToday { todaySlot }
-                    ForEach(Array(shown.enumerated()), id: \.element.objectID) { index, photo in
+                    ForEach(shown, id: \.objectID) { photo in
                         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                             PhotoFrame(photo: photo, images: images, maxPixelSize: 400)
-                                .accessibilityElement()
-                                .accessibilityAddTraits(.isImage)
-                                .accessibilityLabel(index == 0 ? "Latest progress photo" : "Dated photo")
                             if let date = photo.captureDate {
                                 Text(LetterpressFormat.stamp(date))
                                     .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
@@ -178,6 +209,11 @@ private struct TodayPhotoRail: View {
                             PhotoSharingStatusView(photo: photo, compact: true)
                         }
                         .frame(width: Self.tileWidth)
+                        // Compact tiles hold no controls, so the photo, stamp and state read as one element.
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isImage)
+                        .accessibilityLabel(TodayCopy.photoLabel(photo.captureDate,
+                                                                 state: PhotoTileState.of(uploadState: photo.uploadState, reviewed: false)))
                     }
                 }
                 .padding(.horizontal, Letterpress.Space.s22)
@@ -245,12 +281,13 @@ private struct TodayRoutineSection: View {
                     .font(Letterpress.ui(15, relativeTo: .body))
                     .foregroundStyle(Letterpress.inkSecondary)
             }
-            if actionError != nil || repository.lastError != nil {
-                Text("Routines need attention.")
+            if let error = actionError ?? repository.lastError {
+                Text(error)
                     .font(Letterpress.ui(13, relativeTo: .footnote))
                     .foregroundStyle(Letterpress.error)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Button("Open Plan") { selectedTab = .plan }.buttonStyle(.letterpress(.underline))
+            Button("Open plan") { selectedTab = .plan }.buttonStyle(.letterpress(.underline))
         }
     }
 }

@@ -8,16 +8,18 @@ struct ContentView: View {
         Group {
             switch apiService.phase {
             case .loading:
-                VStack { SwiftUI.ProgressView(); Text("Opening your account…") }
+                VStack(spacing: Letterpress.Space.s10) {
+                    SwiftUI.ProgressView().tint(Letterpress.inkTertiary)
+                    Text("Opening your account…")
+                        .font(Letterpress.ui(15, relativeTo: .body))
+                        .foregroundStyle(Letterpress.inkSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Letterpress.canvas.ignoresSafeArea())
             case .signedOut:
                 AuthenticationView {}
             case .profileError:
-                VStack(spacing: 20) {
-                    Text("Unable to open your account").font(.title2)
-                    Text(apiService.accountError).multilineTextAlignment(.center)
-                    Button("Try again") { apiService.retryProfile() }
-                    Button("Sign out") { apiService.logout() }
-                }.padding()
+                AccountErrorView(message: apiService.accountError, retry: apiService.retryProfile, signOut: apiService.logout)
             case .recovery:
                 PasswordRecoveryView()
             case .enrollment:
@@ -63,6 +65,39 @@ struct ContentView: View {
         }
         apiService.photos.resume(context: apiService.persistence.container.viewContext, ticket: ticket)
         apiService.routines.resume(accountID: ticket.accountID, ticket: ticket)
+    }
+}
+
+/// The profile couldn't load (spec §5 error state): what happened in words, one filled retry, sign out beneath it.
+private struct AccountErrorView: View {
+    let message: String
+    let retry: () -> Void
+    let signOut: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
+                Text("Unable to open your account")
+                    .font(Letterpress.display(28, relativeTo: .title))
+                    .foregroundStyle(Letterpress.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                Text(message)
+                    .font(Letterpress.ui(15, relativeTo: .body))
+                    .foregroundStyle(Letterpress.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Try again", action: retry)
+                    .buttonStyle(.letterpress(.filled, fullWidth: true))
+                    .padding(.top, Letterpress.Space.s10)
+                Button("Sign out", action: signOut)
+                    .buttonStyle(.letterpress(.underline))
+            }
+            .padding(.horizontal, Letterpress.Space.s22)
+            .padding(.vertical, Letterpress.Space.s44)
+            .frame(maxWidth: 600, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Letterpress.canvas.ignoresSafeArea())
     }
 }
 

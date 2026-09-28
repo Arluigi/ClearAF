@@ -75,18 +75,9 @@ struct ProfileView: View {
 
     private var header: some View {
         HStack(spacing: Letterpress.Space.s14) {
-            Group {
-                let initials = TodayCopy.initials(api.currentUser?.name)
-                if initials.isEmpty {
-                    Image(systemName: "person").font(Letterpress.ui(17, relativeTo: .body))
-                } else {
-                    Text(initials).font(Letterpress.data(17, relativeTo: .body))
-                }
-            }
-            .foregroundStyle(Letterpress.canvas)
-            .frame(width: 56, height: 56)
-            .background(Letterpress.ink, in: Circle())
-            .accessibilityHidden(true)
+            InitialsAvatar(name: api.currentUser?.name, size: 56, textSize: 17, iconSize: 17)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                 Text(api.currentUser?.name ?? "Your profile")
                     .font(Letterpress.display(26, relativeTo: .title))

@@ -8,11 +8,13 @@ struct LetterpressEyebrow: ViewModifier {
     static var tracking: CGFloat { size * trackingEm }
 
     var color: Color = Letterpress.inkTertiary
+    /// Grows with the caption2 text it spaces, so the 0.16em proportion holds at every text size.
+    @ScaledMetric(relativeTo: .caption2) private var tracking: CGFloat = LetterpressEyebrow.tracking
 
     func body(content: Content) -> some View {
         content
             .font(Letterpress.data(Self.size, weight: .medium, relativeTo: .caption2))
-            .tracking(Self.tracking)
+            .tracking(tracking)
             .textCase(.uppercase)
             .foregroundStyle(color)
     }
