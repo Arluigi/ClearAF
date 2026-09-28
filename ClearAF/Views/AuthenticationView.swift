@@ -1,3 +1,4 @@
+import Auth
 import SwiftUI
 
 /// Sign-in copy and validation (spec §6 #1, §5, §7). The rules are the ones the screen already enforced.
@@ -8,6 +9,8 @@ enum AuthForm {
     static let confirmationSent = "Check your email to confirm your account, then sign in."
     static let recoverySent = "If an account exists, a password reset email is on its way. Open the link on this device."
     static let recoveryNeedsEmail = "Enter your email above, then choose Forgot password."
+    static let offline = "You're offline. Check your connection and try again."
+    static let wrongCredentials = "That email and password don't match. Check them and try again."
 
     static func isValid(registering: Bool, name: String, email: String, password: String) -> Bool {
         if registering {
@@ -43,10 +46,24 @@ enum AuthForm {
         case .recovery: "Couldn't send a reset email. Check your connection and try again."
         }
     }
+
+    /// Names the problem when the error says what it is; otherwise the general sentence for that step.
+    /// Supabase Auth tags a wrong email or password with the `invalid_credentials` code, only on sign-in.
+    static func failureMessage(for error: Error, during failure: Failure) -> String {
+        if let urlError = error as? URLError,
+           [.notConnectedToInternet, .networkConnectionLost, .timedOut].contains(urlError.code) {
+            return offline
+        }
+        if failure == .signIn, let authError = error as? AuthError, authError.errorCode == .invalidCredentials {
+            return wrongCredentials
+        }
+        return message(failure)
+    }
 }
 
 /// Sign in and create account (spec §6 #1). Errors are inline and keep what was typed.
 struct AuthenticationView: View {
+    private enum Field { case name, email, password }
     @StateObject private var supabaseService = SupabaseService.shared
     @ObservedObject private var api = APIService.shared
     @State private var information = ""
@@ -57,6 +74,7 @@ struct AuthenticationView: View {
     @State private var name = ""
     @State private var showingPassword = false
     @State private var isLoading = false
+    @FocusState private var focus: Field?
 
     let onAuthenticationSuccess: () -> Void
 
@@ -101,6 +119,8 @@ struct AuthenticationView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Letterpress.canvas.ignoresSafeArea())
+        // Swapping SecureField and TextField drops focus; put it back so typing can continue.
+        .onChange(of: showingPassword) { focus = .password }
     }
 
     private var fields: some View {
@@ -110,6 +130,9 @@ struct AuthenticationView: View {
                     TextField(text: $name, prompt: nil) { Text("Full name") }
                         .textContentType(.name)
                         .textInputAutocapitalization(.words)
+                        .focused($focus, equals: .name)
+                        .submitLabel(.next)
+                        .onSubmit { focus = .email }
                         .accessibilityIdentifier("authName")
                 }
             }
@@ -119,6 +142,9 @@ struct AuthenticationView: View {
                     .textContentType(.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .focused($focus, equals: .email)
+                    .submitLabel(.next)
+                    .onSubmit { focus = .password }
                     .accessibilityIdentifier("authEmail")
             }
             LetterpressLabeledField(label: "Password", isEmpty: password.isEmpty) {
@@ -132,6 +158,10 @@ struct AuthenticationView: View {
                             SecureField(text: $password, prompt: nil) { Text("Password") }
                         }
                     }
+                    .textContentType(isRegistering ? .newPassword : .password)
+                    .focused($focus, equals: .password)
+                    .submitLabel(.go)
+                    .onSubmit { if canSubmit { submit() } }
                     .accessibilityIdentifier("authPassword")
                     Button(showingPassword ? "Hide" : "Show") { showingPassword.toggle() }
                         .buttonStyle(.letterpress(.underline))
@@ -144,11 +174,9 @@ struct AuthenticationView: View {
 
     private var actions: some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
-            Button(AuthForm.submit(registering: isRegistering, loading: isLoading)) {
-                isRegistering ? registerUser() : loginUser()
-            }
+            Button(AuthForm.submit(registering: isRegistering, loading: isLoading), action: submit)
             .buttonStyle(.letterpress(.filled, fullWidth: true))
-            .disabled(!valid || isLoading)
+            .disabled(!canSubmit)
             .accessibilityIdentifier("authSubmit")
             if let failure {
                 Text(failure)
@@ -205,6 +233,13 @@ struct AuthenticationView: View {
         .accessibilityIdentifier("authMode")
     }
 
+    private var canSubmit: Bool { valid && !isLoading }
+
+    private func submit() {
+        guard canSubmit else { return }
+        isRegistering ? registerUser() : loginUser()
+    }
+
     private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func registerUser() {
@@ -222,7 +257,7 @@ struct AuthenticationView: View {
                     password = ""
                 }
             } catch {
-                failure = AuthForm.message(.register)
+                failure = AuthForm.failureMessage(for: error, during: .register)
             }
         }
     }
@@ -234,7 +269,7 @@ struct AuthenticationView: View {
         Task { @MainActor in
             defer { isLoading = false }
             do { try await supabaseService.signIn(email: trimmedEmail, password: password) }
-            catch { failure = AuthForm.message(.signIn) }
+            catch { failure = AuthForm.failureMessage(for: error, during: .signIn) }
         }
     }
 
@@ -252,18 +287,17 @@ struct AuthenticationView: View {
                 try await supabaseService.requestRecovery(email: trimmedEmail)
                 information = AuthForm.recoverySent
             } catch {
-                failure = AuthForm.message(.recovery)
+                failure = AuthForm.failureMessage(for: error, during: .recovery)
             }
         }
     }
 
+    /// Switching between sign in and create account keeps what was typed except the password.
+    /// `showingPassword` is left alone: changing it moves focus to the password field.
     private func clearForm() {
-        email = ""
         password = ""
-        name = ""
         information = ""
         failure = nil
-        showingPassword = false
     }
 }
 

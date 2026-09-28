@@ -12,10 +12,14 @@ enum RecoveryForm {
 
 /// New password after a recovery link (adapted to spec §6 #1). The update call and sign-out after it are unchanged.
 struct PasswordRecoveryView: View {
+    private enum Field { case password, confirmation }
     @State private var password = ""
     @State private var confirmation = ""
     @State private var saving = false
     @State private var error = ""
+    @FocusState private var focus: Field?
+
+    private var canSave: Bool { !saving && RecoveryForm.problem(password: password, confirmation: confirmation) == nil }
 
     var body: some View {
         let problem = RecoveryForm.problem(password: password, confirmation: confirmation)
@@ -36,10 +40,18 @@ struct PasswordRecoveryView: View {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s22) {
                     LetterpressLabeledField(label: "New password", isEmpty: password.isEmpty) {
                         SecureField(text: $password, prompt: nil) { Text("New password") }
+                            .textContentType(.newPassword)
+                            .focused($focus, equals: .password)
+                            .submitLabel(.next)
+                            .onSubmit { focus = .confirmation }
                             .accessibilityIdentifier("recoveryPassword")
                     }
                     LetterpressLabeledField(label: "Confirm password", isEmpty: confirmation.isEmpty) {
                         SecureField(text: $confirmation, prompt: nil) { Text("Confirm password") }
+                            .textContentType(.newPassword)
+                            .focused($focus, equals: .confirmation)
+                            .submitLabel(.go)
+                            .onSubmit { if canSave { save() } }
                             .accessibilityIdentifier("recoveryConfirmation")
                     }
                 }
@@ -47,7 +59,7 @@ struct PasswordRecoveryView: View {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Button(saving ? "Saving…" : "Update password", action: save)
                         .buttonStyle(.letterpress(.filled, fullWidth: true))
-                        .disabled(saving || problem != nil)
+                        .disabled(!canSave)
                         .accessibilityIdentifier("recoverySubmit")
                     if !error.isEmpty {
                         Text(error)
@@ -70,10 +82,12 @@ struct PasswordRecoveryView: View {
             .frame(maxWidth: 600, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(Letterpress.canvas.ignoresSafeArea())
     }
 
     private func save() {
+        guard canSave else { return }
         saving = true
         error = ""
         Task { @MainActor in
