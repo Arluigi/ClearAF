@@ -23,7 +23,7 @@ struct ContentView: View {
             case .enrollment:
                 EnrollmentView()
             case .onboarding:
-                OnboardingView {}
+                OnboardingView {}.photoErrorInset()
             case .ready:
                 ReadyTabs()
             }
@@ -46,7 +46,10 @@ struct ContentView: View {
                 await apiService.routines.refresh()
             }
         }
-        .overlay(alignment: .bottom) { PhotoPersistenceErrorView(repository: apiService.photos) }
+        // Announced once here; each tab only draws the banner, so VoiceOver never hears it twice.
+        .onReceive(apiService.photos.$lastError.removeDuplicates()) { error in
+            if let error { AccessibilityNotification.Announcement(error).post() }
+        }
         .onOpenURL { url in
             Task { @MainActor in
                 do { try await SupabaseService.shared.handleCallback(url) }
@@ -79,19 +82,24 @@ private struct ReadyTabs: View {
         })) {
             Tab(AppTab.today.title, systemImage: AppTab.today.systemImage, value: AppTab.today) {
                 DashboardViewEnhanced(selectedTab: $selection)
+                    .photoErrorInset()
             }
             Tab(AppTab.record.title, systemImage: AppTab.record.systemImage, value: AppTab.record) {
                 ProgressView()
+                    .photoErrorInset()
             }
             Tab(AppTab.capture.title, systemImage: AppTab.capture.systemImage, value: AppTab.capture) {
+                // Never selected: choosing it opens the capture sheet instead, so it needs no banner.
                 Letterpress.canvas.ignoresSafeArea().accessibilityHidden(true)
             }
             .accessibilityHint("Opens the camera")
             Tab(AppTab.plan.title, systemImage: AppTab.plan.systemImage, value: AppTab.plan) {
                 RoutineView()
+                    .photoErrorInset()
             }
             Tab(AppTab.notes.title, systemImage: AppTab.notes.systemImage, value: AppTab.notes) {
                 MessagingView()
+                    .photoErrorInset()
             }
             .badge(messaging.conversation?.unreadCount ?? 0)
         }
@@ -100,16 +108,55 @@ private struct ReadyTabs: View {
     }
 }
 
-private struct PhotoPersistenceErrorView: View {
+extension View {
+    /// Shows a failed local photo save above the tab bar (and the capture control) instead of over it.
+    func photoErrorInset() -> some View { modifier(PhotoErrorInset(repository: APIService.shared.photos)) }
+}
+
+private struct PhotoErrorInset: ViewModifier {
     @ObservedObject var repository: PhotoRepository
-    var body: some View {
-        if let error = repository.lastError {
-            Text(error)
-                .font(.callout)
-                .padding()
-                .background(Letterpress.surface, in: RoundedRectangle(cornerRadius: Letterpress.Radius.sheet))
-                .overlay(RoundedRectangle(cornerRadius: Letterpress.Radius.sheet).strokeBorder(Letterpress.rule, lineWidth: 1))
-                .padding()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if let error = repository.lastError {
+                    PhotoErrorBanner(text: error) { repository.lastError = nil }
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: repository.lastError)
         }
+    }
+}
+
+/// Inline error in the Letterpress way: error-coloured leading rule, body text, an underlined Dismiss.
+private struct PhotoErrorBanner: View {
+    let text: String
+    let dismiss: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Letterpress.Space.s6))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: Letterpress.Space.s10))
+        layout {
+            Text(text)
+                .font(Letterpress.ui(15, relativeTo: .body))
+                .foregroundStyle(Letterpress.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Dismiss", action: dismiss)
+                .buttonStyle(.letterpress(.underline))
+                .accessibilityIdentifier("photoErrorDismiss")
+        }
+        .padding(.leading, Letterpress.Space.s14)
+        .overlay(alignment: .leading) { Rectangle().fill(Letterpress.error).frame(width: 2) }
+        .padding(.horizontal, Letterpress.Space.s22)
+        .padding(.vertical, Letterpress.Space.s10)
+        .background(Letterpress.surface)
+        .overlay(alignment: .top) { LetterpressRule() }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("photoErrorBanner")
     }
 }
