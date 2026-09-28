@@ -107,4 +107,23 @@ import UIKit
         let selectedFont = try #require(proxy.titleTextAttributes(for: .selected)?[.font] as? UIFont)
         #expect(selectedFont.fontName == "IBMPlexSans-Medm")
     }
+
+    /// Design audit B2/B3: the checklist toggle keeps the 44pt floor at the smallest text size, dims while pressed like
+    /// the buttons, and both ease the release with a short spring.
+    @Test func checkToggleKeepsTheTouchFloorAndPressState() throws {
+        let size = UIHostingController(rootView: Toggle("Step", isOn: .constant(false)).toggleStyle(.letterpressCheck)
+            .environment(\.dynamicTypeSize, .xSmall))
+            .sizeThatFits(in: CGSize(width: 320, height: 1000))
+        #expect(size.height >= 44, "check toggle measured \(size.height)")
+        #expect(LetterpressCheckToggleStyle.pressedOpacity == 0.7)
+        let views = LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views")
+        let controls = try String(contentsOf: views.appendingPathComponent("LetterpressControls.swift"), encoding: .utf8)
+        #expect(controls.contains("Button { configuration.isOn.toggle() }"))
+        #expect(controls.contains("@Environment(\\.isEnabled) private var isEnabled"))
+        #expect(controls.contains(".accessibilityRepresentation {"))
+        for file in ["LetterpressControls.swift", "LetterpressButtonStyle.swift"] {
+            let text = try String(contentsOf: views.appendingPathComponent(file), encoding: .utf8)
+            #expect(text.contains(".animation(.snappy(duration: 0.15), value: configuration.isPressed)"), "\(file)")
+        }
+    }
 }

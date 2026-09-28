@@ -24,6 +24,9 @@ struct ComparePhotosView: View {
     @State private var showingLater = true
     @State private var detail: ComparePhoto?
     @State private var retry = 0
+    /// Counts the patient's own flips and pair picks. The haptic follows it, not `showingLater` or `pair`, which also
+    /// change on their own (the default pair, the reset to the later photo when the pair changes).
+    @State private var selectionTaps = 0
 
     private typealias Ordered = (earlier: ComparePhoto, later: ComparePhoto)
     private var ordered: Ordered? { pair.ordered(date: \.captureDate) }
@@ -53,6 +56,7 @@ struct ComparePhotosView: View {
             pickDefaultPair()
         }
         .onChange(of: strip.photos) { pickDefaultPair() }
+        .sensoryFeedback(.selection, trigger: selectionTaps)
         .onChange(of: pair) {
             showingLater = true
             // Clears synchronously, in the same update as the pair change, so the render that reflects the
@@ -201,16 +205,16 @@ struct ComparePhotosView: View {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showingLater)
             }
             .contentShape(Rectangle())
-            .onTapGesture { showingLater.toggle() }
+            .onTapGesture { flip() }
             .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
                 let width = abs(value.translation.width)
-                if width > Letterpress.minTouch && width > abs(value.translation.height) { showingLater.toggle() }
+                if width > Letterpress.minTouch && width > abs(value.translation.height) { flip() }
             })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(CompareCopy.flipLabel(showingLater: showingLater, date: shown.captureDate))
             .accessibilityHint(CompareCopy.flipHint)
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction { showingLater.toggle() }
+            .accessibilityAction { flip() }
             adaptiveRow {
                 Text(showingLater ? CompareRole.later.label : CompareRole.earlier.label)
                     .letterpressEyebrow(color: Letterpress.ink)
@@ -266,6 +270,7 @@ struct ComparePhotosView: View {
                     ForEach(strip.photos) { photo in
                         CompareThumbnail(photo: photo, role: pair.role(of: photo, date: \.captureDate), strip: strip) {
                             pair.toggle(photo)
+                            selectionTaps += 1
                         }
                         .onAppear { if photo == strip.photos.last { strip.loadMore() } }
                     }
@@ -361,6 +366,11 @@ struct ComparePhotosView: View {
         guard let ordered else { return "none" }
         let generation = api.access.snapshot()?.generation.uuidString ?? "signed-out"
         return "\(ordered.earlier.id.uriRepresentation().absoluteString)|\(ordered.later.id.uriRepresentation().absoluteString)|\(generation)|\(retry)"
+    }
+
+    private func flip() {
+        showingLater.toggle()
+        selectionTaps += 1
     }
 
     private func pickDefaultPair() {

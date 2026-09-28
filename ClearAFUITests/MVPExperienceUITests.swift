@@ -184,7 +184,9 @@ final class MVPExperienceUITests: XCTestCase {
     /// Parent transfers the exact test-target A store with both apps stopped; B starts absent.
     @MainActor func testPhysicalGeneratedHistoryIsolatedAcrossAccountSwitch() throws {
         let app = try signedIn(largestText: false)
-        guard app.images["Latest progress photo"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
+        // Today's photo-rail tiles read as one element: "Photo, <day month>, <sharing state>".
+        let railPhoto = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo, '")).firstMatch
+        guard railPhoto.waitForExistence(timeout: 10) else { throw fixtureFailure() }
         try tapTab("Record", in: app)
         guard app.staticTexts["photoCount"].waitForExistence(timeout: 10),
               app.staticTexts["photoCount"].label.filter(\.isNumber) == "1" else { throw fixtureFailure() }
@@ -207,7 +209,7 @@ final class MVPExperienceUITests: XCTestCase {
         for coldLaunch in [false, true] {
             if coldLaunch { app.terminate(); app.launch() }
             try tapTab("Today", in: app)
-            guard !app.images["Latest progress photo"].exists,
+            guard !railPhoto.exists,
                   !app.staticTexts["Shared"].exists else { throw fixtureFailure() }
             try tapTab("Record", in: app)
             guard app.staticTexts["photoCount"].waitForExistence(timeout: 10),

@@ -46,6 +46,54 @@ struct LetterpressPicker<Selection: Hashable, Options: View>: View {
     }
 }
 
+/// Checklist row (spec §4.4): the checkbox and its label are one native toggle, so the whole row taps, VoiceOver reads
+/// the label once with the toggle's on/off, and the row dims while pressed like `LetterpressButtonStyle`.
+struct LetterpressCheckToggleStyle: ToggleStyle {
+    static let pressedOpacity: Double = 0.7
+
+    func makeBody(configuration: Configuration) -> some View {
+        LetterpressCheckToggleBody(configuration: configuration)
+    }
+}
+
+private struct LetterpressCheckToggleBody: View {
+    let configuration: ToggleStyleConfiguration
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack(alignment: .top, spacing: Letterpress.Space.s10) {
+                RoutineCheckbox(isTicked: configuration.isOn, isEnabled: isEnabled)
+                    .frame(width: Letterpress.minTouch, height: Letterpress.minTouch, alignment: .topLeading)
+                    .padding(.top, 2)
+                configuration.label
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(minHeight: Letterpress.minTouch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CheckPressStyle())
+        // Read as the native toggle it is: one element, the label once, the switch trait and its on/off value.
+        // The explicit `.switch` keeps the representation from picking up `.letterpressCheck` again and recursing.
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) { configuration.label }
+                .toggleStyle(.switch)
+        }
+    }
+}
+
+private struct CheckPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? LetterpressCheckToggleStyle.pressedOpacity : 1)
+            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+extension ToggleStyle where Self == LetterpressCheckToggleStyle {
+    static var letterpressCheck: LetterpressCheckToggleStyle { LetterpressCheckToggleStyle() }
+}
+
 extension Letterpress {
     /// Native switch on-track. Ink in light; ink.tertiary in dark, because dark ink (#EFEDE4) against the white thumb
     /// is 1.17:1 while ink.tertiary is 3.33:1 against the thumb and 5.39:1 against canvas.

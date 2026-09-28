@@ -86,7 +86,7 @@ struct CheckInFlowTests {
         #expect(CheckInFlow.advanceLabel(position: 0, count: 2, returningToReview: true) == "Back to review")
         #expect(CheckInFlow.advanceLabel(position: 1, count: 2, returningToReview: true) == "Back to review")
         let source = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/CheckInView.swift"), encoding: .utf8)
-        #expect(source.contains("index = returningToReview ? draft.form.questions.count : position + 1"))
+        #expect(source.contains("go(to: returningToReview ? draft.form.questions.count : position + 1)"))
         #expect(source.contains(".scrollDismissesKeyboard(.interactively)"))
     }
 
@@ -101,5 +101,28 @@ struct CheckInFlowTests {
         #expect(!capture.contains("Take Photo") && !capture.contains("Choose from Library"))
         let strip = try String(contentsOf: views.appendingPathComponent("AdherenceStrip.swift"), encoding: .utf8)
         #expect(strip.contains("failed ? Letterpress.ui(13, relativeTo: .footnote)"))
+    }
+
+    /// Design audit B4: onboarding and check-in pages slide the way you go (a cross-fade under Reduce Motion), and
+    /// VoiceOver focus moves to the new title instead of an extra announcement.
+    @Test func stepsMoveInTheDirectionYouGoAndFocusTheTitle() throws {
+        let views = LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views")
+        for (file, key) in [("OnboardingView.swift", "step"), ("CheckInView.swift", "index")] {
+            let text = try String(contentsOf: views.appendingPathComponent(file), encoding: .utf8)
+            #expect(text.contains(".id(\(key))"), "\(file)")
+            #expect(text.contains("@State private var forward = true"), "\(file)")
+            let squashed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            #expect(squashed.contains(".transition(reduceMotion ? .opacity : .asymmetric( "
+                + "insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity), "
+                + "removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))"), "\(file)")
+            #expect(text.contains("withAnimation(.smooth) { \(key) = new"), "\(file)")
+            let focus = file == "OnboardingView.swift" ? "focusedStep" : "focusedPage"
+            #expect(text.contains("@AccessibilityFocusState private var \(focus): "), "\(file)")
+            #expect(text.contains(".accessibilityFocused($\(focus), equals: \(key))"), "\(file)")
+            #expect(text.contains("\(focus) = new"), "\(file)")
+            // The focus move is the announcement: the only posts are check-in's send outcome, not page changes.
+            let pages = text.components(separatedBy: "private struct CheckInSendFeedback").first ?? text
+            #expect(!pages.contains("AccessibilityNotification.Announcement"), "\(file)")
+        }
     }
 }

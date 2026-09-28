@@ -57,6 +57,7 @@ struct EnrollmentView: View {
         // A message from one step never carries into the next.
         .onChange(of: repository.state?.status) { _, _ in repository.clearError() }
         .onChange(of: updatingAnswers) { _, _ in repository.clearError() }
+        .announcing(repository.error)
     }
 
     @ViewBuilder private var content: some View {

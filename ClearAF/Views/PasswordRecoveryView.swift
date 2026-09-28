@@ -84,6 +84,7 @@ struct PasswordRecoveryView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Letterpress.canvas.ignoresSafeArea())
+        .announcing(error)
     }
 
     private func save() {

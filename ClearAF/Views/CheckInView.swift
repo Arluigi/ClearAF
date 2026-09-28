@@ -8,6 +8,20 @@ enum CheckInFlow {
     static let sendReason = "Answer every required question before sending."
     static let footnote = "Answers are sent together at the end. Your draft stays on this device until you send it."
     static let readers = "Your clinician reads these alongside your photos."
+    static let sentAnnouncement = "Check-in sent"
+
+    enum SendOutcome: Equatable { case sent, failed }
+
+    /// Only a send made on this screen is felt and announced. Resuming a check-in that was already sent or had
+    /// failed restores that status from disk without passing through `.sending`, so it stays quiet.
+    static func sendOutcome(from old: CheckInRepository.Status, to new: CheckInRepository.Status) -> SendOutcome? {
+        guard old == .sending else { return nil }
+        switch new {
+        case .sent: return .sent
+        case .failed: return .failed
+        default: return nil
+        }
+    }
 
     static func answer(for question: CheckInQuestion, in answers: [CheckInAnswer]) -> CheckInAnswer? {
         answers.first { $0.questionId == question.id }
@@ -86,26 +100,39 @@ struct CheckInView: View {
     @ObservedObject private var repository = APIService.shared.checkIns
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var form: CheckInForm?
     @State private var loaded = false
     @State private var error: String?
     @State private var index = 0
     @State private var positionedDraft: UUID?
     @State private var returningToReview = false
+    /// Which way the last page change went, so the new page slides in from the side you're heading to.
+    @State private var forward = true
+    /// Keyed by page, so the outgoing page's title (still on screen while it slides away) never holds focus.
+    @AccessibilityFocusState private var focusedPage: Int?
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                content(ticket)
+        // The ZStack holds the outgoing and incoming pages on top of each other while they slide. `.id(index)` also
+        // starts each question at the top.
+        ZStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    content(ticket)
+                }
+                .padding(.horizontal, Letterpress.Space.s22)
+                .padding(.top, Letterpress.Space.s10)
+                .padding(.bottom, Letterpress.Space.s28)
+                .frame(maxWidth: 600, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, Letterpress.Space.s22)
-            .padding(.top, Letterpress.Space.s10)
-            .padding(.bottom, Letterpress.Space.s28)
-            .frame(maxWidth: 600, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .scrollDismissesKeyboard(.interactively)
+            .id(index)
+            .transition(reduceMotion ? .opacity : .asymmetric(
+                insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+                removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)))
         }
-        .scrollDismissesKeyboard(.interactively)
         .background(Letterpress.canvas.ignoresSafeArea())
         .navigationTitle("Check-in")
         .navigationBarTitleDisplayMode(.inline)
@@ -119,6 +146,10 @@ struct CheckInView: View {
             returningToReview = false
             positionedDraft = id
         }
+        // VoiceOver lands on the new page's title; the focus move is the announcement.
+        .onChange(of: index) { _, new in focusedPage = new }
+        .modifier(CheckInSendFeedback(status: repository.status, failure: repository.error))
+        .announcing(error)
     }
 
     @ViewBuilder private func content(_ ticket: AccountAccess.Ticket?) -> some View {
@@ -195,6 +226,7 @@ struct CheckInView: View {
                 .foregroundStyle(Letterpress.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($focusedPage, equals: index)
             reason(CheckInFlow.requirement(question))
         }
         .padding(.top, Letterpress.Space.s22)
@@ -213,6 +245,7 @@ struct CheckInView: View {
                     }
                     LetterpressRule()
                 }
+                .sensoryFeedback(.selection, trigger: CheckInFlow.answer(for: question, in: answers)?.optionId)
             case .text:
                 let text = CheckInFlow.answer(for: question, in: answers)?.text ?? ""
                 LetterpressLabeledField(label: "Your answer", isEmpty: text.isEmpty, message: CheckInFlow.count(text),
@@ -232,14 +265,14 @@ struct CheckInView: View {
             layout {
                 if position > 0 {
                     Button("Back") {
-                        index = position - 1
+                        go(to: position - 1)
                         returningToReview = false
                     }
                         .buttonStyle(.letterpress(.outlined, fullWidth: dynamicTypeSize.isAccessibilitySize))
                         .accessibilityIdentifier("checkInBack")
                 }
                 Button(CheckInFlow.advanceLabel(position: position, count: draft.form.questions.count, returningToReview: returningToReview)) {
-                    index = returningToReview ? draft.form.questions.count : position + 1
+                    go(to: returningToReview ? draft.form.questions.count : position + 1)
                     returningToReview = false
                 }
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
@@ -265,13 +298,14 @@ struct CheckInView: View {
                 .font(Letterpress.display(28, relativeTo: .title))
                 .foregroundStyle(Letterpress.ink)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($focusedPage, equals: index)
         }
         .padding(.top, Letterpress.Space.s22)
         newerFormNote(draft)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(draft.form.questions.enumerated()), id: \.element.id) { position, question in
                 Button {
-                    index = position
+                    go(to: position)
                     returningToReview = true
                 } label: {
                     HStack(alignment: .firstTextBaseline, spacing: Letterpress.Space.s10) {
@@ -405,6 +439,18 @@ struct CheckInView: View {
         catch { self.error = "Your edit couldn't be saved. Try again." }
     }
 
+    /// A leaving page keeps the transition it was last drawn with, so when the direction flips it is redrawn with the
+    /// new direction first and the page changes on the next turn of the run loop.
+    private func go(to newIndex: Int) {
+        let isForward = newIndex > index
+        guard isForward != forward else {
+            withAnimation(.smooth) { index = newIndex }
+            return
+        }
+        forward = isForward
+        DispatchQueue.main.async { withAnimation(.smooth) { index = newIndex } }
+    }
+
     private func send(_ ticket: AccountAccess.Ticket?) {
         guard let ticket else { return }
         do {
@@ -429,6 +475,32 @@ struct CheckInView: View {
             guard APIService.shared.access.snapshot() == ticket else { return }
             self.error = "Check your connection, then try again. Any draft stays on this device."
         }
+    }
+}
+
+/// Only a send made here buzzes: resuming a check-in that was already sent, or failed earlier, stays quiet.
+/// The send's outcome, felt and spoken once, keyed on the status transition so a second failure with the same
+/// sentence is still heard.
+private struct CheckInSendFeedback: ViewModifier {
+    let status: CheckInRepository.Status
+    let failure: String?
+
+    func body(content: Content) -> some View {
+        content
+            .sensoryFeedback(trigger: status) { old, new in
+                switch CheckInFlow.sendOutcome(from: old, to: new) {
+                case .sent: SensoryFeedback.success
+                case .failed: SensoryFeedback.error
+                case nil: nil
+                }
+            }
+            .onChange(of: status) { old, new in
+                switch CheckInFlow.sendOutcome(from: old, to: new) {
+                case .sent: AccessibilityNotification.Announcement(CheckInFlow.sentAnnouncement).post()
+                case .failed: if let failure { AccessibilityNotification.Announcement(failure).post() }
+                case nil: break
+                }
+            }
     }
 }
 

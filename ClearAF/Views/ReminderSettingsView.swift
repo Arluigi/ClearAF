@@ -10,6 +10,22 @@ struct ReminderSummaryRow: Equatable, Identifiable {
 enum ReminderCopy {
     static let intro = "Choose reminders that work for you. They stay on this device and pause when you sign out."
     static let deniedHelp = "Allow notifications for ClearAF in iPhone Settings, then try saving again."
+    static let unsaved = "Not saved yet."
+    static let nothingToSave = "Nothing to save."
+
+    /// Save is for changes. Without one it stays available only while the saved preferences still need applying:
+    /// paused after sign-in, blocked by permission, or a failed schedule.
+    static func canSave(_ draft: ReminderPreferences, saved: ReminderPreferences, state: ReminderRepository.State) -> Bool {
+        guard state != .saving else { return false }
+        return draft != saved || [.paused, .denied, .failed].contains(state)
+    }
+
+    /// The sentence beside Save: unsaved edits, or why Save is disabled (spec §5).
+    static func saveNote(_ draft: ReminderPreferences, saved: ReminderPreferences, state: ReminderRepository.State) -> String? {
+        guard state != .saving else { return nil }
+        if draft != saved { return unsaved }
+        return canSave(draft, saved: saved, state: state) ? nil : nothingToSave
+    }
 
     static func time(_ reminder: ReminderTime) -> String { String(format: "%02d:%02d", reminder.hour, reminder.minute) }
 
@@ -42,6 +58,7 @@ enum ReminderCopy {
 /// Toggle and time rows shared by Reminders and onboarding. Changes stay in `draft` until the screen saves.
 struct ReminderRows: View {
     @Binding var draft: ReminderPreferences
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -69,7 +86,8 @@ struct ReminderRows: View {
 
     private func row(_ title: String, schedule: String, time: Binding<ReminderTime>) -> some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
-            Toggle(isOn: time.enabled) {
+            // The time picker slides in with the switch; under Reduce Motion it fades in (the insertion is opacity).
+            Toggle(isOn: time.enabled.animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy)) {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                     Text(title)
                         .font(Letterpress.ui(16, weight: .medium, relativeTo: .body))
@@ -103,7 +121,14 @@ struct ReminderRows: View {
 struct ReminderSettingsView: View {
     @ObservedObject private var api = APIService.shared
     @ObservedObject private var repository = APIService.shared.reminders
-    @State private var draft = ReminderPreferences()
+    /// Seeded from what the repository already holds, so the screen never opens on defaults that look unsaved.
+    @State private var draft = APIService.shared.reminders.preferences
+    /// Set by the patient's first change; the initial load never overwrites an edit made while it was running.
+    @State private var edited = false
+    /// Save waits for this account's preferences to load, so it can never write defaults over them.
+    @State private var loaded = false
+    /// What the last save ended as, for VoiceOver; cleared when a save starts so the same result is heard again.
+    @State private var saveResult: String?
 
     var body: some View {
         ScrollView {
@@ -112,16 +137,29 @@ struct ReminderSettingsView: View {
                     .font(Letterpress.ui(15, relativeTo: .body))
                     .foregroundStyle(Letterpress.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                ReminderRows(draft: $draft)
+                ReminderRows(draft: Binding(get: { draft }, set: { draft = $0; edited = true }))
+                    // No edit before this account's preferences are in place, so nothing is saved over defaults.
+                    .disabled(!loaded)
                     .padding(.top, Letterpress.Space.s22)
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Button(repository.state == .saving ? "Saving…" : "Save reminders") {
                         guard let ticket = api.access.snapshot() else { return }
-                        Task { await repository.save(draft, ticket: ticket) }
+                        saveResult = nil
+                        Task {
+                            await repository.save(draft, ticket: ticket)
+                            saveResult = ReminderCopy.status(repository.state)
+                        }
                     }
                     .buttonStyle(.letterpress(.filled, fullWidth: true))
-                    .disabled(repository.state == .saving)
+                    .disabled(!loaded || !ReminderCopy.canSave(draft, saved: repository.preferences, state: repository.state))
                     .accessibilityIdentifier("reminderSave")
+                    if loaded, let note = ReminderCopy.saveNote(draft, saved: repository.preferences, state: repository.state) {
+                        Text(note)
+                            .font(Letterpress.ui(13, relativeTo: .footnote))
+                            .foregroundStyle(Letterpress.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("reminderSaveNote")
+                    }
                     Text(ReminderCopy.status(repository.state))
                         .font(Letterpress.ui(13, relativeTo: .footnote))
                         .foregroundStyle(repository.state == .failed ? Letterpress.error : Letterpress.inkSecondary)
@@ -148,9 +186,17 @@ struct ReminderSettingsView: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .task {
-            if let ticket = api.access.snapshot() { await repository.resume(ticket: ticket) }
-            draft = repository.preferences
+            // Loaded only once this account's preferences are in: with no ticket, or one that went stale while
+            // resuming, the rows and Save stay disabled rather than working over defaults.
+            if let ticket = api.access.snapshot() {
+                await repository.resume(ticket: ticket)
+                if api.access.snapshot() == ticket {
+                    if !edited { draft = repository.preferences }
+                    loaded = true
+                }
+            }
             await repository.refreshPermission()
         }
+        .announcing(saveResult)
     }
 }

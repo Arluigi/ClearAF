@@ -71,6 +71,34 @@ import Testing
         #expect(scheduler.requests.isEmpty)
         #expect(repo.state == .disabled)
     }
+    /// Design audit B6: unsaved edits are named beside Save, and Save without a change says why it is disabled,
+    /// except while the saved preferences still need applying (paused, permission off, failed).
+    @Test func saveNamesUnsavedChangesAndWhyItIsDisabled() throws {
+        let saved = ReminderPreferences()
+        var edited = saved; edited.morning.enabled = true
+        #expect(ReminderCopy.canSave(edited, saved: saved, state: .disabled))
+        #expect(ReminderCopy.saveNote(edited, saved: saved, state: .enabled) == "Not saved yet.")
+        #expect(!ReminderCopy.canSave(saved, saved: saved, state: .disabled))
+        #expect(!ReminderCopy.canSave(saved, saved: saved, state: .enabled))
+        #expect(ReminderCopy.saveNote(saved, saved: saved, state: .enabled) == "Nothing to save.")
+        for state in [ReminderRepository.State.paused, .denied, .failed] {
+            #expect(ReminderCopy.canSave(saved, saved: saved, state: state), "\(state)")
+            #expect(ReminderCopy.saveNote(saved, saved: saved, state: state) == nil, "\(state)")
+        }
+        #expect(!ReminderCopy.canSave(edited, saved: saved, state: .saving))
+        #expect(ReminderCopy.saveNote(edited, saved: saved, state: .saving) == nil)
+        let view = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/ReminderSettingsView.swift"), encoding: .utf8)
+        #expect(view.contains("if !edited { draft = repository.preferences }"), "the load never clobbers an edit")
+        #expect(view.contains("Toggle(isOn: time.enabled.animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy))"))
+        #expect(view.contains("@State private var draft = APIService.shared.reminders.preferences"), "seeded before the async load")
+        #expect(view.contains(".disabled(!loaded || !ReminderCopy.canSave("), "Save waits for the first load")
+        #expect(view.contains("ReminderRows(draft: Binding(get: { draft }, set: { draft = $0; edited = true }))\n                    // No edit before this account's preferences are in place, so nothing is saved over defaults.\n                    .disabled(!loaded)"),
+                "the rows wait for the first load too")
+        let squashed = view.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        #expect(squashed.contains("if let ticket = api.access.snapshot() { await repository.resume(ticket: ticket) if api.access.snapshot() == ticket { if !edited { draft = repository.preferences } loaded = true } }"),
+                "loaded only after this account's preferences arrive, never with no or a stale ticket")
+        #expect(view.components(separatedBy: "loaded = true").count - 1 == 1)
+    }
 }
 @MainActor private final class FakeReminderScheduler: ReminderScheduling {
     var requests:[String:ReminderRequest]=[:]

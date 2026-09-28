@@ -76,4 +76,46 @@ struct TodayPresentationTests {
         #expect(UrgentReportCopy.meta(report, locale: Self.us, timeZone: Self.utc) == "14 Sep, 12:00 pm · Seen by your care team")
         #expect(UrgentReportCopy.disabledReason == "Choose what's happening and describe it to send.")
     }
+
+    /// Design audit B8: a photo-rail tile reads as one element: what it is, when, where it stands.
+    @Test func photoRailTilesReadAsOneElement() throws {
+        let date = ISO8601DateFormatter().date(from: "2026-09-03T10:00:00Z")!
+        #expect(TodayCopy.photoLabel(date, state: .shared, locale: Self.us, timeZone: Self.utc) == "Photo, 3 Sep, Shared")
+        #expect(TodayCopy.photoLabel(nil, state: .waitingToShare) == "Photo, Waiting to share")
+        let today = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/DashboardViewEnhanced.swift"), encoding: .utf8)
+        #expect(today.contains(".accessibilityElement(children: .combine)"))
+        #expect(!today.contains("Latest progress photo"))
+    }
+
+    /// Design audit B8: Today refreshes by pull, keeps its greeting current, scales its avatar and names routine errors.
+    @Test func todayRefreshesScalesAndNamesErrors() throws {
+        let views = LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views")
+        let today = try String(contentsOf: views.appendingPathComponent("DashboardViewEnhanced.swift"), encoding: .utf8)
+        #expect(today.contains(".refreshable { await refresh() }"))
+        #expect(today.contains("TimelineView(.everyMinute)"))
+        #expect(today.contains("_size = ScaledMetric(wrappedValue: size, relativeTo: .body)"))
+        #expect(today.contains("InitialsAvatar(name: name, size: 30, textSize: 11, iconSize: 13)"))
+        #expect(today.contains(".dynamicTypeSize(...DynamicTypeSize.accessibility2)"))
+        #expect(today.contains("if let error = actionError ?? repository.lastError"))
+        #expect(!today.contains("Routines need attention."))
+        #expect(today.contains("Button(\"Open plan\") { selectedTab = .plan }.buttonStyle(.letterpress(.underline))"))
+        #expect(!today.contains("frame(width: 30, height: 30)"))
+        let profile = try String(contentsOf: views.appendingPathComponent("ProfileView.swift"), encoding: .utf8)
+        #expect(profile.contains("InitialsAvatar(name: api.currentUser?.name, size: 56, textSize: 17, iconSize: 17)"))
+        #expect(profile.contains(".dynamicTypeSize(...DynamicTypeSize.accessibility2)"))
+        #expect(!profile.contains("frame(width: 56, height: 56)"))
+        let eyebrow = try String(contentsOf: views.appendingPathComponent("LetterpressText.swift"), encoding: .utf8)
+        #expect(eyebrow.contains("@ScaledMetric(relativeTo: .caption2) private var tracking: CGFloat = LetterpressEyebrow.tracking"))
+        #expect(eyebrow.contains(".tracking(tracking)"))
+    }
+
+    /// Design audit B8: the loading and account-error screens are Letterpress, not system defaults.
+    @Test func accountLoadingAndErrorScreensAreLetterpress() throws {
+        let content = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/ContentView.swift"), encoding: .utf8)
+        #expect(!content.contains(".font(.title2)"))
+        #expect(content.contains("Text(\"Unable to open your account\")\n                    .font(Letterpress.display(28, relativeTo: .title))"))
+        #expect(content.contains("Button(\"Try again\", action: retry)\n                    .buttonStyle(.letterpress(.filled, fullWidth: true))"))
+        #expect(content.contains("Button(\"Sign out\", action: signOut)\n                    .buttonStyle(.letterpress(.underline))"))
+        #expect(content.components(separatedBy: ".background(Letterpress.canvas.ignoresSafeArea())").count - 1 >= 2)
+    }
 }

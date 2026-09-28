@@ -92,41 +92,61 @@ struct RoutineTickBook: Equatable {
     }
 }
 
+/// Routine haptics come from the patient's own taps, never from state that changes under them: a slot switch,
+/// midnight, a refresh, or the same slot recorded on another (kept-alive) tab.
+enum RoutineFeedback {
+    /// One tap, keyed by the routine revision and day it was made on.
+    struct Action: Equatable {
+        let routineID: UUID
+        let localDate: String
+        let serial: Int
+    }
+
+    static func next(after last: Action?, routineID: UUID, localDate: String) -> Action {
+        Action(routineID: routineID, localDate: localDate, serial: (last?.serial ?? 0) + 1)
+    }
+
+    /// A newer tap made on the routine and day now on screen.
+    static func fires(from old: Action?, to new: Action?, routineID: UUID, localDate: String) -> Bool {
+        guard let new, new.routineID == routineID, new.localDate == localDate else { return false }
+        return new.serial > (old?.serial ?? 0)
+    }
+}
+
 /// Ruled checklist (spec §4.4). Ticks are local and reversible; recording is the filled button.
 struct RoutineChecklist: View {
     let steps: [CareRoutineStep]
+    let routineID: UUID
+    let localDate: String
     @Binding var ticked: Set<Int>
+    @State private var lastTick: RoutineFeedback.Action?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                RoutineChecklistRow(step: step, isTicked: ticked.contains(index)) {
-                    if ticked.contains(index) { ticked.remove(index) } else { ticked.insert(index) }
-                }
+                RoutineChecklistRow(step: step, isTicked: Binding(
+                    get: { ticked.contains(index) },
+                    set: { isOn in
+                        if isOn { ticked.insert(index) } else { ticked.remove(index) }
+                        lastTick = RoutineFeedback.next(after: lastTick, routineID: routineID, localDate: localDate)
+                    }))
                 .overlay(alignment: .top) { LetterpressRule() }
             }
             LetterpressRule()
         }
+        .sensoryFeedback(.selection, trigger: lastTick) { old, new in
+            RoutineFeedback.fires(from: old, to: new, routineID: routineID, localDate: localDate)
+        }
     }
 }
 
+/// One native toggle per step: the whole row taps, and VoiceOver reads the title once with on/off.
 private struct RoutineChecklistRow: View {
     let step: CareRoutineStep
-    let isTicked: Bool
-    let toggle: () -> Void
+    @Binding var isTicked: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: Letterpress.Space.s10) {
-            Button(action: toggle) {
-                RoutineCheckbox(isTicked: isTicked)
-                    .frame(width: Letterpress.minTouch, height: Letterpress.minTouch, alignment: .topLeading)
-                    .padding(.top, 2)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(step.title)
-            .accessibilityValue(isTicked ? "Ticked" : "Not ticked")
-            .accessibilityHint("Ticks this step on this device. Recording the routine is separate.")
+        Toggle(isOn: $isTicked) {
             VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                 Text(step.title)
                     .font(Letterpress.ui(17, weight: .medium, relativeTo: .headline))
@@ -139,30 +159,38 @@ private struct RoutineChecklistRow: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, Letterpress.Space.s4)
         }
+        .toggleStyle(.letterpressCheck)
         .padding(.vertical, Letterpress.Space.s10)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: toggle)
+        .accessibilityHint("Ticks this step on this device. Recording the routine is separate.")
     }
 }
 
 struct RoutineCheckbox: View {
     static let size: CGFloat = 22
+    static let markSize: CGFloat = 12
     let isTicked: Bool
+    var isEnabled = true
 
     var body: some View {
+        let ink = isEnabled ? Letterpress.ink : Letterpress.inkTertiary
         ZStack {
-            Rectangle().fill(isTicked ? Letterpress.ink : Color.clear)
-            Rectangle().strokeBorder(Letterpress.ink, lineWidth: 1.5)
+            Rectangle().fill(isTicked ? ink : Color.clear)
+            Rectangle().strokeBorder(ink, lineWidth: 1.5)
             if isTicked {
+                // Drawn at a fixed size inside the fixed 22pt box, so it never outgrows it at large text sizes.
                 Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .resizable()
+                    .scaledToFit()
+                    .fontWeight(.bold)
+                    .frame(width: Self.markSize, height: Self.markSize)
                     .foregroundStyle(Letterpress.canvas)
             }
         }
         .frame(width: Self.size, height: Self.size)
+        // The mark only exists while ticked, so there is no symbol to replace: the fill and mark fade together.
+        .animation(.snappy(duration: 0.2), value: isTicked)
         .accessibilityHidden(true)
     }
 }
@@ -174,6 +202,8 @@ struct RoutineRecordPanel: View {
     let identifierPrefix: String
     var showsVersionNote = true
     @Binding var actionError: String?
+    /// Only a record made here buzzes; Today and Plan both show this panel and stay alive in the tab view.
+    @State private var lastRecord: RoutineFeedback.Action?
 
     var body: some View {
         let ticket = APIService.shared.access.snapshot()
@@ -185,6 +215,7 @@ struct RoutineRecordPanel: View {
                 do {
                     _ = try repository.recordCompletion(revision: routine, ticket: ticket)
                     actionError = nil
+                    lastRecord = RoutineFeedback.next(after: lastRecord, routineID: routine.id, localDate: repository.localDate)
                 } catch { actionError = error.localizedDescription }
             }
             .buttonStyle(.letterpress(.filled, fullWidth: true))
@@ -200,6 +231,10 @@ struct RoutineRecordPanel: View {
                     .foregroundStyle(Letterpress.inkTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+        // Saved on this device counts: the patient's part is done even while the upload waits.
+        .sensoryFeedback(.success, trigger: lastRecord) { old, new in
+            RoutineFeedback.fires(from: old, to: new, routineID: routine.id, localDate: repository.localDate)
         }
     }
 }

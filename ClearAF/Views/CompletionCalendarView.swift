@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// A day in the completion calendar (spec §4.6): recorded state for today and earlier, future after today.
 enum CalendarCell: Equatable {
@@ -95,12 +94,7 @@ enum CompletionCalendarCopy {
     /// 24-hour time in the zone the patient reported with the completion, so it agrees with its local date.
     static func eventTime(_ completion: CareRoutineCompletion) -> String {
         guard let instant = RoutineDates.instant(completion.completedAt) else { return "—" }
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: completion.timeZone) ?? .current
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: instant)
+        return LetterpressFormat.time24(instant, timeZone: TimeZone(identifier: completion.timeZone) ?? .current)
     }
 
     static func eventTitle(_ routine: CareRoutineRevision) -> String { "\(routine.timeOfDay.title) recorded" }
@@ -114,14 +108,19 @@ enum CompletionCalendarCopy {
 
     /// "yyyy-MM-dd" is already the patient's calendar day, so it is parsed and formatted in UTC to avoid shifting it.
     static func date(_ localDate: String) -> Date? {
+        dayParser.date(from: localDate)
+    }
+
+    /// Built once: every cell label and title parses through it on each render.
+    private static let dayParser: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = utc
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.isLenient = false
-        return formatter.date(from: localDate)
-    }
+        return formatter
+    }()
 }
 
 /// Cell treatments by token name, so the contrast test resolves exactly what the view draws.
@@ -191,10 +190,15 @@ enum CompletionCalendarGrid {
 /// Completion calendar (spec §6 #8). Pushed from Plan: no tab bar, no bottom spacer.
 struct CompletionCalendarView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var monthDate = Date()
+    /// The last month that loaded. It stays on screen, dimmed, while the next month loads.
     @State private var calendar: CompletionCalendar?
+    @State private var loading = false
     @State private var loadFailed = false
     @State private var selected: String?
+    /// The screen's width, measured; a regular iPhone width until the first layout reports it.
+    @State private var width: CGFloat = 393
 
     private var month: String { String(RoutineDates.localDate(monthDate, zone: .current).prefix(7)) }
     private var today: String { RoutineDates.localDate(Date(), zone: .current) }
@@ -203,9 +207,7 @@ struct CompletionCalendarView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                if let calendar {
-                    populated(calendar)
-                } else if loadFailed {
+                if loadFailed {
                     VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                         Text("Couldn't load \(CompletionCalendarCopy.monthTitle(month)).")
                             .font(Letterpress.ui(15, relativeTo: .body))
@@ -215,6 +217,15 @@ struct CompletionCalendarView: View {
                             .buttonStyle(.letterpress(.outlined))
                     }
                     .padding(.top, Letterpress.Space.s22)
+                } else if let calendar {
+                    VStack(alignment: .leading, spacing: 0) {
+                        populated(calendar)
+                    }
+                    .opacity(loading ? 0.4 : 1)
+                    .allowsHitTesting(!loading)
+                    // The dimmed month is out of date: VoiceOver skips it and hears the header's loading line instead.
+                    .disabled(loading)
+                    .accessibilityHidden(loading)
                 } else {
                     HStack(spacing: Letterpress.Space.s10) {
                         SwiftUI.ProgressView().tint(Letterpress.inkTertiary)
@@ -230,12 +241,13 @@ struct CompletionCalendarView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Letterpress.Space.s22)
             }
-            .padding(.horizontal, CompletionCalendarGrid.horizontalPadding(for: UIScreen.main.bounds.width))
+            .padding(.horizontal, CompletionCalendarGrid.horizontalPadding(for: width))
             .padding(.top, Letterpress.Space.s10)
             .padding(.bottom, Letterpress.Space.s28)
             .frame(maxWidth: 600, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .background(Letterpress.canvas.ignoresSafeArea())
         .navigationTitle("Completion history")
         .navigationBarTitleDisplayMode(.inline)
@@ -251,6 +263,12 @@ struct CompletionCalendarView: View {
                 .foregroundStyle(Letterpress.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+            if loading && calendar != nil {
+                // The previous month stays in place, dimmed, until this one arrives.
+                Text("Loading \(CompletionCalendarCopy.monthTitle(month))")
+                    .font(Letterpress.ui(12, relativeTo: .caption))
+                    .foregroundStyle(Letterpress.inkSecondary)
+            }
             ViewThatFits(in: .horizontal) {
                 HStack {
                     previousButton
@@ -275,7 +293,9 @@ struct CompletionCalendarView: View {
         }
     }
 
+    /// Drawn from the calendar's own month, which is the previous one while the next is loading.
     @ViewBuilder private func populated(_ calendar: CompletionCalendar) -> some View {
+        let month = calendar.month
         let dates = SupportDates.days(month)
         let cells = CompletionCalendarCopy.cells(month: month, calendar: calendar, today: today)
         let tally = CompletionCalendarCopy.tally(cells)
@@ -287,6 +307,8 @@ struct CompletionCalendarView: View {
                 Text("\(tally.recorded)")
                     .font(Letterpress.data(28, weight: .medium, relativeTo: .title))
                     .foregroundStyle(Letterpress.ink)
+                    .contentTransition(reduceMotion ? .opacity : .numericText())
+                    .animation(.snappy, value: tally.recorded)
                 Text(CompletionCalendarCopy.countLabel(tally))
                     .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
                     .textCase(.uppercase)
@@ -306,7 +328,7 @@ struct CompletionCalendarView: View {
             dayList(dates: dates, cells: cells)
                 .padding(.top, Letterpress.Space.s22)
         } else {
-            grid(dates: dates, cells: cells)
+            grid(month: month, dates: dates, cells: cells)
                 .padding(.top, Letterpress.Space.s22)
             legend
                 .padding(.top, Letterpress.Space.s18)
@@ -319,9 +341,9 @@ struct CompletionCalendarView: View {
         }
     }
 
-    private func grid(dates: [String], cells: [CalendarCell]) -> some View {
+    private func grid(month: String, dates: [String], cells: [CalendarCell]) -> some View {
         let firstWeekday = Calendar.current.firstWeekday
-        let spacing = CompletionCalendarGrid.columnSpacing(for: UIScreen.main.bounds.width)
+        let spacing = CompletionCalendarGrid.columnSpacing(for: width)
         let columns = Array(
             repeating: GridItem(.flexible(minimum: Letterpress.minTouch), spacing: spacing),
             count: CompletionCalendarGrid.columns
@@ -403,7 +425,6 @@ struct CompletionCalendarView: View {
     }
 
     private func move(_ value: Int) {
-        calendar = nil
         loadFailed = false
         selected = nil
         monthDate = Calendar.current.date(byAdding: .month, value: value, to: monthDate) ?? monthDate
@@ -412,7 +433,7 @@ struct CompletionCalendarView: View {
     private func load() async {
         guard let ticket = APIService.shared.access.snapshot() else { return }
         let requested = month
-        calendar = nil
+        loading = true
         loadFailed = false
         do {
             let result = try await APIService.shared.fetchCompletionCalendar(month: requested, ticket: ticket)
@@ -420,10 +441,12 @@ struct CompletionCalendarView: View {
             try APIService.shared.access.require(ticket)
             guard month == requested else { return }
             calendar = result
+            loading = false
             let cells = CompletionCalendarCopy.cells(month: requested, calendar: result, today: today)
             selected = CompletionCalendarCopy.defaultSelection(month: requested, cells: cells, today: today)
         } catch {
             guard !Task.isCancelled, month == requested, APIService.shared.access.snapshot() == ticket else { return }
+            loading = false
             loadFailed = true
         }
     }
