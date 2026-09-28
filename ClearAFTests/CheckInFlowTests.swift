@@ -79,4 +79,27 @@ struct CheckInFlowTests {
         #expect(!LetterpressProgressRule.isFilled(2, completed: 2))
         #expect(LetterpressProgressRule.height == 2)
     }
+
+    @Test func questionOpenedFromReviewReturnsToReview() throws {
+        #expect(CheckInFlow.advanceLabel(position: 0, count: 2, returningToReview: false) == "Next question")
+        #expect(CheckInFlow.advanceLabel(position: 1, count: 2, returningToReview: false) == "Review answers")
+        #expect(CheckInFlow.advanceLabel(position: 0, count: 2, returningToReview: true) == "Back to review")
+        #expect(CheckInFlow.advanceLabel(position: 1, count: 2, returningToReview: true) == "Back to review")
+        let source = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/CheckInView.swift"), encoding: .utf8)
+        #expect(source.contains("index = returningToReview ? draft.form.questions.count : position + 1"))
+        #expect(source.contains(".scrollDismissesKeyboard(.interactively)"))
+    }
+
+    /// Small form fixes from the design audit: return key on onboarding, sentence-case capture copy, 13pt strip error.
+    @Test func formsDismissTheKeyboardAndCaptureCopyIsSentenceCase() throws {
+        let views = LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views")
+        let onboarding = try String(contentsOf: views.appendingPathComponent("OnboardingView.swift"), encoding: .utf8)
+        #expect(onboarding.contains(".submitLabel(.done)") && onboarding.contains(".onSubmit { if canAdvance { advance() } }"))
+        #expect(onboarding.contains(".scrollDismissesKeyboard(.interactively)"))
+        let capture = try String(contentsOf: views.appendingPathComponent("PhotoCaptureManager.swift"), encoding: .utf8)
+        #expect(capture.contains("\"Take photo\"") && capture.contains("\"Choose from library\""))
+        #expect(!capture.contains("Take Photo") && !capture.contains("Choose from Library"))
+        let strip = try String(contentsOf: views.appendingPathComponent("AdherenceStrip.swift"), encoding: .utf8)
+        #expect(strip.contains("failed ? Letterpress.ui(13, relativeTo: .footnote)"))
+    }
 }

@@ -85,9 +85,11 @@ struct AdherenceStripRow: View {
                         Text("Completion history")
                             .font(Letterpress.ui(15, weight: .medium, relativeTo: .subheadline))
                             .foregroundStyle(Letterpress.ink)
+                        // A failure is something to act on, so it reads in the 13pt body face (spec §2), not the mono stamp.
                         Text(detail)
-                            .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
+                            .font(failed ? Letterpress.ui(13, relativeTo: .footnote) : Letterpress.data(11, weight: .regular, relativeTo: .caption))
                             .foregroundStyle(failed ? Letterpress.error : Letterpress.inkTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: Letterpress.Space.s10)
                     if let window { AdherenceBars(window: window) }

@@ -161,7 +161,7 @@ final class AccountFlowUITests: XCTestCase {
         let capture = app.tabBars.buttons["Capture"]
         XCTAssertTrue(capture.waitForExistence(timeout: 5))
         capture.tap()
-        app.buttons["Choose from Library"].tap()
+        app.buttons["Choose from library"].tap()
         let image = app.images.matching(NSPredicate(format: "label CONTAINS 'Photo' OR label CONTAINS 'Image'")).firstMatch
         if !image.waitForExistence(timeout: 5) { print(app.debugDescription) }
         XCTAssertTrue(image.exists)
@@ -264,8 +264,8 @@ final class AccountFlowUITests: XCTestCase {
         let originalCount = count.label
         XCTAssertTrue(app.tabBars.buttons["Capture"].isHittable)
         app.tabBars.buttons["Capture"].tap()
-        XCTAssertTrue(app.buttons["Take Photo"].waitForExistence(timeout: 5))
-        app.buttons["Take Photo"].tap()
+        XCTAssertTrue(app.buttons["Take photo"].waitForExistence(timeout: 5))
+        app.buttons["Take photo"].tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let deny = springboard.alerts.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Allow' AND label != 'Allow'")).firstMatch
         if deny.waitForExistence(timeout: 3) { deny.tap() }
@@ -277,7 +277,7 @@ final class AccountFlowUITests: XCTestCase {
         } else {
             XCTAssertTrue(app.staticTexts["cameraUnavailableMessage"].exists)
         }
-        let library = app.buttons["Choose from Library"]
+        let library = app.buttons["Choose from library"]
         for _ in 0..<4 where !library.isHittable { app.swipeUp() }
         XCTAssertTrue(library.isHittable)
         library.tap()
@@ -286,7 +286,7 @@ final class AccountFlowUITests: XCTestCase {
         XCTAssertTrue(pickerClose.exists)
         pickerClose.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         await fulfillment(of: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: pickerClose)], timeout: 5)
-        XCTAssertTrue(app.buttons["Choose from Library"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Choose from library"].waitForExistence(timeout: 5))
         app.navigationBars["Camera"].buttons["Cancel"].tap()
         XCTAssertTrue(count.waitForExistence(timeout: 5))
         XCTAssertEqual(count.label, originalCount)

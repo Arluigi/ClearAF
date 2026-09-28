@@ -98,7 +98,7 @@ final class MVPExperienceUITests: XCTestCase {
     }
 
     @MainActor private func revealLibraryAndAudit(_ app: XCUIApplication) throws {
-        let library = app.buttons["Choose from Library"]
+        let library = app.buttons["Choose from library"]
         for _ in 0..<8 where library.frame.maxY > app.frame.maxY - 60 {
             app.scrollViews.firstMatch.swipeUp()
         }
@@ -130,7 +130,7 @@ final class MVPExperienceUITests: XCTestCase {
         let app = try signedIn(largestText: false)
         try tapTab("Record", in: app)
         app.tabBars.buttons["Capture"].tap()
-        app.buttons["Take Photo"].tap()
+        app.buttons["Take photo"].tap()
         let shutter = app.buttons["Take Picture"]
         if !shutter.waitForExistence(timeout: 3) {
         guard app.staticTexts["cameraPermissionMessage"].waitForExistence(timeout: 5) else { throw fixtureFailure() }
@@ -155,8 +155,8 @@ final class MVPExperienceUITests: XCTestCase {
             throw fixtureFailure()
         }
         app.activate()
-        guard app.buttons["Take Photo"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
-        app.buttons["Take Photo"].tap()
+        guard app.buttons["Take photo"].waitForExistence(timeout: 10) else { throw fixtureFailure() }
+        app.buttons["Take photo"].tap()
         } else {
             print("MVP camera already authorized after prior Settings recovery; continuing actual capture")
         }
@@ -266,7 +266,7 @@ final class MVPExperienceUITests: XCTestCase {
         let app = try signedIn(largestText: false)
         try tapTab("Record", in: app)
         let before = try XCTUnwrap(Int(app.staticTexts["photoCount"].label.filter(\.isNumber)))
-        app.tabBars.buttons["Capture"].tap(); app.buttons["Choose from Library"].tap()
+        app.tabBars.buttons["Capture"].tap(); app.buttons["Choose from library"].tap()
         print("MVP READY_FOR_SYNTHETIC_SELECTION: user selects only the prepared prepared synthetic photo")
         guard app.buttons["photoReviewSave"].waitForExistence(timeout: 120) else { throw fixtureFailure() }
         app.buttons["photoReviewSave"].tap()
