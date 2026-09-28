@@ -76,4 +76,27 @@ struct NotesPresentationTests {
             limit: MessageLimit(canSend: true, nextAllowedAt: nil, reason: "reply-window"))
         #expect(repliable.canSendMessage)
     }
+
+    @Test func pendingNoteAndSpokenLabelsNameWhoAndWhen() {
+        #expect(NotesCopy.pendingStamp == "SENDING…")
+        #expect(NotesCopy.pendingLabel("Synthetic") == "You, sending: Synthetic")
+        #expect(NotesCopy.spokenLabel(message("patient"), clinicianName: "Synthetic Clinician", locale: Self.us, timeZone: Self.utc)
+                == "You, 14 Sep, 4:12 pm: Synthetic")
+        #expect(NotesCopy.spokenLabel(message("dermatologist"), clinicianName: "Synthetic Clinician", locale: Self.us, timeZone: Self.utc)
+                == "Synthetic Clinician, 14 Sep, 4:12 pm: Synthetic")
+        #expect(NotesCopy.spokenLabel(message("dermatologist", sentAt: "garbled"), clinicianName: "Synthetic Clinician", locale: Self.us, timeZone: Self.utc)
+                == "Synthetic Clinician: Synthetic")
+    }
+
+    @Test func threadOpensAtTheNewestNoteAndReadsEachNoteOnce() throws {
+        let text = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/MessagingView.swift"), encoding: .utf8)
+        #expect(text.contains(".defaultScrollAnchor(.bottom, for: .initialOffset)"))
+        #expect(text.contains(".defaultScrollAnchor(.bottom, for: .sizeChanges)"))
+        #expect(text.contains(".refreshable { await refresh() }"))
+        #expect(text.contains(".onChange(of: repository.messages.last?.id)"))
+        #expect(!text.contains(".onChange(of: repository.messages.first"))
+        #expect(text.contains("withAnimation(reduceMotion ? nil : .snappy)"))
+        #expect(text.components(separatedBy: ".accessibilityElement(children: .combine)").count >= 3)
+        #expect(text.contains("if repository.sending, let draft = repository.draft"))
+    }
 }

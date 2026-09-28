@@ -36,6 +36,19 @@ enum NotesCopy {
         return "You've sent this week's message. You can write again from \(LetterpressFormat.dayMonth(date, locale: locale, timeZone: timeZone))."
     }
     static let limitReportPrompt = "Report a reaction any time"
+
+    /// Stamp on the patient's own note while it waits for the server; the draft stays until the server confirms.
+    static let pendingStamp = "SENDING…"
+    static func pendingLabel(_ content: String) -> String { "You, sending: \(content)" }
+
+    /// One VoiceOver element per note: who, when (written out), then the words.
+    static func spokenLabel(_ message: AssignedMessage, clinicianName: String, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        let who = message.senderType == "patient" ? "You" : clinicianName
+        let unread = message.unreadForMe ? "Unread, " : ""
+        guard let date = RoutineDates.instant(message.sentAt) else { return "\(unread)\(who): \(message.content)" }
+        let spoken = "\(LetterpressFormat.dayMonth(date, locale: locale, timeZone: timeZone)), \(LetterpressFormat.clock(date, locale: locale, timeZone: timeZone))"
+        return "\(unread)\(who), \(spoken): \(message.content)"
+    }
 }
 
 /// Notes (spec §6 #10, §4.7): clinician words in the display serif with a 2pt ink rule, own replies in a sunk block,
@@ -48,6 +61,7 @@ struct MessagingView: View {
     @State private var showingLimitReport = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
@@ -55,38 +69,55 @@ struct MessagingView: View {
                 if let pair = repository.conversation {
                     header(pair)
                     GeometryReader { viewport in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: Letterpress.Space.s22) {
-                                if repository.nextCursor != nil {
-                                    Button("Load older") { Task { await repository.load(older: true) } }
-                                        .buttonStyle(.letterpress(.underline))
-                                        .frame(maxWidth: .infinity)
-                                        .disabled(repository.loading)
-                                }
-                                if repository.messages.isEmpty && !repository.loading {
-                                    VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
-                                        Text("No notes yet")
-                                            .font(Letterpress.display(28, relativeTo: .title))
-                                            .foregroundStyle(Letterpress.ink)
-                                        Text("Write to \(pair.clinicianName) below.")
-                                            .font(Letterpress.ui(15, relativeTo: .body))
-                                            .foregroundStyle(Letterpress.inkSecondary)
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: Letterpress.Space.s22) {
+                                    if repository.nextCursor != nil {
+                                        Button("Load older") { Task { await repository.load(older: true) } }
+                                            .buttonStyle(.letterpress(.underline))
+                                            .frame(maxWidth: .infinity)
+                                            .disabled(repository.loading)
+                                    }
+                                    if repository.messages.isEmpty && !repository.loading {
+                                        VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+                                            Text("No notes yet")
+                                                .font(Letterpress.display(28, relativeTo: .title))
+                                                .foregroundStyle(Letterpress.ink)
+                                            Text("Write to \(pair.clinicianName) below.")
+                                                .font(Letterpress.ui(15, relativeTo: .body))
+                                                .foregroundStyle(Letterpress.inkSecondary)
+                                        }
+                                    }
+                                    ForEach(repository.messages) { message in
+                                        NoteTurn(message: message, clinicianName: pair.clinicianName) { selected = message }
+                                            .background(GeometryReader { geometry in
+                                                Color.clear.preference(key: VisibleMessageFrames.self, value: [message.id: geometry.frame(in: .named("messageViewport"))])
+                                            })
+                                    }
+                                    // Only the send in flight; account switches clear `sending` and the draft together.
+                                    if repository.sending, let draft = repository.draft {
+                                        PendingNoteTurn(content: draft.content).id(draft.id)
                                     }
                                 }
-                                ForEach(repository.messages) { message in
-                                    NoteTurn(message: message, clinicianName: pair.clinicianName) { selected = message }
-                                        .background(GeometryReader { geometry in
-                                            Color.clear.preference(key: VisibleMessageFrames.self, value: [message.id: geometry.frame(in: .named("messageViewport"))])
-                                        })
-                                }
+                                .padding(.horizontal, Letterpress.Space.s22)
+                                .padding(.vertical, Letterpress.Space.s18)
                             }
-                            .padding(.horizontal, Letterpress.Space.s22)
-                            .padding(.vertical, Letterpress.Space.s18)
-                        }
-                        .coordinateSpace(name: "messageViewport")
-                        .onPreferenceChange(VisibleMessageFrames.self) { frames in
-                            visible = Set(frames.filter { $0.value.intersects(CGRect(origin: .zero, size: viewport.size)) }.keys)
-                            if active && scenePhase == .active && selected == nil { Task { await repository.acknowledgeVisible(visible) } }
+                            .defaultScrollAnchor(.bottom, for: .initialOffset)
+                            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+                            .scrollDismissesKeyboard(.interactively)
+                            .refreshable { await refresh() }
+                            // Keyed on the newest note only, so "Load older" (which prepends) never jumps to the end.
+                            .onChange(of: repository.messages.last?.id) { _, id in
+                                if let id { scrollToEnd(id, proxy: proxy) }
+                            }
+                            .onChange(of: repository.sending) { _, sending in
+                                if sending, let id = repository.draft?.id { scrollToEnd(id, proxy: proxy) }
+                            }
+                            .coordinateSpace(name: "messageViewport")
+                            .onPreferenceChange(VisibleMessageFrames.self) { frames in
+                                visible = Set(frames.filter { $0.value.intersects(CGRect(origin: .zero, size: viewport.size)) }.keys)
+                                if active && scenePhase == .active && selected == nil { Task { await repository.acknowledgeVisible(visible) } }
+                            }
                         }
                     }
                     composer
@@ -111,12 +142,7 @@ struct MessagingView: View {
             .background(Letterpress.canvas.ignoresSafeArea())
             .navigationTitle("Notes")
             .toolbar {
-                Button("Refresh", systemImage: "arrow.clockwise") {
-                    Task {
-                        await repository.openCurrent()
-                        if active && scenePhase == .active && selected == nil { await repository.acknowledgeVisible(visible) }
-                    }
-                }
+                Button("Refresh", systemImage: "arrow.clockwise") { Task { await refresh() } }
                 .disabled(repository.loading || repository.sending)
             }
             .sheet(item: $selected) { message in
@@ -136,6 +162,15 @@ struct MessagingView: View {
                 if id == nil && active && scenePhase == .active { Task { await repository.acknowledgeVisible(visible) } }
             }
         }
+    }
+
+    private func refresh() async {
+        await repository.openCurrent()
+        if active && scenePhase == .active && selected == nil { await repository.acknowledgeVisible(visible) }
+    }
+
+    private func scrollToEnd(_ id: UUID, proxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: .bottom) }
     }
 
     private func header(_ pair: AssignedConversation) -> some View {
@@ -244,15 +279,21 @@ private struct NoteTurn: View {
             .foregroundStyle(Letterpress.inkTertiary)
     }
 
+    private var spokenLabel: String { NotesCopy.spokenLabel(message, clinicianName: clinicianName) }
+
     private var clinician: some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
-            if message.unreadForMe { Text(NotesCopy.unreadEyebrow(clinicianName: clinicianName)).letterpressEyebrow(color: Letterpress.attentionText) }
-            stamp
-            Text(message.content)
-                .font(Letterpress.display(17, relativeTo: .body))
-                .foregroundStyle(Letterpress.ink)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+                if message.unreadForMe { Text(NotesCopy.unreadEyebrow(clinicianName: clinicianName)).letterpressEyebrow(color: Letterpress.attentionText) }
+                stamp
+                Text(message.content)
+                    .font(Letterpress.display(17, relativeTo: .body))
+                    .foregroundStyle(Letterpress.ink)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(spokenLabel)
             if let reference = message.reference { referenceBox(reference) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -266,18 +307,8 @@ private struct NoteTurn: View {
 
     private var patient: some View {
         VStack(alignment: .trailing, spacing: Letterpress.Space.s6) {
-            stamp
-            Text(message.content)
-                .font(Letterpress.ui(15, relativeTo: .body))
-                .foregroundStyle(Letterpress.ink)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(Letterpress.Space.s14)
-                .background(Letterpress.sunk)
-            Text("Sent")
-                .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
-                .foregroundStyle(Letterpress.inkTertiary)
+            OwnNote(stamp: NotesCopy.stamp(message, clinicianName: clinicianName), content: message.content,
+                    footer: "Sent", label: spokenLabel)
             if let reference = message.reference { referenceBox(reference) }
         }
         .padding(.leading, Letterpress.Space.s44)
@@ -313,6 +344,47 @@ private struct NoteTurn: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityHint("Opens the linked feedback")
+    }
+}
+
+/// The patient's own words in a sunk block: stamp above, optional footer below, read by VoiceOver as one element.
+private struct OwnNote: View {
+    let stamp: String
+    let content: String
+    let footer: String?
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: Letterpress.Space.s6) {
+            Text(stamp)
+                .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
+                .foregroundStyle(Letterpress.inkTertiary)
+            Text(content)
+                .font(Letterpress.ui(15, relativeTo: .body))
+                .foregroundStyle(Letterpress.ink)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Letterpress.Space.s14)
+                .background(Letterpress.sunk)
+            if let footer {
+                Text(footer)
+                    .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
+                    .foregroundStyle(Letterpress.inkTertiary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+    }
+}
+
+/// The note being sent, shown at the end of the thread until the server confirms or refuses it.
+private struct PendingNoteTurn: View {
+    let content: String
+    var body: some View {
+        OwnNote(stamp: NotesCopy.pendingStamp, content: content, footer: nil, label: NotesCopy.pendingLabel(content))
+            .padding(.leading, Letterpress.Space.s44)
+            .accessibilityIdentifier("messagesPending")
     }
 }
 
