@@ -34,7 +34,7 @@
     "express": "^4.22.2",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.3.0",
+    "multer": "^2.4.0",
     "node-fetch": "^2.7.0",
     "pg": "8.23.0",
     "sharp": "0.35.4",
