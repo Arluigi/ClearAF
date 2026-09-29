@@ -156,3 +156,13 @@ struct PhotoFrame: View {
 enum PhotoImageKey {
     @MainActor static func of(_ photo: SkinPhoto) -> String { photo.objectID.uriRepresentation().absoluteString }
 }
+
+extension View {
+    /// A photo sheet grows out of the thumbnail it was opened from (`.matchedTransitionSource` with the same ID in the
+    /// same namespace). Under Reduce Motion it cross-fades instead where the system offers that (iOS 27); earlier
+    /// systems keep the zoom, which the system itself tones down for Reduce Motion.
+    @ViewBuilder func photoZoomTransition(id: some Hashable, in ns: Namespace.ID, reduceMotion: Bool) -> some View {
+        if reduceMotion, #available(iOS 27, *) { navigationTransition(.crossFade) }
+        else { navigationTransition(.zoom(sourceID: id, in: ns)) }
+    }
+}

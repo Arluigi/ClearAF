@@ -27,6 +27,8 @@ struct ComparePhotosView: View {
     /// Counts the patient's own flips and pair picks. The haptic follows it, not `showingLater` or `pair`, which also
     /// change on their own (the default pair, the reset to the later photo when the pair changes).
     @State private var selectionTaps = 0
+    /// Each photo's detail sheet grows out of the pane it was opened from.
+    @Namespace private var photoZoom
 
     private typealias Ordered = (earlier: ComparePhoto, later: ComparePhoto)
     private var ordered: Ordered? { pair.ordered(date: \.captureDate) }
@@ -70,15 +72,18 @@ struct ComparePhotosView: View {
             timeline.cancel()
         }
         .sheet(item: $detail) { photo in
-            if let skin = strip.skinPhoto(for: photo) {
-                PhotoDetailView(photo: skin, images: strip.stageImages)
-            } else {
-                Text(CompareCopy.photoUnreadable)
-                    .font(Letterpress.ui(15, relativeTo: .body))
-                    .foregroundStyle(Letterpress.inkSecondary)
-                    .padding(Letterpress.Space.s22)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if let skin = strip.skinPhoto(for: photo) {
+                    PhotoDetailView(photo: skin, images: strip.stageImages)
+                } else {
+                    Text(CompareCopy.photoUnreadable)
+                        .font(Letterpress.ui(15, relativeTo: .body))
+                        .foregroundStyle(Letterpress.inkSecondary)
+                        .padding(Letterpress.Space.s22)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .photoZoomTransition(id: photo.id, in: photoZoom, reduceMotion: reduceMotion)
         }
     }
 
@@ -144,6 +149,7 @@ struct ComparePhotosView: View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
             Button { detail = photo } label: {
                 CompareMat { CompareImage(photo: photo, strip: strip) }
+                    .matchedTransitionSource(id: photo.id, in: photoZoom)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(CompareCopy.paneLabel(role: role, date: photo.captureDate))

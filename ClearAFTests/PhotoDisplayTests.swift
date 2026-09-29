@@ -148,6 +148,24 @@ import PhotosUI
         #expect(progress.contains("PhotoDetailView(photo: photo, images: detailImages"), "the detail sheet has its own cache")
     }
 
+    /// Design audit C3: a photo's sheet grows out of the tile it was opened from; a cross-fade under Reduce Motion.
+    @Test func photosOpenFromTheirThumbnail() throws {
+        let views = LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views")
+        let record = try String(contentsOf: views.appendingPathComponent("PhotoRecordDisplay.swift"), encoding: .utf8)
+        #expect(record.contains("if reduceMotion, #available(iOS 27, *) { navigationTransition(.crossFade) }"))
+        #expect(record.contains("else { navigationTransition(.zoom(sourceID: id, in: ns)) }"))
+        let progress = try String(contentsOf: views.appendingPathComponent("ProgressView.swift"), encoding: .utf8)
+        #expect(progress.components(separatedBy: ".matchedTransitionSource(id: photo.objectID, in: photoZoom)").count - 1 == 2, "grid tile and list row")
+        #expect(progress.components(separatedBy: ".photoZoomTransition(id: photo.objectID, in: photoZoom, reduceMotion: reduceMotion)").count - 1 == 2)
+        #expect(progress.components(separatedBy: "@Namespace private var photoZoom").count - 1 == 2)
+        #expect(progress.contains(".sheet(isPresented: $showingDetail)"), "the existing sheet presentation is kept")
+        let compare = try String(contentsOf: views.appendingPathComponent("CompareView.swift"), encoding: .utf8)
+        #expect(compare.contains(".matchedTransitionSource(id: photo.id, in: photoZoom)"), "each side-by-side pane")
+        #expect(compare.contains(".photoZoomTransition(id: photo.id, in: photoZoom, reduceMotion: reduceMotion)"))
+        #expect(compare.contains(".fullScreenCover") == false && progress.contains(".fullScreenCover(isPresented: comparing)"),
+                "Compare itself stays a full-screen cover")
+    }
+
     @Test func cancelledAndFailedPickersIgnoreLateSelectedCallbacks() {
         for first in [PhotoPickerResult.cancelled, .failed] {
             let delivery = PhotoPickerDelivery()

@@ -194,12 +194,15 @@ private struct PhotoGridCell: View {
     let detailImages: PhotoImageLoader
     let reviewed: Bool
     @State private var showingDetail = false
+    @Namespace private var photoZoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
             Button { showingDetail = true } label: {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                     PhotoFrame(photo: photo, images: images, maxPixelSize: 400)
+                        .matchedTransitionSource(id: photo.objectID, in: photoZoom)
                     if let date = photo.captureDate {
                         Text(LetterpressFormat.stamp(date))
                             .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
@@ -211,7 +214,10 @@ private struct PhotoGridCell: View {
             .accessibilityLabel(datedPhotoLabel(photo))
             PhotoSharingStatusView(photo: photo, compact: true, reviewed: reviewed)
         }
-        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed) }
+        .sheet(isPresented: $showingDetail) {
+            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed)
+                .photoZoomTransition(id: photo.objectID, in: photoZoom, reduceMotion: reduceMotion)
+        }
     }
 }
 
@@ -221,6 +227,8 @@ private struct PhotoListRow: View {
     let detailImages: PhotoImageLoader
     let reviewed: Bool
     @State private var showingDetail = false
+    @Namespace private var photoZoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -230,6 +238,7 @@ private struct PhotoListRow: View {
         stack {
             Button { showingDetail = true } label: {
                 PhotoFrame(photo: photo, images: images, maxPixelSize: 400).frame(width: 72)
+                    .matchedTransitionSource(id: photo.objectID, in: photoZoom)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(datedPhotoLabel(photo))
@@ -251,7 +260,10 @@ private struct PhotoListRow: View {
         }
         .padding(.vertical, Letterpress.Space.s14)
         .overlay(alignment: .top) { LetterpressRule() }
-        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed) }
+        .sheet(isPresented: $showingDetail) {
+            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed)
+                .photoZoomTransition(id: photo.objectID, in: photoZoom, reduceMotion: reduceMotion)
+        }
     }
 }
 
