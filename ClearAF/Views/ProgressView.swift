@@ -290,6 +290,9 @@ struct PhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
     @State private var unreadable = false
+    /// The photo at its own pixel size, decoded the first time it is zoomed past 1.5×.
+    @State private var fullImage: UIImage?
+    @State private var loadingFull = false
 
     var body: some View {
         NavigationStack {
@@ -298,13 +301,14 @@ struct PhotoDetailView: View {
                     if let image {
                         // Sits on the same `sunk` mat as `PhotoFrame` (spec §4.5) instead of the reading-surface
                         // canvas behind it, and keeps the photo's own aspect ratio since this is the uncropped view.
+                        // Pinch or double-tap to zoom; the image view is VoiceOver's labelled photo element.
                         Rectangle()
                             .fill(Letterpress.sunk)
                             .aspectRatio(image.size, contentMode: .fit)
-                            .overlay { Image(uiImage: image).resizable().scaledToFit() }
-                            .accessibilityElement()
-                            .accessibilityLabel("Full photo")
-                            .accessibilityAddTraits(.isImage)
+                            .overlay {
+                                ZoomablePhotoView(image: fullImage ?? image, label: "Full photo",
+                                                  photoID: PhotoImageKey.of(photo), onZoomIn: loadFullResolution)
+                            }
                             .transition(.opacity)
                     } else {
                         // Quiet placeholder while the photo is read and decoded off the main thread.
@@ -356,12 +360,24 @@ struct PhotoDetailView: View {
     private func load() async {
         let key = PhotoImageKey.of(photo)
         image = images.cached(key: key, maxPixelSize: Self.pixelSize)
-        unreadable = false
+        unreadable = false; fullImage = nil
         guard image == nil else { return }
         guard let data = PhotoBytes.reader(for: photo) else { unreadable = true; return }
         let loaded = await images.image(for: key, maxPixelSize: Self.pixelSize, data: data)
         guard !Task.isCancelled else { return }
         image = loaded; unreadable = loaded == nil
+    }
+
+    private func loadFullResolution() {
+        guard fullImage == nil, !loadingFull, let data = PhotoBytes.reader(for: photo) else { return }
+        loadingFull = true
+        let key = PhotoImageKey.of(photo)
+        Task {
+            let full = await images.fullImage(data: data)
+            loadingFull = false
+            // Dropped if another photo is showing by now (the loader already drops it after an account change).
+            if key == PhotoImageKey.of(photo) { fullImage = full }
+        }
     }
 
     static let pixelSize = 1600
