@@ -271,7 +271,8 @@ struct PhotoSharingStatusView: View {
     @ObservedObject var photo: SkinPhoto
     var compact = false
     var reviewed = false
-    @State private var errorMessage: String?
+    /// Share or Retry could not start. Shown in place (spec §5), not as an alert: the tile already carries its state.
+    @State private var shareFailed = false
 
     var body: some View {
         let state = PhotoTileState.of(uploadState: photo.uploadState, reviewed: reviewed)
@@ -281,17 +282,28 @@ struct PhotoSharingStatusView: View {
                 .foregroundStyle(state.color)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("photoSharingStatus")
+            if shareFailed {
+                Text(PhotoTileState.shareFailed)
+                    .font(Letterpress.ui(13, relativeTo: .footnote))
+                    .foregroundStyle(Letterpress.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let action = state.action(compact: compact) {
-                Button(action) {
+                Button(shareFailed ? "Retry" : action) {
+                    shareFailed = false
                     do { try APIService.shared.photos.share(photo) }
-                    catch { errorMessage = error.localizedDescription }
+                    catch {
+                        shareFailed = true
+                        // A failed device save is already spoken once by ContentView's photo error announcer.
+                        if error as? PhotoCaptureFailure != .saveFailed {
+                            AccessibilityNotification.Announcement(PhotoTileState.shareFailed).post()
+                        }
+                    }
                 }
                 .buttonStyle(.letterpress(.underline))
             }
         }
-        .alert("Unable to share photo", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button("OK") { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
+        .onChange(of: photo.uploadState) { shareFailed = false }
     }
 }
 
@@ -318,7 +330,7 @@ struct PhotoDetailView: View {
                             .fill(Letterpress.sunk)
                             .aspectRatio(image.size, contentMode: .fit)
                             .overlay {
-                                ZoomablePhotoView(image: fullImage ?? image, label: "Full photo",
+                                ZoomablePhotoView(image: fullImage ?? image, label: PhotoLabel.photo(photo.captureDate),
                                                   photoID: PhotoImageKey.of(photo), onZoomIn: loadFullResolution)
                             }
                             .transition(.opacity)

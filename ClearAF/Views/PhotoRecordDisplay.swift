@@ -14,6 +14,9 @@ enum PhotoTileState: Equatable {
         }
     }
 
+    /// Said in place, under the state, when Share or Retry could not start. The photo itself is untouched.
+    static let shareFailed = "Couldn't share. Your photo is safe on this device."
+
     var label: String {
         switch self {
         case .onDevice: "On device"
@@ -149,6 +152,13 @@ struct PhotoFrame: View {
         let loaded = await images.image(for: key, maxPixelSize: maxPixelSize, data: data)
         guard !Task.isCancelled else { return }
         image = loaded; unreadable = loaded == nil
+    }
+}
+
+/// "Photo, 28 Sep 2026": how VoiceOver names a whole photo (the detail sheet and the review preview).
+enum PhotoLabel {
+    static func photo(_ date: Date?, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        date.map { "Photo, \(LetterpressFormat.dayMonthYear($0, locale: locale, timeZone: timeZone))" } ?? "Photo"
     }
 }
 

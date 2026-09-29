@@ -106,7 +106,7 @@ struct PhotoReviewSheet: View {
             .animation(.smooth(duration: 0.2), value: image != nil)
             .overlay { Rectangle().strokeBorder(Letterpress.ink, lineWidth: 1.5) }
             .accessibilityElement()
-            .accessibilityLabel("Photo to review, not saved yet")
+            .accessibilityLabel(PhotoLabel.photo(draft.capturedAt))
             .accessibilityAddTraits(.isImage)
             .task(id: previewKey) {
                 image = nil
