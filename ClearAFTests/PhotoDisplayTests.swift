@@ -173,7 +173,7 @@ import PhotosUI
         #expect(progress.components(separatedBy: "preview: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: PhotoFrame.tilePixelSize))").count - 1 == 2)
         // The full-size decode is a cancellable task keyed on the zoom request, checked against the shown photo.
         #expect(progress.contains(".task(id: wantsFull) { await loadFullResolution() }"))
-        #expect(progress.contains("onZoomIn: { wantsFull = shownKey })"))
+        #expect(progress.contains("onZoomIn: { wantsFull = shownKey },"))
         #expect(progress.contains("guard !Task.isCancelled, key == shownKey else { return }"))
         #expect(progress.contains("PhotoDetailView(photo: photo, images: detailImages"), "the detail sheet has its own cache")
     }

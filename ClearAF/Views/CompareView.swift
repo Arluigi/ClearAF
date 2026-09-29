@@ -25,9 +25,14 @@ struct ComparePhotosView: View {
     /// What the flip stage shows: 0 is the earlier photo, 1 the later. Follows a horizontal drag, then settles on
     /// `showingLater`. The later photo's opacity is this value, the earlier one's is the rest.
     @State private var flipProgress: CGFloat = 1
+    /// True while a drag is live; resets on its own when the system cancels one, which never reaches `onEnded`.
+    @GestureState private var flipDragging = false
     /// The live drag's axis, locked on its first change so a diagonal drag can't flicker between flip and scroll.
-    /// Nil when no drag is in progress (including after the system cancels one).
-    @GestureState private var flipAxis: Axis?
+    /// `@State`, not `@GestureState`: gesture state is already reset when `onEnded` runs, and the release must be
+    /// judged on the axis the drag locked, not re-derived from where it ended. Keyed by the drag's start location,
+    /// so a lock left by a cancelled drag never applies to the next one. Not cleared in the cancel path, which can
+    /// run before `onEnded` (gesture state resets first) and would then drop a real flip.
+    @State private var flipLock: CompareFlip.Lock?
     @State private var flipWidth: CGFloat = 0
     @State private var detail: ComparePhoto?
     @State private var retry = 0
@@ -223,9 +228,9 @@ struct ComparePhotosView: View {
             .contentShape(Rectangle())
             .onTapGesture { flip() }
             .simultaneousGesture(flipDrag)
-            .onChange(of: flipAxis == nil) { _, ended in
-                // A drag the system cancelled never reaches `onEnded`: settle back on the committed photo.
-                if ended { withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 } }
+            .onChange(of: flipDragging) { _, dragging in
+                // A cancelled drag never reaches `onEnded`: settle back. The lock stays (see `flipLock`).
+                if !dragging { withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 } }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(CompareCopy.flipLabel(showingLater: showingLater, date: shown.captureDate))
@@ -389,22 +394,21 @@ struct ComparePhotosView: View {
     /// drag can catch the photo mid-spring); on release the projected end decides which photo it settles on.
     private var flipDrag: some Gesture {
         DragGesture(minimumDistance: CompareFlip.threshold)
-            .updating($flipAxis) { value, axis, _ in
-                if axis == nil { axis = CompareFlip.axis(of: value.translation) }
-            }
+            .updating($flipDragging) { _, dragging, _ in dragging = true }
             .onChanged { value in
-                // `flipAxis` may not show this event's update yet; the first event locks the same axis either way.
-                let axis = flipAxis ?? CompareFlip.axis(of: value.translation)
+                let lock = CompareFlip.Lock.keep(flipLock, start: value.startLocation, translation: value.translation)
+                if lock != flipLock { flipLock = lock }
                 let base: CGFloat = showingLater ? 1 : 0
                 withAnimation(.interactiveSpring) {
-                    flipProgress = CompareFlip.progress(base: base, translation: value.translation, axis: axis, width: flipWidth)
+                    flipProgress = CompareFlip.progress(base: base, translation: value.translation, axis: lock.axis, width: flipWidth)
                 }
             }
             .onEnded { value in
-                let axis = flipAxis ?? CompareFlip.axis(of: value.translation)
                 let base: CGFloat = showingLater ? 1 : 0
-                let later = CompareFlip.settlesOnLater(base: base, predictedEnd: value.predictedEndTranslation, axis: axis, width: flipWidth)
-                if later != showingLater { flip() } else { withAnimation(flipAnimation) { flipProgress = base } }
+                let flips = CompareFlip.commitsFlip(lockedAxis: flipLock?.axis(forDragFrom: value.startLocation), base: base,
+                                                    predictedEnd: value.predictedEndTranslation, width: flipWidth)
+                flipLock = nil
+                if flips { flip() } else { withAnimation(flipAnimation) { flipProgress = base } }
             }
     }
 
@@ -459,6 +463,26 @@ enum CompareFlip {
     /// Where a released drag settles: past halfway, projected from the drag's velocity, it flips.
     static func settlesOnLater(base: CGFloat, predictedEnd: CGSize, axis: Axis, width: CGFloat) -> Bool {
         progress(base: base, translation: predictedEnd, axis: axis, width: width) > 0.5
+    }
+
+    /// Whether a released drag commits a flip, judged on the axis it locked. No lock (it never tracked) is a scroll.
+    static func commitsFlip(lockedAxis: Axis?, base: CGFloat, predictedEnd: CGSize, width: CGFloat) -> Bool {
+        guard let lockedAxis else { return false }
+        return settlesOnLater(base: base, predictedEnd: predictedEnd, axis: lockedAxis, width: width) != (base > 0.5)
+    }
+
+    /// One drag's axis, tied to where that drag started.
+    struct Lock: Equatable {
+        let start: CGPoint
+        let axis: Axis
+
+        /// The same drag keeps its lock; a new drag (another start) locks from its first change.
+        static func keep(_ lock: Lock?, start: CGPoint, translation: CGSize) -> Lock {
+            if let lock, lock.start == start { return lock }
+            return Lock(start: start, axis: CompareFlip.axis(of: translation))
+        }
+
+        func axis(forDragFrom start: CGPoint) -> Axis? { start == self.start ? axis : nil }
     }
 }
 

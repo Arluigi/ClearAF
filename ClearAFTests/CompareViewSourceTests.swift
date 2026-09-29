@@ -32,12 +32,16 @@ struct CompareViewSourceTests {
         #expect(animations > 0 && animations == fades, "every implicit animation is an opacity fade")
         // The flip is an opacity cross-fade driven by the tracked progress.
         #expect(text.contains(".opacity(1 - flipProgress)") && text.contains(".opacity(flipProgress)"))
-        #expect(text.contains("@GestureState private var flipAxis: Axis?"))
-        #expect(text.contains("if axis == nil { axis = CompareFlip.axis(of: value.translation) }"), "the axis locks on the first change")
+        #expect(text.contains("@GestureState private var flipDragging = false"), "cancellation is noticed")
+        #expect(text.contains("@State private var flipLock: CompareFlip.Lock?"), "the lock outlives gesture state into onEnded")
+        #expect(text.contains("CompareFlip.Lock.keep(flipLock, start: value.startLocation, translation: value.translation)"),
+                "the axis locks on the first change")
+        #expect(text.contains("CompareFlip.commitsFlip(lockedAxis: flipLock?.axis(forDragFrom: value.startLocation)"),
+                "a release is judged on the locked axis")
         #expect(text.contains("DragGesture(minimumDistance: CompareFlip.threshold)"))
-        #expect(text.contains("CompareFlip.progress(base: base, translation: value.translation, axis: axis, width: flipWidth)"))
+        #expect(text.contains("CompareFlip.progress(base: base, translation: value.translation, axis: lock.axis, width: flipWidth)"))
         #expect(text.contains("predictedEnd: value.predictedEndTranslation"))
-        #expect(text.contains("if later != showingLater { flip() }"), "a committed drag goes through flip(), one tick")
+        #expect(text.contains("if flips { flip() }"), "a committed drag goes through flip(), one tick")
         #expect(text.contains(".onTapGesture { flip() }") && text.contains(".accessibilityAction { flip() }"))
         #expect(text.components(separatedBy: "withAnimation(").count - 1 == 4,
                 "drag tracking, settle back after a drag, settle after a cancelled drag, and flip()")
@@ -157,5 +161,29 @@ struct CompareFlipTests {
         #expect(!later(0, -(24 + 60)))
         #expect(CompareFlip.settlesOnLater(base: 1, predictedEnd: CGSize(width: 900, height: 0), axis: .vertical, width: 300),
                 "a vertical drag never flips")
+    }
+
+    /// Fix round 2: the release is judged on the axis the drag locked, never re-derived from where it ended.
+    @Test func aScrollThatDriftsSidewaysNeverFlipsOnRelease() {
+        let drift = CGSize(width: 80, height: 60)
+        #expect(!CompareFlip.commitsFlip(lockedAxis: .vertical, base: 1, predictedEnd: drift, width: 300),
+                "locked vertical, ending (80, 60): no flip")
+        #expect(!CompareFlip.commitsFlip(lockedAxis: .vertical, base: 1, predictedEnd: CGSize(width: 900, height: 0), width: 300))
+        #expect(!CompareFlip.commitsFlip(lockedAxis: nil, base: 1, predictedEnd: CGSize(width: 900, height: 0), width: 300),
+                "no lock is a scroll")
+        #expect(CompareFlip.commitsFlip(lockedAxis: .horizontal, base: 1, predictedEnd: CGSize(width: 900, height: 0), width: 300))
+        #expect(CompareFlip.commitsFlip(lockedAxis: .horizontal, base: 0, predictedEnd: CGSize(width: -900, height: 0), width: 300))
+        #expect(!CompareFlip.commitsFlip(lockedAxis: .horizontal, base: 1, predictedEnd: CGSize(width: -900, height: 0), width: 300),
+                "already on the side it settles on: no flip")
+    }
+
+    @Test func aLockBelongsToOneDrag() {
+        let start = CGPoint(x: 10, y: 20)
+        let lock = CompareFlip.Lock.keep(nil, start: start, translation: CGSize(width: 5, height: 30))
+        #expect(lock.axis == .vertical)
+        #expect(CompareFlip.Lock.keep(lock, start: start, translation: CGSize(width: 200, height: 0)) == lock, "same drag keeps it")
+        let next = CompareFlip.Lock.keep(lock, start: CGPoint(x: 50, y: 20), translation: CGSize(width: 30, height: 0))
+        #expect(next.axis == .horizontal, "a new drag locks afresh, even after a cancelled one left its lock")
+        #expect(lock.axis(forDragFrom: start) == .vertical && lock.axis(forDragFrom: CGPoint(x: 50, y: 20)) == nil)
     }
 }

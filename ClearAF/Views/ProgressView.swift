@@ -346,7 +346,8 @@ struct PhotoDetailView: View {
                             .aspectRatio(image.size, contentMode: .fit)
                             .overlay {
                                 ZoomablePhotoView(image: fullImage ?? image, label: PhotoLabel.photo(photo.captureDate),
-                                                  photoID: PhotoImageKey.of(photo), onZoomIn: { wantsFull = shownKey })
+                                                  photoID: PhotoImageKey.of(photo), onZoomIn: { wantsFull = shownKey },
+                                                  needsFullResolution: fullImage == nil)
                             }
                             .transition(.opacity)
                     } else {
@@ -416,6 +417,9 @@ struct PhotoDetailView: View {
         // Dropped if another photo is showing by now; the loader already drops it after an account change or cancel.
         guard !Task.isCancelled, key == shownKey else { return }
         fullImage = full
+        // A failed decode clears the request so the next zoom gesture can try once more (the sharper 1600px
+        // photo stays on screen meanwhile).
+        if full == nil { wantsFull = nil }
     }
 
     static let pixelSize = 1600

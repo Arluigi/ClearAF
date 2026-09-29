@@ -40,10 +40,37 @@ import UIKit
         #expect(view.accessibilityLabel == "Photo, 28 Sep 2026")
     }
 
+    /// Fix round 2: zoom asks for the full-size photo once per gesture while it is still missing, never repeatedly.
+    @Test func zoomAsksForFullResolutionOncePerGestureWhileMissing() {
+        let view = ZoomingScrollView()
+        view.frame = CGRect(x: 0, y: 0, width: 300, height: 400)
+        var asks = 0
+        view.onZoomIn = { asks += 1 }
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 400), format: format).image { _ in }
+        view.show(image, photoID: "a", label: "Photo")
+        view.layoutIfNeeded()
+        view.setZoomScale(2, animated: false)
+        view.setZoomScale(3, animated: false)
+        #expect(asks == 1, "one ask per gesture")
+        // The decode failed (still needed): the next pinch asks once more.
+        view.scrollViewWillBeginZooming(view, with: nil)
+        view.setZoomScale(2.5, animated: false)
+        view.setZoomScale(4, animated: false)
+        #expect(asks == 2)
+        // Once the full-size photo is in, a new pinch doesn't ask again.
+        view.needsFullResolution = false
+        view.scrollViewWillBeginZooming(view, with: nil)
+        view.setZoomScale(5, animated: false)
+        #expect(asks == 2)
+    }
+
     @Test func detailUsesTheZoomableViewAndLoadsFullResolutionOnZoom() throws {
         let text = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/ProgressView.swift"), encoding: .utf8)
         #expect(text.contains("ZoomablePhotoView(image: fullImage ?? image"))
-        #expect(text.contains("photoID: PhotoImageKey.of(photo), onZoomIn: { wantsFull = shownKey })"))
+        #expect(text.contains("photoID: PhotoImageKey.of(photo), onZoomIn: { wantsFull = shownKey },"))
+        #expect(text.contains("needsFullResolution: fullImage == nil)"))
+        #expect(text.contains("if full == nil { wantsFull = nil }"), "a failed full-size decode can be retried by the next zoom")
         #expect(text.contains("await images.fullImage(data: data)"))
     }
 }

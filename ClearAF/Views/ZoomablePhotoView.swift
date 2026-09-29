@@ -9,8 +9,10 @@ struct ZoomablePhotoView: UIViewRepresentable {
     let label: String
     /// Identifies the photo shown; a different photo starts again at 1×.
     let photoID: String
-    /// Called once per photo, the first time the zoom passes `fullResolutionScale`.
+    /// Called the first time a zoom gesture passes `fullResolutionScale`: once per photo, and again on a later
+    /// gesture while `needsFullResolution` (the full-size decode failed or hasn't landed), never repeatedly in one.
     let onZoomIn: () -> Void
+    var needsFullResolution = true
 
     static let maximumScale: CGFloat = 6
     static let doubleTapScale: CGFloat = 2.5
@@ -20,6 +22,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
 
     func updateUIView(_ view: ZoomingScrollView, context: Context) {
         view.onZoomIn = onZoomIn
+        view.needsFullResolution = needsFullResolution
         view.show(image, photoID: photoID, label: label)
     }
 
@@ -46,6 +49,7 @@ struct ZoomablePhotoView: UIViewRepresentable {
 
 final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     var onZoomIn: () -> Void = {}
+    var needsFullResolution = true
     private let imageView = UIImageView()
     private var photoID: String?
     private var laidOutFor: CGSize = .zero
@@ -116,6 +120,13 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         }
     }
 
+    func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { beginZoomGesture() }
+
+    /// Each new pinch, double-tap or VoiceOver zoom may ask once more if the full-size photo is still missing.
+    private func beginZoomGesture() {
+        if needsFullResolution { reportedZoomIn = false }
+    }
+
     private func centre() {
         contentInset = ZoomablePhotoView.centeredInset(content: imageView.frame.size, bounds: bounds.size)
     }
@@ -124,6 +135,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         if zoomScale > minimumZoomScale {
             _ = resetZoom()
         } else {
+            beginZoomGesture()
             let rect = ZoomablePhotoView.zoomRect(scale: ZoomablePhotoView.doubleTapScale,
                                                   centre: gesture.location(in: imageView), bounds: bounds.size)
             settle { self.zoom(to: rect, animated: $0) }
@@ -132,6 +144,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     private func zoomIn() -> Bool {
         guard zoomScale < maximumZoomScale else { return false }
+        beginZoomGesture()
         let target = min(maximumZoomScale, zoomScale * ZoomablePhotoView.doubleTapScale)
         let visibleCentre = convert(CGPoint(x: bounds.midX, y: bounds.midY), to: imageView)
         let rect = ZoomablePhotoView.zoomRect(scale: target, centre: visibleCentre, bounds: bounds.size)
