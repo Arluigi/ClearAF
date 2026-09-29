@@ -22,6 +22,11 @@ struct ComparePhotosView: View {
     @State private var mode = CompareMode.sideBySide
     @State private var overlay = 0.5
     @State private var showingLater = true
+    /// What the flip stage shows: 0 is the earlier photo, 1 the later. Follows a horizontal drag, then settles on
+    /// `showingLater`. The later photo's opacity is this value, the earlier one's is the rest.
+    @State private var flipProgress: CGFloat = 1
+    @GestureState private var flipDragging = false
+    @State private var flipWidth: CGFloat = 0
     @State private var detail: ComparePhoto?
     @State private var retry = 0
     /// Counts the patient's own flips and pair picks. The haptic follows it, not `showingLater` or `pair`, which also
@@ -61,6 +66,7 @@ struct ComparePhotosView: View {
         .sensoryFeedback(.selection, trigger: selectionTaps)
         .onChange(of: pair) {
             showingLater = true
+            flipProgress = 1
             // Clears synchronously, in the same update as the pair change, so the render that reflects the
             // new pair never shows the previous pair's version line, date range or recorded-days row while
             // `.task(id: timelineKey)` is still on its way to reloading them.
@@ -117,7 +123,8 @@ struct ComparePhotosView: View {
                 case .flip: flipStage(ordered).transition(.opacity)
                 }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: mode)
+            // Every mode swap is a cross-fade, so it is the same with Reduce Motion on.
+            .animation(.smooth(duration: 0.2), value: mode)
         } else if let error = strip.error, strip.photos.isEmpty {
             VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                 Text(error)
@@ -205,17 +212,19 @@ struct ComparePhotosView: View {
         return VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
             CompareMat {
                 ZStack {
-                    CompareImage(photo: ordered.earlier, strip: strip).opacity(showingLater ? 0 : 1)
-                    CompareImage(photo: ordered.later, strip: strip).opacity(showingLater ? 1 : 0)
+                    CompareImage(photo: ordered.earlier, strip: strip).opacity(1 - flipProgress)
+                    CompareImage(photo: ordered.later, strip: strip).opacity(flipProgress)
                 }
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showingLater)
             }
+            .matchedTransitionSource(id: shown.id, in: photoZoom)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { flipWidth = $0 }
             .contentShape(Rectangle())
             .onTapGesture { flip() }
-            .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
-                let width = abs(value.translation.width)
-                if width > Letterpress.minTouch && width > abs(value.translation.height) { flip() }
-            })
+            .simultaneousGesture(flipDrag)
+            .onChange(of: flipDragging) { _, dragging in
+                // A drag the system cancelled never reaches `onEnded`: settle back on the committed photo.
+                if !dragging { withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 } }
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(CompareCopy.flipLabel(showingLater: showingLater, date: shown.captureDate))
             .accessibilityHint(CompareCopy.flipHint)
@@ -374,9 +383,34 @@ struct ComparePhotosView: View {
         return "\(ordered.earlier.id.uriRepresentation().absoluteString)|\(ordered.later.id.uriRepresentation().absoluteString)|\(generation)|\(retry)"
     }
 
+    /// The drag follows the finger (an interactive spring retargets from wherever the last settle left off, so a
+    /// drag can catch the photo mid-spring); on release the projected end decides which photo it settles on.
+    private var flipDrag: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .updating($flipDragging) { _, dragging, _ in dragging = true }
+            .onChanged { value in
+                let base: CGFloat = showingLater ? 1 : 0
+                withAnimation(.interactiveSpring) {
+                    flipProgress = CompareFlip.progress(base: base, translation: value.translation, width: flipWidth)
+                }
+            }
+            .onEnded { value in
+                let base: CGFloat = showingLater ? 1 : 0
+                let later = CompareFlip.settlesOnLater(base: base, predictedEnd: value.predictedEndTranslation, width: flipWidth)
+                if later != showingLater { flip() } else { withAnimation(flipAnimation) { flipProgress = base } }
+            }
+    }
+
+    /// A spring for the settle; with Reduce Motion a short cross-fade (the flip only ever changes opacity).
+    private var flipAnimation: Animation {
+        reduceMotion ? .smooth(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.9)
+    }
+
+    /// The one path for every committed flip (tap, drag, VoiceOver), so each plays exactly one selection tick.
     private func flip() {
         showingLater.toggle()
         selectionTaps += 1
+        withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 }
     }
 
     private func pickDefaultPair() {
@@ -393,6 +427,20 @@ struct ComparePhotosView: View {
             return
         }
         await timeline.load(from: from, to: to, ticket: ticket)
+    }
+}
+
+/// Flip as values. Earlier sits left of later (as in side by side), so dragging right pulls the earlier photo in and
+/// dragging left the later one, the way Photos moves to a newer picture. A mostly vertical drag is a scroll: no change.
+enum CompareFlip {
+    static func progress(base: CGFloat, translation: CGSize, width: CGFloat) -> CGFloat {
+        guard width > 0, abs(translation.width) > abs(translation.height) else { return base }
+        return min(1, max(0, base - translation.width / width))
+    }
+
+    /// Where a released drag settles: past halfway, projected from the drag's velocity, it flips.
+    static func settlesOnLater(base: CGFloat, predictedEnd: CGSize, width: CGFloat) -> Bool {
+        progress(base: base, translation: predictedEnd, width: width) > 0.5
     }
 }
 

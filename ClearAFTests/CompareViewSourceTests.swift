@@ -18,14 +18,26 @@ struct CompareViewSourceTests {
         }
     }
 
+    /// Design audit C4: Flip follows the finger and settles with a spring; Reduce Motion keeps a short cross-fade
+    /// (never nil: the feedback stays), and nothing in Compare moves or scales a photo.
     @Test func motionRespectsReduceMotionAndFlipIsACrossfade() throws {
         let text = try Self.source()
         #expect(text.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"))
+        #expect(!text.contains("reduceMotion ? nil"), "Reduce Motion swaps motion for a fade, it never removes it")
+        #expect(text.contains("reduceMotion ? .smooth(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.9)"))
+        #expect(text.contains(".animation(.smooth(duration: 0.2), value: mode)"), "mode swaps are a cross-fade")
         let animations = text.components(separatedBy: ".animation(").count - 1
-        let guarded = text.components(separatedBy: ".animation(reduceMotion ? nil :").count - 1
-        let fades = text.components(separatedBy: ".animation(.smooth(duration: 0.2), value: image != nil)").count - 1
-        #expect(animations > 0 && animations == guarded + fades, "every animation is off under Reduce Motion, or a photo fading in")
-        #expect(!text.contains("withAnimation"))
+        let fades = text.components(separatedBy: ".animation(.smooth(duration: 0.2), value: ").count - 1
+        #expect(animations > 0 && animations == fades, "every implicit animation is an opacity fade")
+        // The flip is an opacity cross-fade driven by the tracked progress.
+        #expect(text.contains(".opacity(1 - flipProgress)") && text.contains(".opacity(flipProgress)"))
+        #expect(text.contains("@GestureState private var flipDragging = false"))
+        #expect(text.contains("CompareFlip.progress(base: base, translation: value.translation, width: flipWidth)"))
+        #expect(text.contains("predictedEnd: value.predictedEndTranslation"))
+        #expect(text.contains("if later != showingLater { flip() }"), "a committed drag goes through flip(), one tick")
+        #expect(text.contains(".onTapGesture { flip() }") && text.contains(".accessibilityAction { flip() }"))
+        #expect(text.components(separatedBy: "withAnimation(").count - 1 == 4,
+                "drag tracking, settle back after a drag, settle after a cancelled drag, and flip()")
     }
 
     @Test func compareIsDarkReadOnlyAndOmitsShare() throws {
@@ -100,5 +112,29 @@ struct CompareViewSourceTests {
         let flip = try #require(text.range(of: "private func flipStage(_ ordered: Ordered) -> some View {"))
         let flipBody = text[flip.upperBound...].prefix(1500)
         #expect(flipBody.contains("adaptiveRow"), "the flip caption uses adaptiveRow")
+    }
+}
+
+/// Flip's drag as values (design audit C4).
+struct CompareFlipTests {
+    @Test func dragFollowsTheFingerAcrossThePane() {
+        // Showing later (1): dragging right by a quarter of the pane shows a quarter of the earlier photo.
+        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: 75, height: 0), width: 300) == 0.75)
+        #expect(CompareFlip.progress(base: 0, translation: CGSize(width: -150, height: 10), width: 300) == 0.5)
+        // Clamped at either photo.
+        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: -200, height: 0), width: 300) == 1)
+        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: 900, height: 0), width: 300) == 0)
+        // A mostly vertical drag is a scroll, and an unmeasured pane changes nothing.
+        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: 60, height: 120), width: 300) == 1)
+        #expect(CompareFlip.progress(base: 0, translation: CGSize(width: -60, height: 0), width: 0) == 0)
+    }
+
+    @Test func releaseSettlesOnTheProjectedSide() {
+        // A slow drag past halfway flips; short of it springs back.
+        #expect(!CompareFlip.settlesOnLater(base: 1, predictedEnd: CGSize(width: 180, height: 0), width: 300))
+        #expect(CompareFlip.settlesOnLater(base: 1, predictedEnd: CGSize(width: 120, height: 0), width: 300))
+        // A short flick whose projection passes halfway flips.
+        #expect(CompareFlip.settlesOnLater(base: 0, predictedEnd: CGSize(width: -240, height: 0), width: 300))
+        #expect(!CompareFlip.settlesOnLater(base: 0, predictedEnd: CGSize(width: -60, height: 0), width: 300))
     }
 }
