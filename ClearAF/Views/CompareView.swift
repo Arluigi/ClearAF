@@ -22,11 +22,25 @@ struct ComparePhotosView: View {
     @State private var mode = CompareMode.sideBySide
     @State private var overlay = 0.5
     @State private var showingLater = true
+    /// What the flip stage shows: 0 is the earlier photo, 1 the later. Follows a horizontal drag, then settles on
+    /// `showingLater`. The later photo's opacity is this value, the earlier one's is the rest.
+    @State private var flipProgress: CGFloat = 1
+    /// True while a drag is live; resets on its own when the system cancels one, which never reaches `onEnded`.
+    @GestureState private var flipDragging = false
+    /// The live drag's axis, locked on its first change so a diagonal drag can't flicker between flip and scroll.
+    /// `@State`, not `@GestureState`: gesture state is already reset when `onEnded` runs, and the release must be
+    /// judged on the axis the drag locked, not re-derived from where it ended. Keyed by the drag's start location,
+    /// so a lock left by a cancelled drag never applies to the next one. Not cleared in the cancel path, which can
+    /// run before `onEnded` (gesture state resets first) and would then drop a real flip.
+    @State private var flipLock: CompareFlip.Lock?
+    @State private var flipWidth: CGFloat = 0
     @State private var detail: ComparePhoto?
     @State private var retry = 0
     /// Counts the patient's own flips and pair picks. The haptic follows it, not `showingLater` or `pair`, which also
     /// change on their own (the default pair, the reset to the later photo when the pair changes).
     @State private var selectionTaps = 0
+    /// Each photo's detail sheet grows out of the pane it was opened from.
+    @Namespace private var photoZoom
 
     private typealias Ordered = (earlier: ComparePhoto, later: ComparePhoto)
     private var ordered: Ordered? { pair.ordered(date: \.captureDate) }
@@ -59,6 +73,7 @@ struct ComparePhotosView: View {
         .sensoryFeedback(.selection, trigger: selectionTaps)
         .onChange(of: pair) {
             showingLater = true
+            flipProgress = 1
             // Clears synchronously, in the same update as the pair change, so the render that reflects the
             // new pair never shows the previous pair's version line, date range or recorded-days row while
             // `.task(id: timelineKey)` is still on its way to reloading them.
@@ -70,15 +85,18 @@ struct ComparePhotosView: View {
             timeline.cancel()
         }
         .sheet(item: $detail) { photo in
-            if let skin = strip.skinPhoto(for: photo) {
-                PhotoDetailView(photo: skin, images: strip.stageImages)
-            } else {
-                Text(CompareCopy.photoUnreadable)
-                    .font(Letterpress.ui(15, relativeTo: .body))
-                    .foregroundStyle(Letterpress.inkSecondary)
-                    .padding(Letterpress.Space.s22)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if let skin = strip.skinPhoto(for: photo) {
+                    PhotoDetailView(photo: skin, images: strip.stageImages)
+                } else {
+                    Text(CompareCopy.photoUnreadable)
+                        .font(Letterpress.ui(15, relativeTo: .body))
+                        .foregroundStyle(Letterpress.inkSecondary)
+                        .padding(Letterpress.Space.s22)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .photoZoomTransition(id: photo.id, in: photoZoom, reduceMotion: reduceMotion)
         }
     }
 
@@ -112,7 +130,8 @@ struct ComparePhotosView: View {
                 case .flip: flipStage(ordered).transition(.opacity)
                 }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: mode)
+            // Every mode swap is a cross-fade, so it is the same with Reduce Motion on.
+            .animation(.smooth(duration: 0.2), value: mode)
         } else if let error = strip.error, strip.photos.isEmpty {
             VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                 Text(error)
@@ -144,6 +163,7 @@ struct ComparePhotosView: View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
             Button { detail = photo } label: {
                 CompareMat { CompareImage(photo: photo, strip: strip) }
+                    .matchedTransitionSource(id: photo.id, in: photoZoom)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(CompareCopy.paneLabel(role: role, date: photo.captureDate))
@@ -199,17 +219,19 @@ struct ComparePhotosView: View {
         return VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
             CompareMat {
                 ZStack {
-                    CompareImage(photo: ordered.earlier, strip: strip).opacity(showingLater ? 0 : 1)
-                    CompareImage(photo: ordered.later, strip: strip).opacity(showingLater ? 1 : 0)
+                    CompareImage(photo: ordered.earlier, strip: strip).opacity(1 - flipProgress)
+                    CompareImage(photo: ordered.later, strip: strip).opacity(flipProgress)
                 }
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showingLater)
             }
+            .matchedTransitionSource(id: shown.id, in: photoZoom)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { flipWidth = $0 }
             .contentShape(Rectangle())
             .onTapGesture { flip() }
-            .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
-                let width = abs(value.translation.width)
-                if width > Letterpress.minTouch && width > abs(value.translation.height) { flip() }
-            })
+            .simultaneousGesture(flipDrag)
+            .onChange(of: flipDragging) { _, dragging in
+                // A cancelled drag never reaches `onEnded`: settle back. The lock stays (see `flipLock`).
+                if !dragging { withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 } }
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(CompareCopy.flipLabel(showingLater: showingLater, date: shown.captureDate))
             .accessibilityHint(CompareCopy.flipHint)
@@ -368,9 +390,38 @@ struct ComparePhotosView: View {
         return "\(ordered.earlier.id.uriRepresentation().absoluteString)|\(ordered.later.id.uriRepresentation().absoluteString)|\(generation)|\(retry)"
     }
 
+    /// The drag follows the finger (an interactive spring retargets from wherever the last settle left off, so a
+    /// drag can catch the photo mid-spring); on release the projected end decides which photo it settles on.
+    private var flipDrag: some Gesture {
+        DragGesture(minimumDistance: CompareFlip.threshold)
+            .updating($flipDragging) { _, dragging, _ in dragging = true }
+            .onChanged { value in
+                let lock = CompareFlip.Lock.keep(flipLock, start: value.startLocation, translation: value.translation)
+                if lock != flipLock { flipLock = lock }
+                let base: CGFloat = showingLater ? 1 : 0
+                withAnimation(.interactiveSpring) {
+                    flipProgress = CompareFlip.progress(base: base, translation: value.translation, axis: lock.axis, width: flipWidth)
+                }
+            }
+            .onEnded { value in
+                let base: CGFloat = showingLater ? 1 : 0
+                let flips = CompareFlip.commitsFlip(lockedAxis: flipLock?.axis(forDragFrom: value.startLocation), base: base,
+                                                    predictedEnd: value.predictedEndTranslation, width: flipWidth)
+                flipLock = nil
+                if flips { flip() } else { withAnimation(flipAnimation) { flipProgress = base } }
+            }
+    }
+
+    /// A spring for the settle; with Reduce Motion a short cross-fade (the flip only ever changes opacity).
+    private var flipAnimation: Animation {
+        reduceMotion ? .smooth(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.9)
+    }
+
+    /// The one path for every committed flip (tap, drag, VoiceOver), so each plays exactly one selection tick.
     private func flip() {
         showingLater.toggle()
         selectionTaps += 1
+        withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 }
     }
 
     private func pickDefaultPair() {
@@ -387,6 +438,51 @@ struct ComparePhotosView: View {
             return
         }
         await timeline.load(from: from, to: to, ticket: ticket)
+    }
+}
+
+/// Flip as values. Earlier sits left of later (as in side by side), so dragging right pulls the earlier photo in and
+/// dragging left the later one, the way Photos moves to a newer picture. A drag that starts mostly vertical is a
+/// scroll and never flips, however it moves afterwards.
+enum CompareFlip {
+    /// The drag's minimum distance. Progress counts from here, so the first tracked frame doesn't jump by it.
+    static let threshold: CGFloat = 24
+
+    /// Decided once, from a drag's first change.
+    static func axis(of translation: CGSize) -> Axis {
+        abs(translation.width) > abs(translation.height) ? .horizontal : .vertical
+    }
+
+    static func progress(base: CGFloat, translation: CGSize, axis: Axis, width: CGFloat) -> CGFloat {
+        guard width > 0, axis == .horizontal else { return base }
+        let travelled = max(0, abs(translation.width) - threshold)
+        let dx = translation.width < 0 ? -travelled : travelled
+        return min(1, max(0, base - dx / width))
+    }
+
+    /// Where a released drag settles: past halfway, projected from the drag's velocity, it flips.
+    static func settlesOnLater(base: CGFloat, predictedEnd: CGSize, axis: Axis, width: CGFloat) -> Bool {
+        progress(base: base, translation: predictedEnd, axis: axis, width: width) > 0.5
+    }
+
+    /// Whether a released drag commits a flip, judged on the axis it locked. No lock (it never tracked) is a scroll.
+    static func commitsFlip(lockedAxis: Axis?, base: CGFloat, predictedEnd: CGSize, width: CGFloat) -> Bool {
+        guard let lockedAxis else { return false }
+        return settlesOnLater(base: base, predictedEnd: predictedEnd, axis: lockedAxis, width: width) != (base > 0.5)
+    }
+
+    /// One drag's axis, tied to where that drag started.
+    struct Lock: Equatable {
+        let start: CGPoint
+        let axis: Axis
+
+        /// The same drag keeps its lock; a new drag (another start) locks from its first change.
+        static func keep(_ lock: Lock?, start: CGPoint, translation: CGSize) -> Lock {
+            if let lock, lock.start == start { return lock }
+            return Lock(start: start, axis: CompareFlip.axis(of: translation))
+        }
+
+        func axis(forDragFrom start: CGPoint) -> Axis? { start == self.start ? axis : nil }
     }
 }
 
@@ -425,7 +521,8 @@ private struct CompareMat<Content: View>: View {
     }
 }
 
-/// One photo, fitted inside its mat and never cropped. Decodes once per photo; a failed read says so in words.
+/// One photo, fitted inside its mat and never cropped. Read and decoded off the main thread, once per photo; the
+/// empty mat stands in until then, and a failed read says so in words.
 private struct CompareImage: View {
     let photo: ComparePhoto
     let strip: ComparePhotoStrip
@@ -439,6 +536,7 @@ private struct CompareImage: View {
                     .resizable()
                     .scaledToFit()
                     .accessibilityHidden(true)
+                    .transition(.opacity)
             } else if unreadable {
                 Text(CompareCopy.photoUnreadable)
                     .font(Letterpress.ui(13, relativeTo: .footnote))
@@ -449,9 +547,12 @@ private struct CompareImage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.smooth(duration: 0.2), value: image != nil)
         .task(id: photo.id) {
-            image = strip.image(for: photo, maxPixelSize: ComparePhotoStrip.stagePixelSize, in: strip.stageImages)
-            unreadable = image == nil
+            image = nil; unreadable = false
+            let loaded = await strip.image(for: photo, maxPixelSize: ComparePhotoStrip.stagePixelSize, in: strip.stageImages)
+            guard !Task.isCancelled else { return }
+            image = loaded; unreadable = loaded == nil
         }
     }
 }
@@ -474,9 +575,10 @@ private struct CompareThumbnail: View {
                     .frame(width: width, height: width * 5 / 4)
                     .overlay {
                         if let image {
-                            Image(uiImage: image).resizable().scaledToFit()
+                            Image(uiImage: image).resizable().scaledToFit().transition(.opacity)
                         }
                     }
+                    .animation(.smooth(duration: 0.2), value: image != nil)
                     .overlay {
                         if role != nil {
                             Rectangle().strokeBorder(Letterpress.ink, lineWidth: 1.5)
@@ -500,7 +602,9 @@ private struct CompareThumbnail: View {
         .accessibilityValue(role?.accessibilityValue ?? "")
         .accessibilityAddTraits(role == nil ? [] : .isSelected)
         .task(id: photo.id) {
-            image = strip.image(for: photo, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails)
+            let loaded = await strip.image(for: photo, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails)
+            guard !Task.isCancelled else { return }
+            image = loaded
         }
     }
 }

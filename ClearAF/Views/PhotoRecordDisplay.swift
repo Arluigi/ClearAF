@@ -14,6 +14,9 @@ enum PhotoTileState: Equatable {
         }
     }
 
+    /// Said in place, under the state, when Share or Retry could not start. The photo itself is untouched.
+    static let shareFailed = "Couldn't share. Your photo is safe on this device."
+
     var label: String {
         switch self {
         case .onDevice: "On device"
@@ -111,24 +114,76 @@ extension PhotoRecordLayout {
     }
 }
 
-/// 4:5 neutral mat, square corners; the photo is fitted, never cropped or tinted (spec §4.5).
+/// 4:5 neutral mat, square corners; the photo is fitted, never cropped or tinted (spec §4.5). The photo is read and
+/// decoded off the main thread; until then the empty mat is the quiet placeholder, and it fades in when ready.
 struct PhotoFrame: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
     let maxPixelSize: Int
+    @State private var image: UIImage?
+    @State private var unreadable = false
+
+    static let tilePixelSize = 400
+
+    /// Seeded synchronously from the cache (a lookup, never a decode), so a photo already decoded shows on the first
+    /// frame instead of flashing the empty mat.
+    init(photo: SkinPhoto, images: PhotoImageLoader, maxPixelSize: Int) {
+        _photo = ObservedObject(wrappedValue: photo)
+        self.images = images
+        self.maxPixelSize = maxPixelSize
+        _image = State(initialValue: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: maxPixelSize))
+    }
 
     var body: some View {
         Rectangle()
             .fill(Letterpress.sunk)
             .aspectRatio(4 / 5, contentMode: .fit)
             .overlay {
-                if let bytes = photo.photoData,
-                   let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: maxPixelSize) {
-                    Image(uiImage: image).resizable().scaledToFit()
-                } else {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFit().transition(.opacity)
+                } else if unreadable {
                     Image(systemName: "photo").foregroundStyle(Letterpress.inkTertiary).accessibilityHidden(true)
                 }
             }
+            .animation(.smooth(duration: 0.2), value: image != nil)
             .clipShape(Rectangle())
+            .task(id: PhotoImageKey.of(photo)) { await load() }
+    }
+
+    private func load() async {
+        let key = PhotoImageKey.of(photo)
+        if let hit = images.cached(key: key, maxPixelSize: maxPixelSize) {
+            // Already decoded (scrolling back): shown at once, no fade.
+            var instant = Transaction(); instant.disablesAnimations = true
+            withTransaction(instant) { image = hit; unreadable = false }
+            return
+        }
+        image = nil; unreadable = false
+        guard let data = PhotoBytes.reader(for: photo) else { unreadable = true; return }
+        let loaded = await images.image(for: key, maxPixelSize: maxPixelSize, data: data)
+        guard !Task.isCancelled else { return }
+        image = loaded; unreadable = loaded == nil
+    }
+}
+
+/// "Photo, 28 Sep 2026": how VoiceOver names a whole photo (the detail sheet and the review preview).
+enum PhotoLabel {
+    static func photo(_ date: Date?, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        date.map { "Photo, \(LetterpressFormat.dayMonthYear($0, locale: locale, timeZone: timeZone))" } ?? "Photo"
+    }
+}
+
+/// A photo's cache key: its Core Data object ID, which is unique within the account's store.
+enum PhotoImageKey {
+    @MainActor static func of(_ photo: SkinPhoto) -> String { photo.objectID.uriRepresentation().absoluteString }
+}
+
+extension View {
+    /// A photo sheet grows out of the thumbnail it was opened from (`.matchedTransitionSource` with the same ID in the
+    /// same namespace). Under Reduce Motion it cross-fades instead where the system offers that (iOS 27); earlier
+    /// systems keep the zoom, which the system itself tones down for Reduce Motion.
+    @ViewBuilder func photoZoomTransition(id: some Hashable, in ns: Namespace.ID, reduceMotion: Bool) -> some View {
+        if reduceMotion, #available(iOS 27, *) { navigationTransition(.crossFade) }
+        else { navigationTransition(.zoom(sourceID: id, in: ns)) }
     }
 }

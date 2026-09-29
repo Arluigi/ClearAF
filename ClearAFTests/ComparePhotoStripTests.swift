@@ -18,7 +18,7 @@ import UIKit
         return (try PersistenceController(accountID: account, directory: root), root)
     }
 
-    @Test func pagesNewestFirstWithoutHoldingPhotosOrBytes() throws {
+    @Test func pagesNewestFirstWithoutHoldingPhotosOrBytes() async throws {
         let (persistence, root) = try store(UUID())
         defer { try? FileManager.default.removeItem(at: root) }
         let context = persistence.container.viewContext
@@ -32,7 +32,8 @@ import UIKit
         try context.save()
         context.reset()
 
-        let strip = ComparePhotoStrip()
+        let access = AccountAccess(); _ = access.activate(UUID())
+        let strip = ComparePhotoStrip(access: access)
         strip.bind(context: context)
         #expect(strip.total == 60 && strip.photos.count == 24 && strip.hasMore)
         #expect(strip.photos.first?.captureDate == Date(timeIntervalSince1970: 1_788_000_000 + 59 * 86_400))
@@ -43,13 +44,16 @@ import UIKit
         #expect(zip(strip.photos, strip.photos.dropFirst()).allSatisfy { ($0.captureDate ?? .distantPast) >= ($1.captureDate ?? .distantPast) })
 
         let first = try #require(strip.photos.first)
-        #expect(strip.imageData(for: first) == Self.bytes)
-        let thumb = try #require(strip.image(for: first, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails))
+        let reader = try #require(strip.bytesReader(for: first))
+        #expect(await reader() == Self.bytes, "bytes are read through a background context")
+        let thumb = try #require(await strip.image(for: first, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails))
         #expect(max(thumb.cgImage!.width, thumb.cgImage!.height) <= ComparePhotoStrip.thumbnailPixelSize)
         #expect(strip.thumbnails.contains(key: first.id.uriRepresentation().absoluteString, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize))
-        #expect(strip.image(for: first, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails) === thumb, "a cached decode is reused")
+        #expect(await strip.image(for: first, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails) === thumb, "a cached decode is reused")
         #expect(context.registeredObjects.isEmpty)
-        #expect(strip.skinPhoto(for: first)?.photoData == Self.bytes, "the detail sheet still gets the full photo")
+        let skin = try #require(strip.skinPhoto(for: first))
+        #expect(skin.captureDate == first.captureDate, "the detail sheet gets the photo's metadata")
+        #expect(await PhotoBytes.reader(for: skin)?() == Self.bytes, "and reads the full photo off the main thread")
 
         strip.dispose()
         #expect(strip.photos.isEmpty && strip.total == 0 && strip.thumbnails.cachedCount == 0)
@@ -67,13 +71,13 @@ import UIKit
         strip.bind(context: context)
         let item = try #require(strip.photos.first)
         context.userInfo["accountID"] = UUID()
-        #expect(strip.imageData(for: item) == nil)
+        #expect(strip.bytesReader(for: item) == nil)
         #expect(strip.skinPhoto(for: item) == nil)
         strip.loadMore()
         #expect(strip.photos.isEmpty && strip.total == 0, "a context that changed account is dropped")
 
         let unbound = ComparePhotoStrip()
-        #expect(unbound.imageData(for: item) == nil)
+        #expect(unbound.bytesReader(for: item) == nil)
         let anonymous = PersistenceController(inMemory: true)
         unbound.bind(context: anonymous.container.viewContext)
         #expect(unbound.photos.isEmpty && unbound.total == 0, "an identity-free context is never read")

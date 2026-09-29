@@ -103,13 +103,13 @@ struct ProgressView: View {
                 if layout.browsing(fallback: browsingLayout) == .grid {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: Letterpress.Space.s14) {
                         ForEach(group.items, id: \.objectID) { photo in
-                            PhotoGridCell(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
+                            PhotoGridCell(photo: photo, images: store.images, detailImages: store.detailImages, reviewed: reviews.isReviewed(photo))
                         }
                     }
                 } else {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(group.items, id: \.objectID) { photo in
-                            PhotoListRow(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
+                            PhotoListRow(photo: photo, images: store.images, detailImages: store.detailImages, reviewed: reviews.isReviewed(photo))
                         }
                     }
                 }
@@ -191,14 +191,18 @@ private func datedPhotoLabel(_ photo: SkinPhoto) -> String {
 private struct PhotoGridCell: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
+    let detailImages: PhotoImageLoader
     let reviewed: Bool
     @State private var showingDetail = false
+    @Namespace private var photoZoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
             Button { showingDetail = true } label: {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                    PhotoFrame(photo: photo, images: images, maxPixelSize: 400)
+                    PhotoFrame(photo: photo, images: images, maxPixelSize: PhotoFrame.tilePixelSize)
+                        .matchedTransitionSource(id: photo.objectID, in: photoZoom)
                     if let date = photo.captureDate {
                         Text(LetterpressFormat.stamp(date))
                             .font(Letterpress.data(11, weight: .regular, relativeTo: .caption))
@@ -210,15 +214,22 @@ private struct PhotoGridCell: View {
             .accessibilityLabel(datedPhotoLabel(photo))
             PhotoSharingStatusView(photo: photo, compact: true, reviewed: reviewed)
         }
-        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: images, reviewed: reviewed) }
+        .sheet(isPresented: $showingDetail) {
+            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed,
+                            preview: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: PhotoFrame.tilePixelSize))
+                .photoZoomTransition(id: photo.objectID, in: photoZoom, reduceMotion: reduceMotion)
+        }
     }
 }
 
 private struct PhotoListRow: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
+    let detailImages: PhotoImageLoader
     let reviewed: Bool
     @State private var showingDetail = false
+    @Namespace private var photoZoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -227,7 +238,8 @@ private struct PhotoListRow: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: Letterpress.Space.s14))
         stack {
             Button { showingDetail = true } label: {
-                PhotoFrame(photo: photo, images: images, maxPixelSize: 400).frame(width: 72)
+                PhotoFrame(photo: photo, images: images, maxPixelSize: PhotoFrame.tilePixelSize).frame(width: 72)
+                    .matchedTransitionSource(id: photo.objectID, in: photoZoom)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(datedPhotoLabel(photo))
@@ -249,7 +261,11 @@ private struct PhotoListRow: View {
         }
         .padding(.vertical, Letterpress.Space.s14)
         .overlay(alignment: .top) { LetterpressRule() }
-        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: images, reviewed: reviewed) }
+        .sheet(isPresented: $showingDetail) {
+            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed,
+                            preview: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: PhotoFrame.tilePixelSize))
+                .photoZoomTransition(id: photo.objectID, in: photoZoom, reduceMotion: reduceMotion)
+        }
     }
 }
 
@@ -257,7 +273,8 @@ struct PhotoSharingStatusView: View {
     @ObservedObject var photo: SkinPhoto
     var compact = false
     var reviewed = false
-    @State private var errorMessage: String?
+    /// Share or Retry could not start. Shown in place (spec §5), not as an alert: the tile already carries its state.
+    @State private var shareFailed = false
 
     var body: some View {
         let state = PhotoTileState.of(uploadState: photo.uploadState, reviewed: reviewed)
@@ -267,17 +284,28 @@ struct PhotoSharingStatusView: View {
                 .foregroundStyle(state.color)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("photoSharingStatus")
+            if shareFailed {
+                Text(PhotoTileState.shareFailed)
+                    .font(Letterpress.ui(13, relativeTo: .footnote))
+                    .foregroundStyle(Letterpress.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let action = state.action(compact: compact) {
-                Button(action) {
+                Button(shareFailed ? "Retry" : action) {
+                    shareFailed = false
                     do { try APIService.shared.photos.share(photo) }
-                    catch { errorMessage = error.localizedDescription }
+                    catch {
+                        shareFailed = true
+                        // A failed device save is already spoken once by ContentView's photo error announcer.
+                        if error as? PhotoCaptureFailure != .saveFailed {
+                            AccessibilityNotification.Announcement(PhotoTileState.shareFailed).post()
+                        }
+                    }
                 }
                 .buttonStyle(.letterpress(.underline))
             }
         }
-        .alert("Unable to share photo", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button("OK") { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
+        .onChange(of: photo.uploadState) { shareFailed = false }
     }
 }
 
@@ -286,22 +314,52 @@ struct PhotoDetailView: View {
     let images: PhotoImageLoader
     var reviewed = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var image: UIImage?
+    @State private var unreadable = false
+    /// The photo `load()` last loaded; a late full-size decode for any other key is dropped.
+    @State private var shownKey: String?
+    /// Set to `shownKey` the first time the photo is zoomed past 1.5×; drives the full-size decode's `.task(id:)`,
+    /// which is cancelled when the sheet closes or the photo changes.
+    @State private var wantsFull: String?
+    @State private var fullImage: UIImage?
+
+    /// Seeded synchronously from the cache (a lookup, never a decode), or from the tile's own smaller decode, so the
+    /// sheet opens on the photo at its own aspect ratio instead of an empty 4:5 mat that then resizes.
+    init(photo: SkinPhoto, images: PhotoImageLoader, reviewed: Bool = false, preview: UIImage? = nil) {
+        _photo = ObservedObject(wrappedValue: photo)
+        self.images = images
+        self.reviewed = reviewed
+        _image = State(initialValue: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: Self.pixelSize) ?? preview)
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
-                    if let bytes = photo.photoData,
-                       let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 1600) {
+                    if let image {
                         // Sits on the same `sunk` mat as `PhotoFrame` (spec §4.5) instead of the reading-surface
                         // canvas behind it, and keeps the photo's own aspect ratio since this is the uncropped view.
+                        // Pinch or double-tap to zoom; the image view is VoiceOver's labelled photo element.
                         Rectangle()
                             .fill(Letterpress.sunk)
                             .aspectRatio(image.size, contentMode: .fit)
-                            .overlay { Image(uiImage: image).resizable().scaledToFit() }
-                            .accessibilityElement()
-                            .accessibilityLabel("Full photo")
-                            .accessibilityAddTraits(.isImage)
+                            .overlay {
+                                ZoomablePhotoView(image: fullImage ?? image, label: PhotoLabel.photo(photo.captureDate),
+                                                  photoID: PhotoImageKey.of(photo), onZoomIn: { wantsFull = shownKey },
+                                                  needsFullResolution: fullImage == nil)
+                            }
+                            .transition(.opacity)
+                    } else {
+                        // Quiet placeholder while the photo is read and decoded off the main thread.
+                        Rectangle()
+                            .fill(Letterpress.sunk)
+                            .aspectRatio(4 / 5, contentMode: .fit)
+                            .overlay {
+                                if unreadable {
+                                    Image(systemName: "photo").foregroundStyle(Letterpress.inkTertiary).accessibilityHidden(true)
+                                }
+                            }
                     }
                     if let date = photo.captureDate {
                         Text(LetterpressFormat.stampYearTime(date))
@@ -329,13 +387,42 @@ struct PhotoDetailView: View {
                 }
                 .padding(Letterpress.Space.s22)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Under Reduce Motion the mat doesn't animate from 4:5 to the photo's own shape (rare: only when the
+                // sheet opens before the tile had decoded anything to seed it with).
+                .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: image != nil)
             }
+            .task(id: PhotoImageKey.of(photo)) { await load() }
+            .task(id: wantsFull) { await loadFullResolution() }
             .navigationTitle("Photo details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .letterpressSheetBackground()
     }
+
+    private func load() async {
+        let key = PhotoImageKey.of(photo)
+        shownKey = key; wantsFull = nil; fullImage = nil; unreadable = false
+        if let hit = images.cached(key: key, maxPixelSize: Self.pixelSize) { image = hit; return }
+        // A seeded smaller decode stays on screen until the sharper one replaces it.
+        guard let data = PhotoBytes.reader(for: photo) else { unreadable = image == nil; return }
+        let loaded = await images.image(for: key, maxPixelSize: Self.pixelSize, data: data)
+        guard !Task.isCancelled else { return }
+        if let loaded { image = loaded } else { unreadable = image == nil }
+    }
+
+    private func loadFullResolution() async {
+        guard let key = wantsFull, key == shownKey, fullImage == nil, let data = PhotoBytes.reader(for: photo) else { return }
+        let full = await images.fullImage(data: data)
+        // Dropped if another photo is showing by now; the loader already drops it after an account change or cancel.
+        guard !Task.isCancelled, key == shownKey else { return }
+        fullImage = full
+        // A failed decode clears the request so the next zoom gesture can try once more (the sharper 1600px
+        // photo stays on screen meanwhile).
+        if full == nil { wantsFull = nil }
+    }
+
+    static let pixelSize = 1600
 }
 
 #Preview {

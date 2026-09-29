@@ -139,26 +139,26 @@ struct DurablePhotoCaptureView: View {
     @State private var attachmentFailed = false
     @State private var session = PhotoCaptureSession()
     @State private var captureTicket = APIService.shared.access.snapshot()
-    @State private var review: PhotoReviewDraft?
+    @State private var review = PhotoReviewFlow()
     @State private var saving = false
 
     var body: some View {
         Group {
-            if review != nil {
+            if review.draft != nil {
                 PhotoReviewSheet(
-                    draft: Binding(get: { review ?? PhotoReviewDraft(bytes: Data(), capturedAt: Date()) }, set: { review = $0 }),
+                    draft: Binding(get: { review.draft ?? PhotoReviewDraft(bytes: Data(), capturedAt: Date()) }, set: { review.draft = $0 }),
                     saving: saving,
-                    onRetake: { review = nil },
-                    onDiscard: { review = nil; dismiss() },
-                    onSave: save)
+                    onRetake: { review.retake() },
+                    onDiscard: { review.draft = nil; dismiss() },
+                    onSave: { Task { await save() } })
             } else {
                 PhotoCaptureView(title: "Add a dated photo", subtitle: "Your photo is saved on this device, then shared with your care team.") { bytes in
-                    review = PhotoReviewDraft(bytes: bytes, capturedAt: Date())
+                    review.receive(bytes, capturedAt: Date())
                 }
             }
         }
         // An unsaved photo is never dropped by a swipe; Discard asks first.
-        .interactiveDismissDisabled(review != nil)
+        .interactiveDismissDisabled(review.draft != nil)
         .letterpressSheetBackground()
         .alert(attachmentFailed ? "Photo saved" : "Unable to save photo",
                isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { finishAlert() } })) {
@@ -169,10 +169,14 @@ struct DurablePhotoCaptureView: View {
         .sensoryFeedback(.error, trigger: errorMessage) { _, new in new != nil && !attachmentFailed }
     }
 
-    private func save() {
-        guard let draft = review, draft.canSave, !saving else { return }
+    /// Re-entry is refused while a save is in flight (`saving` is set before the first suspension), so a double
+    /// tap saves once. The one-frame pause lets "Saving…" draw before the synchronous write to the device store
+    /// (a bare `Task.yield()` can resume before the frame is committed).
+    private func save() async {
+        guard let draft = review.draft, draft.canSave, !saving else { return }
         saving = true
         defer { saving = false }
+        try? await Task.sleep(for: .milliseconds(16))
         do {
             let completion = try session.capture(draft.bytes, date: draft.capturedAt, notes: draft.trimmedNote,
                 repository: APIService.shared.photos, ticket: captureTicket, onSaved: onSaved)
@@ -233,9 +237,15 @@ struct CameraImagePicker: UIViewControllerRepresentable {
         let delivery = PhotoPickerDelivery()
         init(_ parent: CameraImagePicker) { self.parent = parent }
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            let bytes = (info[.originalImage] as? UIImage)?.jpegData(compressionQuality: 0.8)
-            delivery.finish(bytes.map(PhotoPickerResult.selected) ?? .failed, deliver: parent.onResult)
-            parent.dismiss()
+            let image = info[.originalImage] as? UIImage
+            let (delivery, parent) = (delivery, parent)
+            Task { @MainActor in
+                // JPEG encoding a full camera frame takes long enough to hitch the UI, so it runs off the main thread,
+                // as the library path's does. The delivery still finishes only once.
+                let bytes = await Task.detached(priority: .userInitiated) { image?.jpegData(compressionQuality: 0.8) }.value
+                delivery.finish(bytes.map(PhotoPickerResult.selected) ?? .failed, deliver: parent.onResult)
+                parent.dismiss()
+            }
         }
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             delivery.finish(.cancelled, deliver: parent.onResult); parent.dismiss()
@@ -283,6 +293,22 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
                 }
             }
         }
+    }
+}
+
+/// The capture sheet's review state: the draft on screen, and the note kept across a retake so typed text survives it.
+struct PhotoReviewFlow: Equatable {
+    var draft: PhotoReviewDraft?
+    private(set) var keptNote = ""
+
+    mutating func receive(_ bytes: Data, capturedAt: Date) {
+        draft = PhotoReviewDraft(bytes: bytes, capturedAt: capturedAt, note: keptNote)
+        keptNote = ""
+    }
+
+    mutating func retake() {
+        keptNote = draft?.note ?? ""
+        draft = nil
     }
 }
 

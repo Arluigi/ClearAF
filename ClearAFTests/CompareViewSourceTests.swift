@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import ClearAF
 
@@ -18,13 +19,32 @@ struct CompareViewSourceTests {
         }
     }
 
+    /// Design audit C4: Flip follows the finger and settles with a spring; Reduce Motion keeps a short cross-fade
+    /// (never nil: the feedback stays), and nothing in Compare moves or scales a photo.
     @Test func motionRespectsReduceMotionAndFlipIsACrossfade() throws {
         let text = try Self.source()
         #expect(text.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"))
+        #expect(!text.contains("reduceMotion ? nil"), "Reduce Motion swaps motion for a fade, it never removes it")
+        #expect(text.contains("reduceMotion ? .smooth(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.9)"))
+        #expect(text.contains(".animation(.smooth(duration: 0.2), value: mode)"), "mode swaps are a cross-fade")
         let animations = text.components(separatedBy: ".animation(").count - 1
-        let guarded = text.components(separatedBy: ".animation(reduceMotion ? nil :").count - 1
-        #expect(animations > 0 && animations == guarded, "every animation is off under Reduce Motion")
-        #expect(!text.contains("withAnimation"))
+        let fades = text.components(separatedBy: ".animation(.smooth(duration: 0.2), value: ").count - 1
+        #expect(animations > 0 && animations == fades, "every implicit animation is an opacity fade")
+        // The flip is an opacity cross-fade driven by the tracked progress.
+        #expect(text.contains(".opacity(1 - flipProgress)") && text.contains(".opacity(flipProgress)"))
+        #expect(text.contains("@GestureState private var flipDragging = false"), "cancellation is noticed")
+        #expect(text.contains("@State private var flipLock: CompareFlip.Lock?"), "the lock outlives gesture state into onEnded")
+        #expect(text.contains("CompareFlip.Lock.keep(flipLock, start: value.startLocation, translation: value.translation)"),
+                "the axis locks on the first change")
+        #expect(text.contains("CompareFlip.commitsFlip(lockedAxis: flipLock?.axis(forDragFrom: value.startLocation)"),
+                "a release is judged on the locked axis")
+        #expect(text.contains("DragGesture(minimumDistance: CompareFlip.threshold)"))
+        #expect(text.contains("CompareFlip.progress(base: base, translation: value.translation, axis: lock.axis, width: flipWidth)"))
+        #expect(text.contains("predictedEnd: value.predictedEndTranslation"))
+        #expect(text.contains("if flips { flip() }"), "a committed drag goes through flip(), one tick")
+        #expect(text.contains(".onTapGesture { flip() }") && text.contains(".accessibilityAction { flip() }"))
+        #expect(text.components(separatedBy: "withAnimation(").count - 1 == 4,
+                "drag tracking, settle back after a drag, settle after a cancelled drag, and flip()")
     }
 
     @Test func compareIsDarkReadOnlyAndOmitsShare() throws {
@@ -99,5 +119,71 @@ struct CompareViewSourceTests {
         let flip = try #require(text.range(of: "private func flipStage(_ ordered: Ordered) -> some View {"))
         let flipBody = text[flip.upperBound...].prefix(1500)
         #expect(flipBody.contains("adaptiveRow"), "the flip caption uses adaptiveRow")
+    }
+}
+
+/// Flip's drag as values (design audit C4).
+struct CompareFlipTests {
+    private func progress(_ base: CGFloat, _ dx: CGFloat, _ dy: CGFloat = 0, axis: Axis = .horizontal) -> CGFloat {
+        CompareFlip.progress(base: base, translation: CGSize(width: dx, height: dy), axis: axis, width: 300)
+    }
+
+    @Test func theAxisLocksFromTheFirstChange() {
+        #expect(CompareFlip.axis(of: CGSize(width: 25, height: 10)) == .horizontal)
+        #expect(CompareFlip.axis(of: CGSize(width: 10, height: -25)) == .vertical)
+        // Locked vertical, a drag that later turns sideways still never flips.
+        #expect(progress(1, 200, 30, axis: .vertical) == 1)
+    }
+
+    @Test func dragFollowsTheFingerFromTheThreshold() {
+        #expect(CompareFlip.threshold == 24)
+        // The first tracked frame, exactly at the threshold, has not moved yet: no jump.
+        #expect(progress(1, 24) == 1 && progress(0, -24) == 0)
+        // Showing later (1): 75pt past the threshold to the right shows a quarter of the earlier photo.
+        #expect(progress(1, 24 + 75) == 0.75)
+        #expect(progress(0, -(24 + 150), 60) == 0.5, "locked horizontal, some vertical wobble is ignored")
+        // Clamped at either photo.
+        #expect(progress(1, -200) == 1)
+        #expect(progress(1, 900) == 0)
+        // An unmeasured pane changes nothing.
+        #expect(CompareFlip.progress(base: 0, translation: CGSize(width: -60, height: 0), axis: .horizontal, width: 0) == 0)
+    }
+
+    @Test func releaseSettlesOnTheProjectedSide() {
+        func later(_ base: CGFloat, _ dx: CGFloat) -> Bool {
+            CompareFlip.settlesOnLater(base: base, predictedEnd: CGSize(width: dx, height: 0), axis: .horizontal, width: 300)
+        }
+        // Short of halfway springs back; past it flips.
+        #expect(later(1, 24 + 120))
+        #expect(!later(1, 24 + 180))
+        // A short flick whose projection passes halfway flips.
+        #expect(later(0, -(24 + 240)))
+        #expect(!later(0, -(24 + 60)))
+        #expect(CompareFlip.settlesOnLater(base: 1, predictedEnd: CGSize(width: 900, height: 0), axis: .vertical, width: 300),
+                "a vertical drag never flips")
+    }
+
+    /// Fix round 2: the release is judged on the axis the drag locked, never re-derived from where it ended.
+    @Test func aScrollThatDriftsSidewaysNeverFlipsOnRelease() {
+        let drift = CGSize(width: 80, height: 60)
+        #expect(!CompareFlip.commitsFlip(lockedAxis: .vertical, base: 1, predictedEnd: drift, width: 300),
+                "locked vertical, ending (80, 60): no flip")
+        #expect(!CompareFlip.commitsFlip(lockedAxis: .vertical, base: 1, predictedEnd: CGSize(width: 900, height: 0), width: 300))
+        #expect(!CompareFlip.commitsFlip(lockedAxis: nil, base: 1, predictedEnd: CGSize(width: 900, height: 0), width: 300),
+                "no lock is a scroll")
+        #expect(CompareFlip.commitsFlip(lockedAxis: .horizontal, base: 1, predictedEnd: CGSize(width: 900, height: 0), width: 300))
+        #expect(CompareFlip.commitsFlip(lockedAxis: .horizontal, base: 0, predictedEnd: CGSize(width: -900, height: 0), width: 300))
+        #expect(!CompareFlip.commitsFlip(lockedAxis: .horizontal, base: 1, predictedEnd: CGSize(width: -900, height: 0), width: 300),
+                "already on the side it settles on: no flip")
+    }
+
+    @Test func aLockBelongsToOneDrag() {
+        let start = CGPoint(x: 10, y: 20)
+        let lock = CompareFlip.Lock.keep(nil, start: start, translation: CGSize(width: 5, height: 30))
+        #expect(lock.axis == .vertical)
+        #expect(CompareFlip.Lock.keep(lock, start: start, translation: CGSize(width: 200, height: 0)) == lock, "same drag keeps it")
+        let next = CompareFlip.Lock.keep(lock, start: CGPoint(x: 50, y: 20), translation: CGSize(width: 30, height: 0))
+        #expect(next.axis == .horizontal, "a new drag locks afresh, even after a cancelled one left its lock")
+        #expect(lock.axis(forDragFrom: start) == .vertical && lock.axis(forDragFrom: CGPoint(x: 50, y: 20)) == nil)
     }
 }
