@@ -170,12 +170,13 @@ struct DurablePhotoCaptureView: View {
     }
 
     /// Re-entry is refused while a save is in flight (`saving` is set before the first suspension), so a double
-    /// tap saves once. The yield lets "Saving…" draw before the synchronous write to the device store.
+    /// tap saves once. The one-frame pause lets "Saving…" draw before the synchronous write to the device store
+    /// (a bare `Task.yield()` can resume before the frame is committed).
     private func save() async {
         guard let draft = review.draft, draft.canSave, !saving else { return }
         saving = true
         defer { saving = false }
-        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(16))
         do {
             let completion = try session.capture(draft.bytes, date: draft.capturedAt, notes: draft.trimmedNote,
                 repository: APIService.shared.photos, ticket: captureTicket, onSaved: onSaved)

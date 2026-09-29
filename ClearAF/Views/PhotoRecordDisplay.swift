@@ -123,6 +123,17 @@ struct PhotoFrame: View {
     @State private var image: UIImage?
     @State private var unreadable = false
 
+    static let tilePixelSize = 400
+
+    /// Seeded synchronously from the cache (a lookup, never a decode), so a photo already decoded shows on the first
+    /// frame instead of flashing the empty mat.
+    init(photo: SkinPhoto, images: PhotoImageLoader, maxPixelSize: Int) {
+        _photo = ObservedObject(wrappedValue: photo)
+        self.images = images
+        self.maxPixelSize = maxPixelSize
+        _image = State(initialValue: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: maxPixelSize))
+    }
+
     var body: some View {
         Rectangle()
             .fill(Letterpress.sunk)

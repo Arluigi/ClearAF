@@ -20,12 +20,17 @@ struct ComparePhoto: Identifiable, Equatable {
     @Published private(set) var total = 0
     @Published private(set) var loading = false
     @Published private(set) var error: String?
-    let thumbnails = PhotoImageLoader(byteLimit: 8 * 1024 * 1024, countLimit: 72)
-    let stageImages = PhotoImageLoader(byteLimit: 64 * 1024 * 1024, countLimit: 4)
+    let thumbnails: PhotoImageLoader
+    let stageImages: PhotoImageLoader
     private var context: NSManagedObjectContext?
     private var accountID: UUID?
 
     var hasMore: Bool { photos.count < total }
+
+    init(access: AccountAccess = APIService.shared.access) {
+        thumbnails = PhotoImageLoader(byteLimit: 8 * 1024 * 1024, countLimit: 72, access: access)
+        stageImages = PhotoImageLoader(byteLimit: 64 * 1024 * 1024, countLimit: 4, access: access)
+    }
 
     func bind(context: NSManagedObjectContext) {
         let account = context.userInfo["accountID"] as? UUID

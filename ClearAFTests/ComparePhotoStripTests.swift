@@ -32,7 +32,8 @@ import UIKit
         try context.save()
         context.reset()
 
-        let strip = ComparePhotoStrip()
+        let access = AccountAccess(); _ = access.activate(UUID())
+        let strip = ComparePhotoStrip(access: access)
         strip.bind(context: context)
         #expect(strip.total == 60 && strip.photos.count == 24 && strip.hasMore)
         #expect(strip.photos.first?.captureDate == Date(timeIntervalSince1970: 1_788_000_000 + 59 * 86_400))

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import ClearAF
 
@@ -31,8 +32,10 @@ struct CompareViewSourceTests {
         #expect(animations > 0 && animations == fades, "every implicit animation is an opacity fade")
         // The flip is an opacity cross-fade driven by the tracked progress.
         #expect(text.contains(".opacity(1 - flipProgress)") && text.contains(".opacity(flipProgress)"))
-        #expect(text.contains("@GestureState private var flipDragging = false"))
-        #expect(text.contains("CompareFlip.progress(base: base, translation: value.translation, width: flipWidth)"))
+        #expect(text.contains("@GestureState private var flipAxis: Axis?"))
+        #expect(text.contains("if axis == nil { axis = CompareFlip.axis(of: value.translation) }"), "the axis locks on the first change")
+        #expect(text.contains("DragGesture(minimumDistance: CompareFlip.threshold)"))
+        #expect(text.contains("CompareFlip.progress(base: base, translation: value.translation, axis: axis, width: flipWidth)"))
         #expect(text.contains("predictedEnd: value.predictedEndTranslation"))
         #expect(text.contains("if later != showingLater { flip() }"), "a committed drag goes through flip(), one tick")
         #expect(text.contains(".onTapGesture { flip() }") && text.contains(".accessibilityAction { flip() }"))
@@ -117,24 +120,42 @@ struct CompareViewSourceTests {
 
 /// Flip's drag as values (design audit C4).
 struct CompareFlipTests {
-    @Test func dragFollowsTheFingerAcrossThePane() {
-        // Showing later (1): dragging right by a quarter of the pane shows a quarter of the earlier photo.
-        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: 75, height: 0), width: 300) == 0.75)
-        #expect(CompareFlip.progress(base: 0, translation: CGSize(width: -150, height: 10), width: 300) == 0.5)
+    private func progress(_ base: CGFloat, _ dx: CGFloat, _ dy: CGFloat = 0, axis: Axis = .horizontal) -> CGFloat {
+        CompareFlip.progress(base: base, translation: CGSize(width: dx, height: dy), axis: axis, width: 300)
+    }
+
+    @Test func theAxisLocksFromTheFirstChange() {
+        #expect(CompareFlip.axis(of: CGSize(width: 25, height: 10)) == .horizontal)
+        #expect(CompareFlip.axis(of: CGSize(width: 10, height: -25)) == .vertical)
+        // Locked vertical, a drag that later turns sideways still never flips.
+        #expect(progress(1, 200, 30, axis: .vertical) == 1)
+    }
+
+    @Test func dragFollowsTheFingerFromTheThreshold() {
+        #expect(CompareFlip.threshold == 24)
+        // The first tracked frame, exactly at the threshold, has not moved yet: no jump.
+        #expect(progress(1, 24) == 1 && progress(0, -24) == 0)
+        // Showing later (1): 75pt past the threshold to the right shows a quarter of the earlier photo.
+        #expect(progress(1, 24 + 75) == 0.75)
+        #expect(progress(0, -(24 + 150), 60) == 0.5, "locked horizontal, some vertical wobble is ignored")
         // Clamped at either photo.
-        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: -200, height: 0), width: 300) == 1)
-        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: 900, height: 0), width: 300) == 0)
-        // A mostly vertical drag is a scroll, and an unmeasured pane changes nothing.
-        #expect(CompareFlip.progress(base: 1, translation: CGSize(width: 60, height: 120), width: 300) == 1)
-        #expect(CompareFlip.progress(base: 0, translation: CGSize(width: -60, height: 0), width: 0) == 0)
+        #expect(progress(1, -200) == 1)
+        #expect(progress(1, 900) == 0)
+        // An unmeasured pane changes nothing.
+        #expect(CompareFlip.progress(base: 0, translation: CGSize(width: -60, height: 0), axis: .horizontal, width: 0) == 0)
     }
 
     @Test func releaseSettlesOnTheProjectedSide() {
-        // A slow drag past halfway flips; short of it springs back.
-        #expect(!CompareFlip.settlesOnLater(base: 1, predictedEnd: CGSize(width: 180, height: 0), width: 300))
-        #expect(CompareFlip.settlesOnLater(base: 1, predictedEnd: CGSize(width: 120, height: 0), width: 300))
+        func later(_ base: CGFloat, _ dx: CGFloat) -> Bool {
+            CompareFlip.settlesOnLater(base: base, predictedEnd: CGSize(width: dx, height: 0), axis: .horizontal, width: 300)
+        }
+        // Short of halfway springs back; past it flips.
+        #expect(later(1, 24 + 120))
+        #expect(!later(1, 24 + 180))
         // A short flick whose projection passes halfway flips.
-        #expect(CompareFlip.settlesOnLater(base: 0, predictedEnd: CGSize(width: -240, height: 0), width: 300))
-        #expect(!CompareFlip.settlesOnLater(base: 0, predictedEnd: CGSize(width: -60, height: 0), width: 300))
+        #expect(later(0, -(24 + 240)))
+        #expect(!later(0, -(24 + 60)))
+        #expect(CompareFlip.settlesOnLater(base: 1, predictedEnd: CGSize(width: 900, height: 0), axis: .vertical, width: 300),
+                "a vertical drag never flips")
     }
 }

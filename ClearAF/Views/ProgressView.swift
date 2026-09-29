@@ -201,7 +201,7 @@ private struct PhotoGridCell: View {
         VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
             Button { showingDetail = true } label: {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                    PhotoFrame(photo: photo, images: images, maxPixelSize: 400)
+                    PhotoFrame(photo: photo, images: images, maxPixelSize: PhotoFrame.tilePixelSize)
                         .matchedTransitionSource(id: photo.objectID, in: photoZoom)
                     if let date = photo.captureDate {
                         Text(LetterpressFormat.stamp(date))
@@ -215,7 +215,8 @@ private struct PhotoGridCell: View {
             PhotoSharingStatusView(photo: photo, compact: true, reviewed: reviewed)
         }
         .sheet(isPresented: $showingDetail) {
-            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed)
+            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed,
+                            preview: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: PhotoFrame.tilePixelSize))
                 .photoZoomTransition(id: photo.objectID, in: photoZoom, reduceMotion: reduceMotion)
         }
     }
@@ -237,7 +238,7 @@ private struct PhotoListRow: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: Letterpress.Space.s14))
         stack {
             Button { showingDetail = true } label: {
-                PhotoFrame(photo: photo, images: images, maxPixelSize: 400).frame(width: 72)
+                PhotoFrame(photo: photo, images: images, maxPixelSize: PhotoFrame.tilePixelSize).frame(width: 72)
                     .matchedTransitionSource(id: photo.objectID, in: photoZoom)
             }
             .buttonStyle(.plain)
@@ -261,7 +262,8 @@ private struct PhotoListRow: View {
         .padding(.vertical, Letterpress.Space.s14)
         .overlay(alignment: .top) { LetterpressRule() }
         .sheet(isPresented: $showingDetail) {
-            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed)
+            PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed,
+                            preview: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: PhotoFrame.tilePixelSize))
                 .photoZoomTransition(id: photo.objectID, in: photoZoom, reduceMotion: reduceMotion)
         }
     }
@@ -312,11 +314,24 @@ struct PhotoDetailView: View {
     let images: PhotoImageLoader
     var reviewed = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var image: UIImage?
     @State private var unreadable = false
-    /// The photo at its own pixel size, decoded the first time it is zoomed past 1.5×.
+    /// The photo `load()` last loaded; a late full-size decode for any other key is dropped.
+    @State private var shownKey: String?
+    /// Set to `shownKey` the first time the photo is zoomed past 1.5×; drives the full-size decode's `.task(id:)`,
+    /// which is cancelled when the sheet closes or the photo changes.
+    @State private var wantsFull: String?
     @State private var fullImage: UIImage?
-    @State private var loadingFull = false
+
+    /// Seeded synchronously from the cache (a lookup, never a decode), or from the tile's own smaller decode, so the
+    /// sheet opens on the photo at its own aspect ratio instead of an empty 4:5 mat that then resizes.
+    init(photo: SkinPhoto, images: PhotoImageLoader, reviewed: Bool = false, preview: UIImage? = nil) {
+        _photo = ObservedObject(wrappedValue: photo)
+        self.images = images
+        self.reviewed = reviewed
+        _image = State(initialValue: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: Self.pixelSize) ?? preview)
+    }
 
     var body: some View {
         NavigationStack {
@@ -331,7 +346,7 @@ struct PhotoDetailView: View {
                             .aspectRatio(image.size, contentMode: .fit)
                             .overlay {
                                 ZoomablePhotoView(image: fullImage ?? image, label: PhotoLabel.photo(photo.captureDate),
-                                                  photoID: PhotoImageKey.of(photo), onZoomIn: loadFullResolution)
+                                                  photoID: PhotoImageKey.of(photo), onZoomIn: { wantsFull = shownKey })
                             }
                             .transition(.opacity)
                     } else {
@@ -371,9 +386,12 @@ struct PhotoDetailView: View {
                 }
                 .padding(Letterpress.Space.s22)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .animation(.smooth(duration: 0.2), value: image != nil)
+                // Under Reduce Motion the mat doesn't animate from 4:5 to the photo's own shape (rare: only when the
+                // sheet opens before the tile had decoded anything to seed it with).
+                .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: image != nil)
             }
             .task(id: PhotoImageKey.of(photo)) { await load() }
+            .task(id: wantsFull) { await loadFullResolution() }
             .navigationTitle("Photo details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -383,25 +401,21 @@ struct PhotoDetailView: View {
 
     private func load() async {
         let key = PhotoImageKey.of(photo)
-        image = images.cached(key: key, maxPixelSize: Self.pixelSize)
-        unreadable = false; fullImage = nil
-        guard image == nil else { return }
-        guard let data = PhotoBytes.reader(for: photo) else { unreadable = true; return }
+        shownKey = key; wantsFull = nil; fullImage = nil; unreadable = false
+        if let hit = images.cached(key: key, maxPixelSize: Self.pixelSize) { image = hit; return }
+        // A seeded smaller decode stays on screen until the sharper one replaces it.
+        guard let data = PhotoBytes.reader(for: photo) else { unreadable = image == nil; return }
         let loaded = await images.image(for: key, maxPixelSize: Self.pixelSize, data: data)
         guard !Task.isCancelled else { return }
-        image = loaded; unreadable = loaded == nil
+        if let loaded { image = loaded } else { unreadable = image == nil }
     }
 
-    private func loadFullResolution() {
-        guard fullImage == nil, !loadingFull, let data = PhotoBytes.reader(for: photo) else { return }
-        loadingFull = true
-        let key = PhotoImageKey.of(photo)
-        Task {
-            let full = await images.fullImage(data: data)
-            loadingFull = false
-            // Dropped if another photo is showing by now (the loader already drops it after an account change).
-            if key == PhotoImageKey.of(photo) { fullImage = full }
-        }
+    private func loadFullResolution() async {
+        guard let key = wantsFull, key == shownKey, fullImage == nil, let data = PhotoBytes.reader(for: photo) else { return }
+        let full = await images.fullImage(data: data)
+        // Dropped if another photo is showing by now; the loader already drops it after an account change or cancel.
+        guard !Task.isCancelled, key == shownKey else { return }
+        fullImage = full
     }
 
     static let pixelSize = 1600

@@ -31,8 +31,9 @@ import ImageIO
     }
 
     /// An aspect-preserving downsample no larger than `maxPixelSize` on its long side. A cache hit returns at once;
-    /// otherwise `data` is read and decoded on a background task. The result is dropped (nil, not cached) if the
-    /// signed-in account changed or the cache was cleared while it was in flight.
+    /// otherwise `data` is read and decoded on a background task. The result is dropped (nil, not cached) while
+    /// signed out, if the signed-in account changed or the cache was cleared while it was in flight, or if the
+    /// caller was cancelled.
     func image(for key: String, maxPixelSize: Int, data: @escaping @Sendable () async -> Data?) async -> UIImage? {
         guard maxPixelSize > 0 else { return nil }
         if let hit = cached(key: key, maxPixelSize: maxPixelSize) { return hit }
@@ -42,11 +43,18 @@ import ImageIO
         return image
     }
 
-    /// The photo at its own pixel size, for zooming in. Never cached: one full-size decode can be larger than the
-    /// whole cache and would evict every smaller image.
+    /// The photo at its own pixel size, up to `fullResolutionLimit` on the long side, for zooming in. Never cached:
+    /// one full-size decode can be larger than the whole cache and would evict every smaller image.
     func fullImage(data: @escaping @Sendable () async -> Data?) async -> UIImage? {
-        await decode(data) { bytes in Self.nativePixelSize(bytes).flatMap { Self.downsample(bytes, maxPixelSize: $0) } }
+        await decode(data) { bytes in
+            Self.nativePixelSize(bytes).flatMap { Self.downsample(bytes, maxPixelSize: Self.fullPixelSize(native: $0)) }
+        }
     }
+
+    /// 4096px keeps a zoomed-in decode near 64 MB; a 24 MP photo at its own size would be about 96 MB.
+    nonisolated static let fullResolutionLimit: CGFloat = 4096
+
+    nonisolated static func fullPixelSize(native: CGFloat) -> CGFloat { min(native, fullResolutionLimit) }
 
     func clear() { entries.removeAll(); order.removeAll(); decodedCost = 0; epoch += 1 }
 
@@ -73,13 +81,19 @@ import ImageIO
         return max(width, height)
     }
 
+    /// Nothing is read while signed out, and a result is kept only if the same sign-in is still current, the cache
+    /// wasn't cleared and the caller didn't cancel (a `.task(id:)` that restarted or a view that left). Cancelling
+    /// the caller cancels the background read and decode too.
     private func decode(_ data: @escaping @Sendable () async -> Data?,
                         _ decoder: @escaping @Sendable (Data) -> UIImage?) async -> UIImage? {
-        let ticket = access.snapshot(), epoch = epoch
-        let image = await Task.detached(priority: .userInitiated) {
-            await data().flatMap(decoder)
-        }.value
-        guard access.snapshot() == ticket, self.epoch == epoch else { return nil }
+        guard let ticket = access.snapshot() else { return nil }
+        let epoch = epoch
+        let work = Task.detached(priority: .userInitiated) { () -> UIImage? in
+            guard let bytes = await data(), !Task.isCancelled else { return nil }
+            return decoder(bytes)
+        }
+        let image = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+        guard !Task.isCancelled, access.snapshot() == ticket, self.epoch == epoch else { return nil }
         return image
     }
 

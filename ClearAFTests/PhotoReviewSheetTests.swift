@@ -47,7 +47,7 @@ struct PhotoReviewSheetTests {
         let views = LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views")
         let capture = try String(contentsOf: views.appendingPathComponent("PhotoCaptureManager.swift"), encoding: .utf8)
         #expect(capture.contains("onSave: { Task { await save() } }"))
-        #expect(capture.contains("private func save() async {\n        guard let draft = review.draft, draft.canSave, !saving else { return }\n        saving = true\n        defer { saving = false }\n        await Task.yield()"))
+        #expect(capture.contains("private func save() async {\n        guard let draft = review.draft, draft.canSave, !saving else { return }\n        saving = true\n        defer { saving = false }\n        try? await Task.sleep(for: .milliseconds(16))"))
         let save = try #require(capture.range(of: "private func save() async {"))
         let saveBody = capture[save.upperBound...].prefix(900)
         let didSave = try #require(saveBody.range(of: "didSave()")), dismiss = try #require(saveBody.range(of: "dismiss()"))

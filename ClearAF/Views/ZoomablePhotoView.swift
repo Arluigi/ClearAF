@@ -92,15 +92,16 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         }
     }
 
+    /// UIScrollView lays out on every scroll frame, so this only does work when the bounds size changed (first
+    /// layout, rotation, a new photo); zooming re-centres from `scrollViewDidZoom`.
     override func layoutSubviews() {
         super.layoutSubviews()
-        if bounds.size != laidOutFor, let image = imageView.image {
-            laidOutFor = bounds.size
-            setZoomScale(1, animated: false)
-            let fitted = ZoomablePhotoView.fittedSize(image.size, in: bounds.size)
-            imageView.frame = CGRect(origin: .zero, size: fitted)
-            contentSize = fitted
-        }
+        guard bounds.size != laidOutFor, let image = imageView.image else { return }
+        laidOutFor = bounds.size
+        setZoomScale(1, animated: false)
+        let fitted = ZoomablePhotoView.fittedSize(image.size, in: bounds.size)
+        imageView.frame = CGRect(origin: .zero, size: fitted)
+        contentSize = fitted
         centre()
     }
 

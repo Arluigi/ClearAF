@@ -43,7 +43,7 @@ import UIKit
     @Test func detailUsesTheZoomableViewAndLoadsFullResolutionOnZoom() throws {
         let text = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/ProgressView.swift"), encoding: .utf8)
         #expect(text.contains("ZoomablePhotoView(image: fullImage ?? image"))
-        #expect(text.contains("photoID: PhotoImageKey.of(photo), onZoomIn: loadFullResolution)"))
+        #expect(text.contains("photoID: PhotoImageKey.of(photo), onZoomIn: { wantsFull = shownKey })"))
         #expect(text.contains("await images.fullImage(data: data)"))
     }
 }

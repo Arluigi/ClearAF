@@ -135,7 +135,8 @@ import UIKit
         try context.save(); context.reset()
         let pages = PhotoPageStore(); pages.bind(context: context)
         #expect(pages.total == 1000 && pages.photos.count == 24)
-        let loader = PhotoImageLoader()
+        let access = AccountAccess(); _ = access.activate(fixture.accountID)
+        let loader = PhotoImageLoader(access: access)
         var samples: [[String: Int]] = []
         for index in 0..<21 {
             #expect(pages.photos.count <= 24)

@@ -64,7 +64,8 @@ import PhotosUI
 
     @Test func imagesDecodeOffMainAndCacheEvictsByDecodedCostAndCount() async throws {
         let bytes = Self.jpeg(width: 3000, height: 2000)
-        let loader = PhotoImageLoader(byteLimit: 700_000, countLimit: 2, access: AccountAccess())
+        let access = AccountAccess(); _ = access.activate(UUID())
+        let loader = PhotoImageLoader(byteLimit: 700_000, countLimit: 2, access: access)
         let first = try #require(await loader.image(for: "a", maxPixelSize: 400, data: { bytes }))
         #expect(first.cgImage!.width <= 400 && first.cgImage!.height <= 400)
         // A cache hit never reads the bytes again.
@@ -83,6 +84,17 @@ import PhotosUI
         #expect(loader.cachedCount == 0, "a full-size decode is never cached")
     }
 
+    /// A zoomed-in decode is the photo's own size up to 4096px on the long side (a 24 MP photo would be ~96 MB).
+    @Test func fullResolutionIsCappedAt4096() async throws {
+        #expect(PhotoImageLoader.fullResolutionLimit == 4096)
+        #expect(PhotoImageLoader.fullPixelSize(native: 3000) == 3000)
+        #expect(PhotoImageLoader.fullPixelSize(native: 6000) == 4096)
+        let access = AccountAccess(); _ = access.activate(UUID())
+        let bytes = Self.jpeg(width: 5000, height: 2500)
+        let full = try #require(await PhotoImageLoader(access: access).fullImage(data: { bytes })?.cgImage)
+        #expect(full.width == 4096 && full.height == 2048)
+    }
+
     /// Review focus 4: a decode that finishes after the account changed, or after its cache was cleared, is dropped.
     @Test func aDecodeInFlightDuringAnAccountSwitchOrClearIsDropped() async throws {
         let bytes = Self.jpeg(width: 800, height: 1000)
@@ -92,6 +104,14 @@ import PhotosUI
         #expect(switched == nil && loader.cachedCount == 0)
         let signedOut = await loader.image(for: "a", maxPixelSize: 400, data: { access.invalidate(); return bytes })
         #expect(signedOut == nil && loader.cachedCount == 0)
+        // Signed out: nothing is read at all.
+        #expect(await loader.image(for: "a", maxPixelSize: 400, data: { Issue.record("read while signed out"); return bytes }) == nil)
+        #expect(await loader.fullImage(data: { Issue.record("read while signed out"); return bytes }) == nil)
+        _ = access.activate(UUID())
+        // A caller that is cancelled (a restarted `.task(id:)`) cancels the background read and keeps nothing.
+        let cancelled = Task { await loader.image(for: "a", maxPixelSize: 400, data: { try? await Task.sleep(for: .seconds(30)); return bytes }) }
+        cancelled.cancel()
+        #expect(await cancelled.value == nil && loader.cachedCount == 0)
         let cleared = await loader.image(for: "a", maxPixelSize: 400, data: { await loader.clear(); return bytes })
         #expect(cleared == nil && loader.cachedCount == 0)
         #expect(await loader.image(for: "a", maxPixelSize: 400, data: { bytes }) != nil, "an undisturbed decode is kept")
@@ -143,8 +163,18 @@ import PhotosUI
             let source = try body(of: type, in: text)
             #expect(!source.contains("photoData") && !source.contains("images.image(data:"), "\(type) decodes on main")
             #expect(source.contains(".task(id:") && source.contains("await images.image(for:"), "\(type) loads in a task")
-            #expect(source.contains(".animation(.smooth(duration: 0.2), value: image != nil)"), "\(type) fades the photo in")
+            let fade = type == "PhotoDetailView" ? ".animation(reduceMotion ? nil : .smooth(duration: 0.2), value: image != nil)"
+                                                 : ".animation(.smooth(duration: 0.2), value: image != nil)"
+            #expect(source.contains(fade), "\(type) fades the photo in")
         }
+        // Already-decoded photos show on the first frame: seeded from the cache in init, never decoded there.
+        #expect(record.contains("_image = State(initialValue: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: maxPixelSize))"))
+        #expect(progress.contains("_image = State(initialValue: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: Self.pixelSize) ?? preview)"))
+        #expect(progress.components(separatedBy: "preview: images.cached(key: PhotoImageKey.of(photo), maxPixelSize: PhotoFrame.tilePixelSize))").count - 1 == 2)
+        // The full-size decode is a cancellable task keyed on the zoom request, checked against the shown photo.
+        #expect(progress.contains(".task(id: wantsFull) { await loadFullResolution() }"))
+        #expect(progress.contains("onZoomIn: { wantsFull = shownKey })"))
+        #expect(progress.contains("guard !Task.isCancelled, key == shownKey else { return }"))
         #expect(progress.contains("PhotoDetailView(photo: photo, images: detailImages"), "the detail sheet has its own cache")
     }
 

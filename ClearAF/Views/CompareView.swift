@@ -25,7 +25,9 @@ struct ComparePhotosView: View {
     /// What the flip stage shows: 0 is the earlier photo, 1 the later. Follows a horizontal drag, then settles on
     /// `showingLater`. The later photo's opacity is this value, the earlier one's is the rest.
     @State private var flipProgress: CGFloat = 1
-    @GestureState private var flipDragging = false
+    /// The live drag's axis, locked on its first change so a diagonal drag can't flicker between flip and scroll.
+    /// Nil when no drag is in progress (including after the system cancels one).
+    @GestureState private var flipAxis: Axis?
     @State private var flipWidth: CGFloat = 0
     @State private var detail: ComparePhoto?
     @State private var retry = 0
@@ -221,9 +223,9 @@ struct ComparePhotosView: View {
             .contentShape(Rectangle())
             .onTapGesture { flip() }
             .simultaneousGesture(flipDrag)
-            .onChange(of: flipDragging) { _, dragging in
+            .onChange(of: flipAxis == nil) { _, ended in
                 // A drag the system cancelled never reaches `onEnded`: settle back on the committed photo.
-                if !dragging { withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 } }
+                if ended { withAnimation(flipAnimation) { flipProgress = showingLater ? 1 : 0 } }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(CompareCopy.flipLabel(showingLater: showingLater, date: shown.captureDate))
@@ -386,17 +388,22 @@ struct ComparePhotosView: View {
     /// The drag follows the finger (an interactive spring retargets from wherever the last settle left off, so a
     /// drag can catch the photo mid-spring); on release the projected end decides which photo it settles on.
     private var flipDrag: some Gesture {
-        DragGesture(minimumDistance: 24)
-            .updating($flipDragging) { _, dragging, _ in dragging = true }
+        DragGesture(minimumDistance: CompareFlip.threshold)
+            .updating($flipAxis) { value, axis, _ in
+                if axis == nil { axis = CompareFlip.axis(of: value.translation) }
+            }
             .onChanged { value in
+                // `flipAxis` may not show this event's update yet; the first event locks the same axis either way.
+                let axis = flipAxis ?? CompareFlip.axis(of: value.translation)
                 let base: CGFloat = showingLater ? 1 : 0
                 withAnimation(.interactiveSpring) {
-                    flipProgress = CompareFlip.progress(base: base, translation: value.translation, width: flipWidth)
+                    flipProgress = CompareFlip.progress(base: base, translation: value.translation, axis: axis, width: flipWidth)
                 }
             }
             .onEnded { value in
+                let axis = flipAxis ?? CompareFlip.axis(of: value.translation)
                 let base: CGFloat = showingLater ? 1 : 0
-                let later = CompareFlip.settlesOnLater(base: base, predictedEnd: value.predictedEndTranslation, width: flipWidth)
+                let later = CompareFlip.settlesOnLater(base: base, predictedEnd: value.predictedEndTranslation, axis: axis, width: flipWidth)
                 if later != showingLater { flip() } else { withAnimation(flipAnimation) { flipProgress = base } }
             }
     }
@@ -431,16 +438,27 @@ struct ComparePhotosView: View {
 }
 
 /// Flip as values. Earlier sits left of later (as in side by side), so dragging right pulls the earlier photo in and
-/// dragging left the later one, the way Photos moves to a newer picture. A mostly vertical drag is a scroll: no change.
+/// dragging left the later one, the way Photos moves to a newer picture. A drag that starts mostly vertical is a
+/// scroll and never flips, however it moves afterwards.
 enum CompareFlip {
-    static func progress(base: CGFloat, translation: CGSize, width: CGFloat) -> CGFloat {
-        guard width > 0, abs(translation.width) > abs(translation.height) else { return base }
-        return min(1, max(0, base - translation.width / width))
+    /// The drag's minimum distance. Progress counts from here, so the first tracked frame doesn't jump by it.
+    static let threshold: CGFloat = 24
+
+    /// Decided once, from a drag's first change.
+    static func axis(of translation: CGSize) -> Axis {
+        abs(translation.width) > abs(translation.height) ? .horizontal : .vertical
+    }
+
+    static func progress(base: CGFloat, translation: CGSize, axis: Axis, width: CGFloat) -> CGFloat {
+        guard width > 0, axis == .horizontal else { return base }
+        let travelled = max(0, abs(translation.width) - threshold)
+        let dx = translation.width < 0 ? -travelled : travelled
+        return min(1, max(0, base - dx / width))
     }
 
     /// Where a released drag settles: past halfway, projected from the drag's velocity, it flips.
-    static func settlesOnLater(base: CGFloat, predictedEnd: CGSize, width: CGFloat) -> Bool {
-        progress(base: base, translation: predictedEnd, width: width) > 0.5
+    static func settlesOnLater(base: CGFloat, predictedEnd: CGSize, axis: Axis, width: CGFloat) -> Bool {
+        progress(base: base, translation: predictedEnd, axis: axis, width: width) > 0.5
     }
 }
 
