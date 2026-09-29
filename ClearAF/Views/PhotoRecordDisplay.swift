@@ -111,24 +111,48 @@ extension PhotoRecordLayout {
     }
 }
 
-/// 4:5 neutral mat, square corners; the photo is fitted, never cropped or tinted (spec §4.5).
+/// 4:5 neutral mat, square corners; the photo is fitted, never cropped or tinted (spec §4.5). The photo is read and
+/// decoded off the main thread; until then the empty mat is the quiet placeholder, and it fades in when ready.
 struct PhotoFrame: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
     let maxPixelSize: Int
+    @State private var image: UIImage?
+    @State private var unreadable = false
 
     var body: some View {
         Rectangle()
             .fill(Letterpress.sunk)
             .aspectRatio(4 / 5, contentMode: .fit)
             .overlay {
-                if let bytes = photo.photoData,
-                   let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: maxPixelSize) {
-                    Image(uiImage: image).resizable().scaledToFit()
-                } else {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFit().transition(.opacity)
+                } else if unreadable {
                     Image(systemName: "photo").foregroundStyle(Letterpress.inkTertiary).accessibilityHidden(true)
                 }
             }
+            .animation(.smooth(duration: 0.2), value: image != nil)
             .clipShape(Rectangle())
+            .task(id: PhotoImageKey.of(photo)) { await load() }
     }
+
+    private func load() async {
+        let key = PhotoImageKey.of(photo)
+        if let hit = images.cached(key: key, maxPixelSize: maxPixelSize) {
+            // Already decoded (scrolling back): shown at once, no fade.
+            var instant = Transaction(); instant.disablesAnimations = true
+            withTransaction(instant) { image = hit; unreadable = false }
+            return
+        }
+        image = nil; unreadable = false
+        guard let data = PhotoBytes.reader(for: photo) else { unreadable = true; return }
+        let loaded = await images.image(for: key, maxPixelSize: maxPixelSize, data: data)
+        guard !Task.isCancelled else { return }
+        image = loaded; unreadable = loaded == nil
+    }
+}
+
+/// A photo's cache key: its Core Data object ID, which is unique within the account's store.
+enum PhotoImageKey {
+    @MainActor static func of(_ photo: SkinPhoto) -> String { photo.objectID.uriRepresentation().absoluteString }
 }

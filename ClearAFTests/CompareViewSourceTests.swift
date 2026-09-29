@@ -23,7 +23,8 @@ struct CompareViewSourceTests {
         #expect(text.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"))
         let animations = text.components(separatedBy: ".animation(").count - 1
         let guarded = text.components(separatedBy: ".animation(reduceMotion ? nil :").count - 1
-        #expect(animations > 0 && animations == guarded, "every animation is off under Reduce Motion")
+        let fades = text.components(separatedBy: ".animation(.smooth(duration: 0.2), value: image != nil)").count - 1
+        #expect(animations > 0 && animations == guarded + fades, "every animation is off under Reduce Motion, or a photo fading in")
         #expect(!text.contains("withAnimation"))
     }
 

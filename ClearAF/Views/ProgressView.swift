@@ -103,13 +103,13 @@ struct ProgressView: View {
                 if layout.browsing(fallback: browsingLayout) == .grid {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: Letterpress.Space.s14) {
                         ForEach(group.items, id: \.objectID) { photo in
-                            PhotoGridCell(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
+                            PhotoGridCell(photo: photo, images: store.images, detailImages: store.detailImages, reviewed: reviews.isReviewed(photo))
                         }
                     }
                 } else {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(group.items, id: \.objectID) { photo in
-                            PhotoListRow(photo: photo, images: store.images, reviewed: reviews.isReviewed(photo))
+                            PhotoListRow(photo: photo, images: store.images, detailImages: store.detailImages, reviewed: reviews.isReviewed(photo))
                         }
                     }
                 }
@@ -191,6 +191,7 @@ private func datedPhotoLabel(_ photo: SkinPhoto) -> String {
 private struct PhotoGridCell: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
+    let detailImages: PhotoImageLoader
     let reviewed: Bool
     @State private var showingDetail = false
 
@@ -210,13 +211,14 @@ private struct PhotoGridCell: View {
             .accessibilityLabel(datedPhotoLabel(photo))
             PhotoSharingStatusView(photo: photo, compact: true, reviewed: reviewed)
         }
-        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: images, reviewed: reviewed) }
+        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed) }
     }
 }
 
 private struct PhotoListRow: View {
     @ObservedObject var photo: SkinPhoto
     let images: PhotoImageLoader
+    let detailImages: PhotoImageLoader
     let reviewed: Bool
     @State private var showingDetail = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -249,7 +251,7 @@ private struct PhotoListRow: View {
         }
         .padding(.vertical, Letterpress.Space.s14)
         .overlay(alignment: .top) { LetterpressRule() }
-        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: images, reviewed: reviewed) }
+        .sheet(isPresented: $showingDetail) { PhotoDetailView(photo: photo, images: detailImages, reviewed: reviewed) }
     }
 }
 
@@ -286,13 +288,14 @@ struct PhotoDetailView: View {
     let images: PhotoImageLoader
     var reviewed = false
     @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+    @State private var unreadable = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
-                    if let bytes = photo.photoData,
-                       let image = images.image(data: bytes, key: photo.objectID.uriRepresentation().absoluteString, maxPixelSize: 1600) {
+                    if let image {
                         // Sits on the same `sunk` mat as `PhotoFrame` (spec §4.5) instead of the reading-surface
                         // canvas behind it, and keeps the photo's own aspect ratio since this is the uncropped view.
                         Rectangle()
@@ -302,6 +305,17 @@ struct PhotoDetailView: View {
                             .accessibilityElement()
                             .accessibilityLabel("Full photo")
                             .accessibilityAddTraits(.isImage)
+                            .transition(.opacity)
+                    } else {
+                        // Quiet placeholder while the photo is read and decoded off the main thread.
+                        Rectangle()
+                            .fill(Letterpress.sunk)
+                            .aspectRatio(4 / 5, contentMode: .fit)
+                            .overlay {
+                                if unreadable {
+                                    Image(systemName: "photo").foregroundStyle(Letterpress.inkTertiary).accessibilityHidden(true)
+                                }
+                            }
                     }
                     if let date = photo.captureDate {
                         Text(LetterpressFormat.stampYearTime(date))
@@ -329,13 +343,28 @@ struct PhotoDetailView: View {
                 }
                 .padding(Letterpress.Space.s22)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(.smooth(duration: 0.2), value: image != nil)
             }
+            .task(id: PhotoImageKey.of(photo)) { await load() }
             .navigationTitle("Photo details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .letterpressSheetBackground()
     }
+
+    private func load() async {
+        let key = PhotoImageKey.of(photo)
+        image = images.cached(key: key, maxPixelSize: Self.pixelSize)
+        unreadable = false
+        guard image == nil else { return }
+        guard let data = PhotoBytes.reader(for: photo) else { unreadable = true; return }
+        let loaded = await images.image(for: key, maxPixelSize: Self.pixelSize, data: data)
+        guard !Task.isCancelled else { return }
+        image = loaded; unreadable = loaded == nil
+    }
+
+    static let pixelSize = 1600
 }
 
 #Preview {

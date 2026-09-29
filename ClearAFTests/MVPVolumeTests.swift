@@ -108,7 +108,7 @@ import UIKit
     }
 
     /// Opt-in test-target writer. Exports an isolated store, never opens the live account store.
-    @Test func exportSyntheticAccountHistory() throws {
+    @Test func exportSyntheticAccountHistory() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let input = environment["CLEARAF_MVP_NATIVE_INPUT"] else { return }
         struct Fixture: Decodable { let run: UUID; let accountID: UUID; let photoIDs: [UUID] }
@@ -140,9 +140,9 @@ import UIKit
         for index in 0..<21 {
             #expect(pages.photos.count <= 24)
             for photo in pages.photos {
-                let data = try #require(photo.photoData)
+                let reader = try #require(PhotoBytes.reader(for: photo))
                 let id = try #require(photo.id)
-                let image = try #require(loader.image(data: data, key: id.uuidString, maxPixelSize: 400))
+                let image = try #require(await loader.image(for: id.uuidString, maxPixelSize: 400, data: reader))
                 #expect(image.cgImage!.width <= 400 && image.cgImage!.height <= 400)
             }
             samples.append(["page": index + 1, "records": pages.photos.count, "cacheCount": loader.cachedCount, "decodedBytes": loader.decodedCost])

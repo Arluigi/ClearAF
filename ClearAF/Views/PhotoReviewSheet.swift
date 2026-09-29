@@ -34,6 +34,7 @@ struct PhotoReviewSheet: View {
     let onDiscard: () -> Void
     let onSave: () -> Void
     @State private var images = PhotoImageLoader()
+    @State private var image: UIImage?
     @State private var confirmingDiscard = false
 
     var body: some View {
@@ -98,13 +99,23 @@ struct PhotoReviewSheet: View {
             .aspectRatio(4 / 5, contentMode: .fit)
             .frame(maxWidth: .infinity)
             .overlay {
-                if let image = images.image(data: draft.bytes, key: "review-\(draft.capturedAt.timeIntervalSince1970)", maxPixelSize: 1600) {
-                    Image(uiImage: image).resizable().scaledToFit()
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFit().transition(.opacity)
                 }
             }
+            .animation(.smooth(duration: 0.2), value: image != nil)
             .overlay { Rectangle().strokeBorder(Letterpress.ink, lineWidth: 1.5) }
             .accessibilityElement()
             .accessibilityLabel("Photo to review, not saved yet")
             .accessibilityAddTraits(.isImage)
+            .task(id: previewKey) {
+                image = nil
+                let bytes = draft.bytes
+                let loaded = await images.image(for: previewKey, maxPixelSize: 1600, data: { bytes })
+                guard !Task.isCancelled else { return }
+                image = loaded
+            }
     }
+
+    private var previewKey: String { "review-\(draft.capturedAt.timeIntervalSince1970)" }
 }

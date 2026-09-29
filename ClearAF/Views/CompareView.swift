@@ -425,7 +425,8 @@ private struct CompareMat<Content: View>: View {
     }
 }
 
-/// One photo, fitted inside its mat and never cropped. Decodes once per photo; a failed read says so in words.
+/// One photo, fitted inside its mat and never cropped. Read and decoded off the main thread, once per photo; the
+/// empty mat stands in until then, and a failed read says so in words.
 private struct CompareImage: View {
     let photo: ComparePhoto
     let strip: ComparePhotoStrip
@@ -439,6 +440,7 @@ private struct CompareImage: View {
                     .resizable()
                     .scaledToFit()
                     .accessibilityHidden(true)
+                    .transition(.opacity)
             } else if unreadable {
                 Text(CompareCopy.photoUnreadable)
                     .font(Letterpress.ui(13, relativeTo: .footnote))
@@ -449,9 +451,12 @@ private struct CompareImage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.smooth(duration: 0.2), value: image != nil)
         .task(id: photo.id) {
-            image = strip.image(for: photo, maxPixelSize: ComparePhotoStrip.stagePixelSize, in: strip.stageImages)
-            unreadable = image == nil
+            image = nil; unreadable = false
+            let loaded = await strip.image(for: photo, maxPixelSize: ComparePhotoStrip.stagePixelSize, in: strip.stageImages)
+            guard !Task.isCancelled else { return }
+            image = loaded; unreadable = loaded == nil
         }
     }
 }
@@ -474,9 +479,10 @@ private struct CompareThumbnail: View {
                     .frame(width: width, height: width * 5 / 4)
                     .overlay {
                         if let image {
-                            Image(uiImage: image).resizable().scaledToFit()
+                            Image(uiImage: image).resizable().scaledToFit().transition(.opacity)
                         }
                     }
+                    .animation(.smooth(duration: 0.2), value: image != nil)
                     .overlay {
                         if role != nil {
                             Rectangle().strokeBorder(Letterpress.ink, lineWidth: 1.5)
@@ -500,7 +506,9 @@ private struct CompareThumbnail: View {
         .accessibilityValue(role?.accessibilityValue ?? "")
         .accessibilityAddTraits(role == nil ? [] : .isSelected)
         .task(id: photo.id) {
-            image = strip.image(for: photo, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails)
+            let loaded = await strip.image(for: photo, maxPixelSize: ComparePhotoStrip.thumbnailPixelSize, in: strip.thumbnails)
+            guard !Task.isCancelled else { return }
+            image = loaded
         }
     }
 }

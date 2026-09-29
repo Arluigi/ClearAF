@@ -9,8 +9,8 @@ struct ComparePhoto: Identifiable, Equatable {
 }
 
 /// The signed-in account's photos for Compare, newest first in pages of 24 (Record's order). Rows are dictionary
-/// fetches, so no `SkinPhoto` or image bytes stay registered; bytes are read one photo at a time and decoded into
-/// bounded caches. Record's `PhotoPageStore` and its pagination are untouched.
+/// fetches, so no `SkinPhoto` or image bytes stay registered; bytes are read one photo at a time, off the main
+/// thread, and decoded into bounded caches. Record's `PhotoPageStore` and its pagination are untouched.
 @MainActor final class ComparePhotoStrip: ObservableObject {
     static let pageSize = PhotoPageStore.pageSize
     static let thumbnailPixelSize = 160
@@ -74,32 +74,32 @@ struct ComparePhoto: Identifiable, Equatable {
         }
     }
 
-    /// The stored bytes of one photo, read for a single decode. Nil for another account's context or a missing photo.
-    func imageData(for photo: ComparePhoto) -> Data? {
-        guard let context, context.userInfo["accountID"] as? UUID == accountID, accountID != nil else { return nil }
-        let request = NSFetchRequest<NSDictionary>(entityName: "SkinPhoto")
-        request.resultType = .dictionaryResultType
-        request.predicate = NSPredicate(format: "SELF == %@", photo.id)
-        request.propertiesToFetch = ["photoData"]
-        request.fetchLimit = 1
-        return (try? context.fetch(request))?.first?["photoData"] as? Data
+    /// Reads one photo's stored bytes off the main thread, for a single decode. Nil for another account's context.
+    func bytesReader(for photo: ComparePhoto) -> (@Sendable () async -> Data?)? {
+        guard let context, context.userInfo["accountID"] as? UUID == accountID, accountID != nil,
+              let coordinator = context.persistentStoreCoordinator else { return nil }
+        return PhotoBytes.reader(for: photo.id, coordinator: coordinator)
     }
 
-    /// A decoded, aspect-preserving downsample. A cached decode is returned without reading bytes again
-    /// (`PhotoImageLoader` answers a cache hit before it looks at the data).
-    func image(for photo: ComparePhoto, maxPixelSize: Int, in loader: PhotoImageLoader) -> UIImage? {
+    /// A decoded, aspect-preserving downsample, read and decoded off the main thread. A cached decode is returned
+    /// without reading bytes again.
+    func image(for photo: ComparePhoto, maxPixelSize: Int, in loader: PhotoImageLoader) async -> UIImage? {
         let key = photo.id.uriRepresentation().absoluteString
-        if loader.contains(key: key, maxPixelSize: maxPixelSize) {
-            return loader.image(data: Data(), key: key, maxPixelSize: maxPixelSize)
-        }
-        guard let data = imageData(for: photo) else { return nil }
-        return loader.image(data: data, key: key, maxPixelSize: maxPixelSize)
+        if let hit = loader.cached(key: key, maxPixelSize: maxPixelSize) { return hit }
+        guard let data = bytesReader(for: photo) else { return nil }
+        return await loader.image(for: key, maxPixelSize: maxPixelSize, data: data)
     }
 
-    /// The managed photo for the existing detail sheet, which shows the whole, uncropped photo.
+    /// The managed photo for the existing detail sheet, which shows the whole, uncropped photo. Fetched without its
+    /// bytes, which the sheet reads off the main thread.
     func skinPhoto(for photo: ComparePhoto) -> SkinPhoto? {
         guard let context, context.userInfo["accountID"] as? UUID == accountID, accountID != nil else { return nil }
-        return try? context.existingObject(with: photo.id) as? SkinPhoto
+        if let registered = context.registeredObject(for: photo.id) as? SkinPhoto { return registered }
+        let request = SkinPhoto.fetchRequest()
+        request.predicate = NSPredicate(format: "SELF == %@", photo.id)
+        request.propertiesToFetch = PhotoBytes.metadataProperties(in: context)
+        request.fetchLimit = 1
+        return (try? context.fetch(request))?.first
     }
 
     func dispose() {
