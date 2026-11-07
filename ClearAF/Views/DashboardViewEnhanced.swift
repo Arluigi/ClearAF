@@ -100,9 +100,11 @@ struct DashboardViewEnhanced: View {
                     TodayUnreadNote(selectedTab: $selectedTab)
                         .padding(.horizontal, Letterpress.Space.s22)
                         .padding(.top, Letterpress.Space.s22)
-                    TodayCheckInRow()
-                        .padding(.horizontal, Letterpress.Space.s22)
-                        .padding(.top, Letterpress.Space.s22)
+                    if LaunchFlags.clinicianForms {
+                        TodayCheckInRow()
+                            .padding(.horizontal, Letterpress.Space.s22)
+                            .padding(.top, Letterpress.Space.s22)
+                    }
                 }
                 .padding(.bottom, Letterpress.Space.s28)
             }

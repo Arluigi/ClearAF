@@ -62,6 +62,20 @@ enum NotesCopy {
 /// Notes (spec §6 #10, §4.7): clinician words in the display serif with a 2pt ink rule, own replies in a sunk block,
 /// mono stamps, labelled reference boxes, no bubbles.
 struct MessagingView: View {
+    #if DEBUG
+    /// Only the proposal launch route enables this; production continues to use repository state.
+    private let prototypeEmptyState: Bool
+    init(prototypeEmptyState: Bool = false) { self.prototypeEmptyState = prototypeEmptyState }
+    #endif
+
+    private var showsEmptyState: Bool {
+        #if DEBUG
+        repository.opened || prototypeEmptyState
+        #else
+        repository.opened
+        #endif
+    }
+
     @ObservedObject private var repository = APIService.shared.messaging
     @State private var selected: AssignedMessage?
     @State private var visible: Set<UUID> = []
@@ -135,7 +149,7 @@ struct MessagingView: View {
                         }
                     }
                     composer
-                } else if repository.opened {
+                } else if showsEmptyState {
                     VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
                         Text("No care team yet")
                             .font(Letterpress.display(28, relativeTo: .title))
@@ -146,6 +160,7 @@ struct MessagingView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(Letterpress.Space.s22)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 } else {
                     Button("Open current conversation") { Task { await repository.openCurrent() } }
                         .buttonStyle(.letterpress(.outlined))

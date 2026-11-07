@@ -30,18 +30,18 @@ struct LetterpressLockupTests {
         #expect(pixels.luma(28, 20) > 239, "inside the frame, above the letters")
     }
 
-    @Test func signInLockupShowsTheWordmark() {
+    @Test func signInLockupKeepsItsPlacementAPI() {
         #expect(LetterpressLockup.signInHeight == 28)
         #expect(LetterpressMarkGeometry.showsWordmark(height: LetterpressLockup.signInHeight))
     }
 
-    @Test func lockupIsMarkThenGapThenWordmark() throws {
+    @Test func lockupRendersUNZITInTheDisplayFace() throws {
         let pixels = try render(LetterpressLockup(height: 28).background(Color.white))
-        #expect(pixels.width >= 96)
-        #expect(pixels.luma(0, pixels.height / 2) < 60, "the mark's left rule starts the lockup")
-        // Mark is 22.4 wide and the gap is 11.2, so column 28 is clear from top to bottom.
-        #expect((0..<pixels.height).allSatisfy { pixels.luma(28, $0) > 200 })
-        #expect((34..<pixels.width).contains { x in (0..<pixels.height).contains { pixels.luma(x, $0) < 60 } }, "wordmark is drawn")
+        #expect(pixels.width > pixels.height * 2, "the wordmark is wider than the legacy standalone mark")
+        #expect((0..<pixels.width).contains { x in (0..<pixels.height).contains { pixels.luma(x, $0) < 60 } })
+        let source = try String(contentsOf: Self.repoRoot.appendingPathComponent("ClearAF/Views/Brand/LetterpressMark.swift"), encoding: .utf8)
+        #expect(source.contains("Text(\"UNZIT\")"))
+        #expect(source.contains(".accessibilityLabel(\"UNZIT\")"))
     }
 
     @Test func signInScreensUseTheLockupAndThePlaceholderIsGone() throws {

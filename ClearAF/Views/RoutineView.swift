@@ -36,8 +36,10 @@ struct RoutineView: View {
                         }
                     }
                     content
-                    LetterpressRule()
-                    AdherenceStripRow(repository: repository)
+                    if LaunchFlags.adherenceCalendar {
+                        LetterpressRule()
+                        AdherenceStripRow(repository: repository)
+                    }
                 }
                 .padding(.horizontal, Letterpress.Space.s22)
                 .padding(.vertical, Letterpress.Space.s18)

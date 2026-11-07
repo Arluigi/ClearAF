@@ -16,11 +16,11 @@ enum EnrollmentCopy {
             switch code {
             case "state":
                 line = screening.stateCode == "NON_US"
-                    ? "ClearAF is only available in the United States right now."
-                    : "ClearAF isn't available in your state yet."
+                    ? "UNZIT is only available in the United States right now."
+                    : "UNZIT isn't available in your state yet."
             case "age": line = "You don't meet the minimum age for online care yet."
-            case "pregnancy": line = "ClearAF can't treat you online during pregnancy."
-            case "breastfeeding": line = "ClearAF can't treat you online while breastfeeding."
+            case "pregnancy": line = "UNZIT can't treat you online during pregnancy."
+            case "breastfeeding": line = "UNZIT can't treat you online while breastfeeding."
             default: line = fallbackReason
             }
             if !lines.contains(line) { lines.append(line) }
@@ -265,7 +265,7 @@ private struct NotEligibleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 UrgentReportEntry(horizontalPadding: 0)
-                Text("ClearAF can't provide your care right now")
+                Text("UNZIT can't provide your care right now")
                     .font(Letterpress.display(28, relativeTo: .title))
                     .foregroundStyle(Letterpress.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -294,7 +294,7 @@ private struct NotEligibleView: View {
                             .foregroundStyle(Letterpress.ink)
                             .accessibilityIdentifier("enrollmentWaitlisted")
                     } else {
-                        Button(repository.saving ? "Saving…" : "Notify me if ClearAF becomes available to me") {
+                        Button(repository.saving ? "Saving…" : "Notify me if UNZIT becomes available to me") {
                             guard let ticket = APIService.shared.access.snapshot() else { return }
                             Task { await repository.joinWaitlist(ticket: ticket) }
                         }

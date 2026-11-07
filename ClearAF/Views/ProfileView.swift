@@ -13,7 +13,7 @@ enum ProfileCopy {
 
     static func version(_ info: [String: Any]?) -> String? {
         guard let short = info?["CFBundleShortVersionString"] as? String, let build = info?["CFBundleVersion"] as? String else { return nil }
-        return "ClearAF \(short) · build \(build)"
+        return "UNZIT \(short) · build \(build)"
     }
 
     static func nameChanged(_ name: String, saved: String?) -> Bool {

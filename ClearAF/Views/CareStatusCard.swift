@@ -17,7 +17,7 @@ enum CareStatusCopy {
     }
     static let nextSteps = [
         "Book a visit with an in-person dermatologist.",
-        "Your photos and history stay available in ClearAF.",
+        "Your photos and history stay available in UNZIT.",
         "You can still message your care team.",
     ]
     static func byline(_ decision: CareDecision, locale: Locale = .current, timeZone: TimeZone = .current) -> String {

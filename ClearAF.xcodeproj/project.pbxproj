@@ -426,8 +426,9 @@
 				DEVELOPMENT_TEAM = 93C854GUT9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Clear AF needs camera access to take progress photos";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Clear AF needs photo library access to save and view your progress photos";
+				INFOPLIST_KEY_CFBundleDisplayName = UNZIT;
+				INFOPLIST_KEY_NSCameraUsageDescription = "UNZIT needs camera access to take progress photos";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "UNZIT needs photo library access to save and view your progress photos";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -470,8 +471,9 @@
 				DEVELOPMENT_TEAM = 93C854GUT9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Clear AF needs camera access to take progress photos";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Clear AF needs photo library access to save and view your progress photos";
+				INFOPLIST_KEY_CFBundleDisplayName = UNZIT;
+				INFOPLIST_KEY_NSCameraUsageDescription = "UNZIT needs camera access to take progress photos";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "UNZIT needs photo library access to save and view your progress photos";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

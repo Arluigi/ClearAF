@@ -9,7 +9,7 @@ struct ReminderSummaryRow: Equatable, Identifiable {
 
 enum ReminderCopy {
     static let intro = "Choose reminders that work for you. They stay on this device and pause when you sign out."
-    static let deniedHelp = "Allow notifications for ClearAF in iPhone Settings, then try saving again."
+    static let deniedHelp = "Allow notifications for UNZIT in iPhone Settings, then try saving again."
     static let unsaved = "Not saved yet."
     static let nothingToSave = "Nothing to save."
 

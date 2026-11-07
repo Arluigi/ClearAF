@@ -94,9 +94,9 @@ import Testing
                 reasons: reasons, flags: [], rulesVersion: "2026-09-15.1", submittedAt: "2026-09-15T12:00:00.000Z", waitlistRequestedAt: nil)
         }
         #expect(EnrollmentCopy.reasons(for: screening("NON_US", ["state", "age"])) ==
-            ["ClearAF is only available in the United States right now.", "You don't meet the minimum age for online care yet."])
+            ["UNZIT is only available in the United States right now.", "You don't meet the minimum age for online care yet."])
         #expect(EnrollmentCopy.reasons(for: screening("IL", ["state", "pregnancy", "breastfeeding"])) ==
-            ["ClearAF isn't available in your state yet.", "ClearAF can't treat you online during pregnancy.", "ClearAF can't treat you online while breastfeeding."])
+            ["UNZIT isn't available in your state yet.", "UNZIT can't treat you online during pregnancy.", "UNZIT can't treat you online while breastfeeding."])
         #expect(EnrollmentCopy.reasons(for: screening("IL", ["new_rule", "other_rule"])) == ["You're not eligible for online care right now."])
         #expect(EnrollmentCopy.reasons(for: screening("IL", [])) == ["You're not eligible for online care right now."])
     }

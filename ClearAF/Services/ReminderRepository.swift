@@ -38,7 +38,7 @@ struct ReminderRequest {
         return status == .authorized || status == .provisional || status == .ephemeral
     }
     func add(_ request:ReminderRequest) async throws {
-        let content=UNMutableNotificationContent();content.title="ClearAF reminder";content.body=request.body;content.sound = .default
+        let content=UNMutableNotificationContent();content.title="UNZIT reminder";content.body=request.body;content.sound = .default
         var date=DateComponents();date.hour=request.hour;date.minute=request.minute;date.weekday=request.weekday
         try await center.add(UNNotificationRequest(identifier:request.id,content:content,trigger:UNCalendarNotificationTrigger(dateMatching:date,repeats:true)))
     }
@@ -112,7 +112,7 @@ struct ReminderRequest {
             guard allowed else{state = .denied;return}
             activeIDs=ids
             for (index,time) in [value.morning,value.evening,value.photo].enumerated() where time.enabled {
-                try await scheduler.add(ReminderRequest(id:ids[index],hour:time.hour,minute:time.minute,weekday:index==2 ? value.weekday:nil,body:index==2 ? "Open ClearAF for your photo check-in." : "Open ClearAF to view your routine."))
+                try await scheduler.add(ReminderRequest(id:ids[index],hour:time.hour,minute:time.minute,weekday:index==2 ? value.weekday:nil,body:index==2 ? "Open UNZIT for your photo check-in." : "Open UNZIT to view your routine."))
                 guard current() else{scheduler.remove(ids);return}
             }
             state = .enabled

@@ -17,7 +17,15 @@ struct ClearAFApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if let prototype = UNZITPrototypeRoute.requested() {
+                UNZITPrototypeRoot(route: prototype)
+            } else {
+                ContentView()
+            }
+            #else
             ContentView()
+            #endif
         }
     }
 }

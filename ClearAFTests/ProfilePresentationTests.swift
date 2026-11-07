@@ -30,7 +30,7 @@ import Testing
         let utc = TimeZone(identifier: "UTC")!
         #expect(ProfileCopy.since("2026-07-30T10:00:00.000Z", locale: Locale(identifier: "en_US"), timeZone: utc) == "Patient since 30 Jul 2026")
         #expect(ProfileCopy.since(nil) == nil)
-        #expect(ProfileCopy.version(["CFBundleShortVersionString": "1.0", "CFBundleVersion": "12"]) == "ClearAF 1.0 · build 12")
+        #expect(ProfileCopy.version(["CFBundleShortVersionString": "1.0", "CFBundleVersion": "12"]) == "UNZIT 1.0 · build 12")
         #expect(ProfileCopy.version(nil) == nil)
         #expect(!ProfileCopy.nameChanged("  Sam Patient ", saved: "Sam Patient"))
         #expect(ProfileCopy.nameChanged("Sam", saved: "Sam Patient"))
