@@ -42,7 +42,7 @@ enum AuthForm {
     static func message(_ failure: Failure) -> String {
         switch failure {
         case .signIn: "Couldn't sign in. Check your email, password and connection, then try again."
-        case .register: "Couldn't create your account. Check your details and connection, then try again."
+        case .register: "Couldn't create your account. UNZIT is currently open to the closed waitlist only. Check your invitation and try again."
         case .recovery: "Couldn't send a reset email. Check your connection and try again."
         }
     }

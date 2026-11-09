@@ -23,7 +23,9 @@ struct ContentView: View {
             case .recovery:
                 PasswordRecoveryView()
             case .enrollment:
-                EnrollmentView()
+                if let ticket = apiService.access.snapshot() {
+                    LaunchEnrollmentView(repository: apiService.launchEnrollment, ticket: ticket)
+                }
             case .onboarding:
                 OnboardingView {}.photoErrorInset()
             case .ready:

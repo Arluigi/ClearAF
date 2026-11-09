@@ -144,16 +144,16 @@ class APIService: ObservableObject {
                 let store = try PersistenceController(accountID: id)
                 try hydrate(profile.user, in: store.container.viewContext)
                 // Eligibility and consent come before onboarding and the tabs.
-                guard await enrollment.load(ticket: ticket) else {
+                guard await launchEnrollment.refresh(ticket: ticket) else {
                     guard access.snapshot() == ticket else { return }
-                    accountError = enrollment.error ?? AccountFailure.profileUnavailable.localizedDescription
+                    accountError = launchEnrollment.error ?? AccountFailure.profileUnavailable.localizedDescription
                     phase = .profileError
                     return
                 }
                 try access.require(ticket)
                 persistence = store
                 currentUser = profile.user
-                if enrollment.state?.status != .enrolled { phase = .enrollment }
+                if !LaunchEnrollmentRoute.canOpenCare(caseStatus: launchEnrollment.state?.case.status ?? .consents, membershipAccess: launchEnrollment.state?.membership?.access) { phase = .enrollment }
                 else { phase = profile.user.onboardingCompleted ? .ready : .onboarding }
             } catch {
                 guard access.snapshot() == ticket else { return }
@@ -201,6 +201,12 @@ class APIService: ObservableObject {
         SupabaseService.shared.signOut()
     }
 
+    @MainActor func launchEnrollmentFinished() {
+        guard phase == .enrollment, let state = launchEnrollment.state,
+              LaunchEnrollmentRoute.canOpenCare(caseStatus: state.case.status, membershipAccess: state.membership?.access) else { return }
+        phase = currentUser?.onboardingCompleted == true ? .ready : .onboarding
+    }
+
     @MainActor func enrollmentFinished() {
         guard phase == .enrollment, enrollment.state?.status == .enrolled else { return }
         phase = currentUser?.onboardingCompleted == true ? .ready : .onboarding
@@ -211,11 +217,12 @@ class APIService: ObservableObject {
         guard phase == .ready || phase == .onboarding, !recheckingEnrollment, let ticket = access.snapshot() else { return }
         recheckingEnrollment = true
         Task { @MainActor in
-            let loaded = await enrollment.load(ticket: ticket)
+            let loaded = await launchEnrollment.refresh(ticket: ticket)
             guard access.snapshot() == ticket else { return }
             recheckingEnrollment = false
             guard loaded, phase == .ready || phase == .onboarding,
-                  let status = enrollment.state?.status, status != .enrolled else { return }
+                  let state = launchEnrollment.state,
+                  !LaunchEnrollmentRoute.canOpenCare(caseStatus: state.case.status, membershipAccess: state.membership?.access) else { return }
             phase = .enrollment
         }
     }

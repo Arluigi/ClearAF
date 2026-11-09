@@ -5,6 +5,19 @@ struct LaunchRequest {
     init(path: String, method: String = "GET", body: Data? = nil, contentType: String = "application/json") {
         self.path = path; self.method = method; self.body = body; self.contentType = contentType
     }
+    /// The launch API is additive; legacy /api/enrollment stays compatible with installed clients.
+    func url(baseURL: String) throws -> URL {
+        let decoded = path.removingPercentEncoding ?? path
+        let route = decoded.split(separator: "?", maxSplits: 1).first.map(String.init) ?? ""
+        guard path.hasPrefix("/"), !path.hasPrefix("//"), !decoded.contains("://"),
+              !decoded.contains("\\"), !decoded.contains("#"),
+              !decoded.contains("\r"), !decoded.contains("\n"),
+              !route.split(separator: "/").contains(where: { $0 == ".." || $0 == "." }),
+              let base = URL(string: baseURL), base.host != nil,
+              let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/launch" + path),
+              url.host == base.host, url.scheme == base.scheme else { throw LaunchFailure.invalidData }
+        return url
+    }
     static func json<T: Encodable>(_ path: String, method: String = "PUT", _ body: T) throws -> Self {
         Self(path: path, method: method, body: try JSONEncoder().encode(body))
     }
@@ -17,8 +30,8 @@ extension APIService: LaunchTransport {
         try access.require(ticket)
         let auth = try await SupabaseService.shared.client.auth.session
         try access.require(ticket)
-        guard auth.user.id == ticket.accountID, launch.path.hasPrefix("/"), !launch.path.contains("://"),
-              let url = URL(string: AppEnvironment.apiURL + launch.path) else { throw AccountFailure.accountChanged }
+        guard auth.user.id == ticket.accountID else { throw AccountFailure.accountChanged }
+        let url = try launch.url(baseURL: AppEnvironment.apiURL)
         var request = URLRequest(url: url)
         request.httpMethod = launch.method; request.httpBody = launch.body
         request.setValue(launch.contentType, forHTTPHeaderField: "Content-Type")
