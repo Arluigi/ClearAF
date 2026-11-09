@@ -1,0 +1,35 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {billingConfig,createBillingProvider} from '../src/services/billingProvider';
+const local={NODE_ENV:'test',BILLING_PROVIDER:'fake',SUPABASE_URL:'http://127.0.0.1:54321',DATABASE_URL:'postgresql://postgres:postgres@127.0.0.1:54322/postgres',BILLING_RETURN_ORIGIN:'http://127.0.0.1:3001'};
+test('fake billing is explicit, synthetic and loopback only, never production',()=>{
+ assert.equal(billingConfig(local).kind,'fake');
+ for(const patch of [{NODE_ENV:'production'},{SUPABASE_URL:'https://example.invalid'},{DATABASE_URL:'postgresql://postgres:postgres@example.invalid/db'},{BILLING_RETURN_ORIGIN:'https://example.invalid'},{BILLING_PROVIDER:'unknown'}])assert.throws(()=>billingConfig({...local,...patch}));
+ assert.throws(()=>billingConfig({}));
+});
+test('stripe configuration requires test keys and pinned API, with fixed return origin',()=>{
+ const stripe={...local,BILLING_PROVIDER:'stripe_test',STRIPE_SECRET_KEY:'sk_test_synthetic',STRIPE_WEBHOOK_SECRET:'whsec_synthetic',STRIPE_API_VERSION:'2026-10-28.endive'};
+ assert.equal(billingConfig(stripe).kind,'stripe_test');
+ for(const patch of [{STRIPE_SECRET_KEY:'sk_live_synthetic'},{STRIPE_WEBHOOK_SECRET:''},{STRIPE_API_VERSION:'latest'},{BILLING_RETURN_ORIGIN:'https://example.invalid/path?redirect=bad'}])assert.throws(()=>billingConfig({...stripe,...patch}));
+ assert.equal(createBillingProvider(local).kind,'fake');
+});
+import {createStripeBilling} from '../src/services/stripeBilling';
+const price=(id:string,amount:number)=>({id,livemode:false,active:true,unit_amount:amount,currency:'usd',billing_scheme:'per_unit',custom_unit_amount:null,transform_quantity:null,recurring:{interval:'month',interval_count:1,usage_type:'licensed'},product:'prod_synthetic'});
+const cfg:any={kind:'stripe_test',secretKey:'sk_test_synthetic',webhookSecret:'whsec_synthetic',apiVersion:'2026-10-28.endive',returnOrigin:'http://127.0.0.1:3001'};
+test('Stripe Checkout uses subscription mode, server price, opaque metadata and stable provider key',async()=>{
+ let sent:any,options:any;const adapter=createStripeBilling(cfg,{prices:{retrieve:async()=>price('price_care',3900)},checkout:{sessions:{create:async(body:any,opts:any)=>{sent=body;options=opts;return {id:'cs_test_synthetic',url:'https://checkout.stripe.com/synthetic',expires_at:1800000000,livemode:false}}}}});
+ await adapter.checkout({membershipId:'opaque-membership',operationId:'opaque-operation',providerKey:'stable-key',priceId:'price_care',amountCents:3900,planId:'care',returnUrl:'http://127.0.0.1:3001/api/launch/billing/return'} as any);
+ assert.equal(sent.mode,'subscription');assert.equal(sent.line_items[0].price,'price_care');assert.equal(sent.client_reference_id,'opaque-membership');assert.deepEqual(sent.metadata,{membershipId:'opaque-membership',operationId:'opaque-operation'});assert.equal(options.idempotencyKey,'stable-key');assert.equal(sent.subscription_data.trial_period_days,undefined);
+});
+test('Customer Portal restricts switching prices and always invoices without moving billing anchor',async()=>{
+ let sent:any;const adapter=createStripeBilling(cfg,{prices:{retrieve:async(id:string)=>price(id,id==='price_care'?3900:8900)},customers:{retrieve:async()=>({id:'cus_synthetic',livemode:false})},billingPortal:{configurations:{create:async(body:any)=>{sent=body;return {id:'bpc_synthetic',livemode:false}}},sessions:{create:async()=>({url:'https://billing.stripe.com/synthetic',livemode:false})}}});
+ await adapter.portal({customerId:'cus_synthetic',membershipId:'opaque',settings:{id:'settings',carePriceId:'price_care',allInPriceId:'price_all_in',careAmountCents:3900,allInAmountCents:8900},returnUrl:'http://127.0.0.1:3001/api/launch/billing/return'});
+ assert.equal(sent.features.subscription_cancel.mode,'at_period_end');assert.equal(sent.features.subscription_update.proration_behavior,'always_invoice');assert.equal(sent.features.subscription_update.billing_cycle_anchor,'unchanged');assert.deepEqual(sent.features.subscription_update.products,[{product:'prod_synthetic',prices:['price_care','price_all_in']}]);
+});
+test('SDK-shaped refund response lacks livemode but matches verified invoice payment and amount',async()=>{
+ const adapter=createStripeBilling(cfg,{subscriptions:{retrieve:async()=>({id:'sub_synthetic',livemode:false})},invoices:{list:async()=>({data:[{id:'in_synthetic',livemode:false,status:'paid',currency:'usd',amount_paid:3900,status_transitions:{paid_at:1794240000}}]})},invoicePayments:{list:async()=>({has_more:false,data:[{livemode:false,payment:{payment_intent:'pi_synthetic'},currency:'usd',amount_paid:3900,status_transitions:{paid_at:1794240000}}]})},refunds:{create:async()=>({id:'re_synthetic',payment_intent:'pi_synthetic',amount:3900,status:'succeeded'})}});
+ assert.deepEqual(await adapter.refundLatestInvoice!({subscriptionId:'sub_synthetic',providerKey:'refund-key'}),{refundId:'re_synthetic',paymentId:'pi_synthetic',invoiceId:'in_synthetic',amountCents:3900,status:'succeeded'});
+});
+test('completed Checkout cannot be expired to start another payable subscription',async()=>{
+ let expired=false;const adapter=createStripeBilling(cfg,{checkout:{sessions:{retrieve:async()=>({id:'cs_test_completed',livemode:false,status:'complete'}),expire:async()=>{expired=true;return {status:'expired',livemode:false}}}}});await assert.rejects(adapter.expireCheckout('cs_test_completed','stable'),{code:'OPERATION_CONFLICT'});assert.equal(expired,false);
+});

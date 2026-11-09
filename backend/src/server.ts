@@ -23,6 +23,8 @@ import enrollmentRoutes from './routes/enrollment';
 import urgentReportRoutes from './routes/urgent-reports';
 import worklistRoutes from './routes/worklist';
 import dashboardRoutes from './routes/dashboard';
+import launchEnrollmentRoutes from './routes/launch-enrollment';
+import launchBillingRoutes,{launchBillingWebhook,launchBillingReturn} from './routes/launch-billing';
 
 // Import middleware
 import { authenticateToken } from './middleware/auth';
@@ -48,6 +50,10 @@ app.use(cors({
   credentials: true
 }));
 
+// Stripe signature verification requires the exact bytes, before global JSON parsing.
+app.post('/api/launch/billing/webhook',express.raw({type:'application/json',limit:'256kb'}),launchBillingWebhook);
+app.get('/api/launch/billing/return',launchBillingReturn);
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -68,6 +74,7 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 app.use('/api/auth', authRoutes);
+app.use('/api/launch',authenticateToken,launchBillingRoutes,launchEnrollmentRoutes);
 app.use('/api/users', authenticateToken, userRoutes);
 app.use('/api/appointments', authenticateToken, appointmentRoutes);
 app.use('/api/messages', authenticateToken, messageRoutes);
@@ -103,7 +110,9 @@ app.use('*', (req, res) => {
 
 // Vercel imports the application; local/Render execution starts a listener.
 if (require.main === module) {
-  server.listen(PORT, () => console.log(`ClearAF API listening on port ${PORT}`));
+  const listening=()=>console.log(`ClearAF API listening on port ${PORT}`);
+  if(process.env.BILLING_PROVIDER==='fake')server.listen(Number(PORT),'127.0.0.1',listening);
+  else server.listen(PORT,listening);
 }
 
 export default app;
