@@ -99,6 +99,7 @@ class APIService: ObservableObject {
     @MainActor lazy var messaging = MessagingRepository(access: access, transport: self)
     @MainActor lazy var checkIns = CheckInRepository(access: access, transport: self)
     @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
+    @MainActor lazy var billing = BillingRepository(access: access, transport: self)
     @MainActor lazy var launchEnrollment = LaunchEnrollmentRepository(access: access, transport: self)
     @MainActor lazy var enrollment = EnrollmentRepository(access: access, transport: self)
     @MainActor lazy var careDecisions = CareDecisionRepository(access: access, transport: self)
@@ -186,6 +187,7 @@ class APIService: ObservableObject {
         photoReviews.cancel()
         enrollment.cancel()
         launchEnrollment.cancel()
+        billing.cancel()
         careDecisions.cancel()
         urgentReports.cancel()
         recheckingEnrollment = false

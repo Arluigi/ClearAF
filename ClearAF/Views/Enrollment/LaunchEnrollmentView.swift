@@ -24,7 +24,12 @@ struct LaunchEnrollmentView: View {
                 }
             }
             .background(Letterpress.canvas.ignoresSafeArea())
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Sign out") { APIService.shared.logout() } } }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("Sign out") { APIService.shared.logout() } }
+                if repository.state?.membership != nil {
+                    ToolbarItem(placement: .topBarLeading) { NavigationLink("Membership") { MembershipView(billing: APIService.shared.billing, enrollment: repository, ticket: ticket) } }
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 if let error = repository.error { Text(error).font(Letterpress.ui(13)).foregroundStyle(Letterpress.error).padding().frame(maxWidth: .infinity).background(Letterpress.canvas) }
             }
@@ -39,6 +44,7 @@ struct LaunchEnrollmentView: View {
         case .consents: ConsentDocumentsView(repository: repository, ticket: ticket)
         case .identity: IdentityCaptureView(repository: repository, ticket: ticket)
         case .eligibility: EligibilityView(repository: repository, ticket: ticket)
+        case .payment: PlanChoiceView(enrollment: repository, billing: APIService.shared.billing, ticket: ticket)
         case .ineligible:
             LaunchPage(title: "UNZIT can't provide your care right now") {
                 Text("UNZIT provides online acne care for adults physically in North Carolina. Your answers may mean you need care in person.")
