@@ -33,6 +33,8 @@ struct PhotoReviewSheet: View {
     let onRetake: () -> Void
     let onDiscard: () -> Void
     let onSave: () -> Void
+    var launchSlot: LaunchPhotoSlot? = nil
+    @State private var zooming = false
     @State private var images = PhotoImageLoader()
     @State private var image: UIImage?
     @State private var confirmingDiscard = false
@@ -51,6 +53,11 @@ struct PhotoReviewSheet: View {
                             .disabled(saving)
                     }
                     preview
+                    if launchSlot != nil {
+                        Button("Zoom in and check it is sharp") { zooming = true }.buttonStyle(.letterpress(.underline))
+                        Text("Check the angle, lighting and focus before sharing. Retake a blurred photo.").font(Letterpress.ui(13))
+                    }
+                    if launchSlot == nil {
                     VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
                         Text(PhotoReviewCopy.noteLabel).letterpressEyebrow()
                         TextField(PhotoReviewCopy.notePlaceholder, text: $draft.note, axis: .vertical)
@@ -65,11 +72,12 @@ struct PhotoReviewSheet: View {
                                 .foregroundStyle(Letterpress.error)
                         }
                     }
-                    Button(PhotoReviewCopy.saveLabel(saving: saving), action: onSave)
+                    }
+                    Button(launchSlot == nil ? PhotoReviewCopy.saveLabel(saving: saving) : (saving ? "Saving…" : "Save and share photo"), action: onSave)
                         .buttonStyle(.letterpress(.filled, fullWidth: true))
                         .disabled(saving || !draft.canSave)
                         .accessibilityIdentifier("photoReviewSave")
-                    Text(PhotoReviewCopy.afterSave)
+                    Text(launchSlot == nil ? PhotoReviewCopy.afterSave : "Saved privately on this device, then shared with this clinical photo set. Continue only after sharing is confirmed.")
                         .font(Letterpress.ui(13, relativeTo: .footnote))
                         .foregroundStyle(Letterpress.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -90,6 +98,14 @@ struct PhotoReviewSheet: View {
                 Text("It hasn't been saved to your record.")
             }
             .onDisappear { images.clear() }
+            .sheet(isPresented: $zooming) {
+                if let image {
+                    NavigationStack {
+                        ZoomablePhotoView(image: image, label: "Photo sharpness preview", photoID: previewKey, onZoomIn: {}, needsFullResolution: false)
+                            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { zooming = false } } }
+                    }
+                }
+            }
         }
     }
 

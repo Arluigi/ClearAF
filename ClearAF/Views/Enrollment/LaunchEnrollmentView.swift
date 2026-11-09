@@ -46,6 +46,7 @@ struct LaunchEnrollmentView: View {
         case .eligibility: EligibilityView(repository: repository, ticket: ticket)
         case .payment: PlanChoiceView(enrollment: repository, billing: APIService.shared.billing, ticket: ticket)
         case .medicalHistory: MedicalHistoryView(repository: repository, ticket: ticket)
+        case .photos: EnrollmentClinicalPhotosView(enrollment: repository, ticket: ticket)
         case .destination:
             if let plan = state.membership?.planId ?? state.case.planId { DestinationView(repository: repository, ticket: ticket, planId: plan) }
             else { LaunchPage(title: "Pharmacy and delivery") { Text("Refresh your enrollment to load the selected plan."); Button("Refresh enrollment") { refresh() }.buttonStyle(.letterpress(.filled, fullWidth: true)) } }
@@ -60,26 +61,16 @@ struct LaunchEnrollmentView: View {
             LaunchPage(title: "Your clinician needs an update") {
                 Text(state.case.patientMessage ?? "Refresh your enrollment to see the requested changes.")
                 if state.case.identity?.status == .needsChanges { IdentityCaptureView(repository: repository, ticket: ticket) }
-                else { MedicalHistoryView(repository: repository, ticket: ticket) }
+                else {
+                    NavigationLink("Update health history") { MedicalHistoryView(repository: repository, ticket: ticket) }.buttonStyle(.letterpress(.outlined))
+                    NavigationLink("Update clinical photos") { EnrollmentClinicalPhotosView(enrollment: repository, ticket: ticket) }.buttonStyle(.letterpress(.outlined))
+                    NavigationLink("Review and resubmit") { CaseFinalReviewView(repository: repository, ticket: ticket) }.buttonStyle(.letterpress(.filled, fullWidth: true))
+                }
                 Button("Refresh enrollment") { refresh() }.buttonStyle(.letterpress(.outlined, fullWidth: true))
             }
         case .submitted, .approved, .rejected:
-            LaunchPage(title: state.case.status == .rejected ? "Your care review" : "Your enrollment is with your clinician") {
-                Text(state.case.patientMessage ?? "Review within 1 to 2 business days.")
-                Text(state.case.status == .rejected ? "Your membership and refund status will update after the payment provider confirms them." : "Uploading your ID does not approve care. Your clinician reviews your identity and medical information before care begins.")
-                if let refund = state.membership?.refundStatus, refund != .notApplicable { Text("Refund: \(refund.rawValue)") }
-                Button("Refresh status") { refresh() }.buttonStyle(.letterpress(.filled, fullWidth: true))
-            }
-        default:
-            // B3–B5 replace these subsequent server-driven steps with their production views.
-            LaunchPage(title: title(state.case.status)) {
-                Text("Your progress is saved. Continue from this step when it is available.")
-                Button("Refresh enrollment") { refresh() }.buttonStyle(.letterpress(.filled, fullWidth: true))
-            }
+            CaseSubmittedView(repository: repository, ticket: ticket)
         }
-    }
-    private func title(_ status: LaunchCase.Status) -> String {
-        switch status { case .payment: "Choose your care plan"; case .medicalHistory: "Your health history"; case .photos: "Your clinical photos"; case .destination: "Pharmacy and delivery"; default: "Your enrollment" }
     }
     private func refresh() { Task { await repository.loadCatalog(ticket: ticket); _ = await repository.refresh(ticket: ticket) } }
 }

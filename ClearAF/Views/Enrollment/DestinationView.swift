@@ -53,6 +53,9 @@ struct DestinationView: View {
             }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!LaunchDestinationValidation.valid(destination) || repository.saving)
             if !LaunchDestinationValidation.valid(destination) { Text("Enter the complete name, address and ZIP code\(planId == .care ? ", including the pharmacy phone number" : "").").font(Letterpress.ui(13)) }
             if saved { Text("Your destination was saved to your enrollment.") }
+            if repository.canSubmitCase {
+                NavigationLink("Review and submit case") { CaseFinalReviewView(repository: repository, ticket: ticket) }.buttonStyle(.letterpress(.outlined, fullWidth: true))
+            }
             if let error = repository.error { Text(error).foregroundStyle(Letterpress.error) }
         }
         .onAppear { populate() }
