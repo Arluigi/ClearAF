@@ -99,3 +99,24 @@ export class IdempotentAction<B, R> {
     }
   }
 }
+
+/** The contract cannot distinguish absent launch enrollment from concealed assignment denial.
+ * Fail closed. Preserve legacy implementations without selecting them on an ambiguous error. */
+export async function readLaunchChart(read:()=>Promise<import('../types/api').LaunchChart>):Promise<import('../types/api').LaunchChart|null> {
+  return read();
+}
+export function launchMembershipWords(membership:import('../types/api').LaunchMembership|null,status:import('../types/api').LaunchCaseStatus) {
+  if(status==='approved'&&membership?.status==='active'&&membership.access==='care')return 'Care active';
+  if(status==='approved')return 'Clinical approval recorded. Care not yet confirmed active. Refresh to confirm.';
+  if(status==='rejected')return 'Rejected. Full refund and immediate subscription cancellation requested.';
+  return `Case ${status.replaceAll('_',' ')} · Membership ${membership?.status.replaceAll('_',' ')??'not available'}`;
+}
+export function launchReviewBlock(enrollment:import('../types/api').LaunchEnrollmentResponse,checkIn?:import('../types/api').LaunchCheckIn):string|null {
+  if(!checkIn)return launchApprovalBlock(enrollment);
+  if(checkIn.status!=='submitted')return 'A submitted check-in is required.';
+  if(!checkIn.answers)return 'Follow-up answers are required.';
+  if(!checkIn.answers.physicallyInNC)return 'Current affirmative NC attestation is required.';
+  if(!checkIn.photoSet||checkIn.photoSet.requiredSlots.some(slot=>!checkIn.photoSet!.items.some(item=>item.slot===slot)))return 'The required photo set is incomplete.';
+  return null;
+}
+import { launchApprovalBlock } from './workspace';

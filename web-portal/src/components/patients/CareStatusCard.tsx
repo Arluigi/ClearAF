@@ -1,9 +1,12 @@
 'use client';
+import * as React from 'react';
 import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useClinicalAPI } from '@/lib/auth';
 import { useRead, LoadState, Pages } from '@/components/care-support/shared';
+import { launchMembershipWords, readLaunchChart } from '@/lib/care-decisions';
+import type { LaunchMembership, LaunchCaseStatus } from '@/types/api';
 import { canMarkRefund, careStatusView, decisionLabel, refundLabel } from '@/lib/care-decisions';
 import type { CareDecision, DecisionKind } from '@/lib/care-decisions';
 import { stamp } from '@/lib/worklist';
@@ -24,7 +27,7 @@ function DecisionMeta({ decision }: { decision: CareDecision }) {
   );
 }
 
-export default function CareStatusCard({ patientId, refresh }: { patientId: string; refresh: number }) {
+function LegacyCareStatusCard({ patientId, refresh }: { patientId: string; refresh: number }) {
   const api = useClinicalAPI();
   const [page, setPage] = useState(1);
   const [dialogDecision, setDialogDecision] = useState<DecisionKind | null>(null);
@@ -125,4 +128,13 @@ export default function CareStatusCard({ patientId, refresh }: { patientId: stri
       />
     </section>
   );
+}
+
+export function LaunchMembershipStatus({membership,caseStatus}:{membership:LaunchMembership|null;caseStatus:LaunchCaseStatus}) {
+  return <section aria-label="Launch care and refund status" className="space-y-2 border-y-2 border-ink py-4"><h3 className="font-medium">{launchMembershipWords(membership,caseStatus)}</h3>{membership&&<><p className="text-sm">{`Refund ${membership.refundStatus.replaceAll('_',' ')}`}</p><p className="text-sm">Paid through: {membership.paidThrough?stamp(membership.paidThrough):'Not confirmed'}</p>{membership.refundStatus==='failed'&&<p className="text-sm">Refund failed. Provider reconciliation must retry the durable operation; refresh to check confirmation.</p>}</>}</section>;
+}
+export default function CareStatusCard({patientId,refresh}:{patientId:string;refresh:number}) {
+  const api=useClinicalAPI();const fetch=useCallback(()=>{void refresh;return readLaunchChart(()=>api.launch().chart(patientId));},[api,patientId,refresh]);const chart=useRead(fetch);
+  if(chart.status==='ready'&&chart.data===null)return <LegacyCareStatusCard patientId={patientId} refresh={refresh}/>;
+  return <section className="space-y-3"><LoadState {...chart} loading="Loading launch care status"/>{chart.data&&<LaunchMembershipStatus membership={chart.data.enrollment.membership} caseStatus={chart.data.enrollment.case.status}/>}<Button variant="outline" onClick={chart.retry}>Refresh provider status</Button></section>;
 }
