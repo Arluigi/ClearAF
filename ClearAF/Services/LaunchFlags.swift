@@ -2,4 +2,5 @@
 enum LaunchFlags {
     static let adherenceCalendar = false
     static let clinicianForms = false
+    static let launchCheckIns = true
 }
