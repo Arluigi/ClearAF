@@ -10,8 +10,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin, PHOTO_BUCKET, generatePhotoPath } from '../config/supabase';
 import { captureIdentity, isMissingStorageObject, isValidCaptureObject } from '../services/photoCapture';
 import { parsePagination } from '../services/pagination';
+import {assertLegacyPhotoWriter,assertMutableLaunchPhoto} from '../services/clinicalPhotoSets';
 
 const router = express.Router();
+// Launch uploads/mutations always use bounded orchestration, even if the legacy gate is off.
+const requireLegacyPhotoWriter:express.RequestHandler=async(req,res,next)=>{try{await assertLegacyPhotoWriter(prisma,req.user!.id);next()}catch(error){next(error)}};
 
 
 // Configure multer for memory storage (Supabase Storage upload)
@@ -83,7 +86,7 @@ async function captureObjectInfo(storagePath: string) {
   return { state: 'uploaded' as const };
 }
 
-router.post('/captures/:captureId/upload-url', requirePatient, requireEnrolledPatient, async (req, res, next) => {
+router.post('/captures/:captureId/upload-url', requirePatient, requireEnrolledPatient, requireLegacyPhotoWriter, async (req, res, next) => {
   try {
     const captureId = captureIdSchema.parse(req.params.captureId);
     captureIntentSchema.parse(req.body);
@@ -112,7 +115,7 @@ router.post('/captures/:captureId/upload-url', requirePatient, requireEnrolledPa
   }
 });
 
-router.post('/captures/:captureId/complete', requirePatient, requireEnrolledPatient, async (req, res, next) => {
+router.post('/captures/:captureId/complete', requirePatient, requireEnrolledPatient, requireLegacyPhotoWriter, async (req, res, next) => {
   try {
     const captureId = captureIdSchema.parse(req.params.captureId);
     const input = completeCaptureSchema.parse(req.body);
@@ -128,6 +131,7 @@ router.post('/captures/:captureId/complete', requirePatient, requireEnrolledPati
     try {
       const photo = await prisma.$transaction(async tx => {
         await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+        await assertLegacyPhotoWriter(tx,req.user!.id);
         if (await tx.photoCleanup.findUnique({where:{photoId:id}})) throw Object.assign(new Error('Photo cleanup pending'), {statusCode:409,code:'PHOTO_CLEANUP_PENDING'});
         // Recheck under the deletion lock: a pre-lock storage read may describe
         // an object that deletion has since removed.
@@ -149,7 +153,7 @@ router.post('/captures/:captureId/complete', requirePatient, requireEnrolledPati
 
 // Large images travel directly to private Storage instead of through Vercel's
 // request-size limit. Only the server chooses the owner-bound object path.
-router.post('/upload-url', requirePatient, requireEnrolledPatient, async (req, res, next) => {
+router.post('/upload-url', requirePatient, requireEnrolledPatient, requireLegacyPhotoWriter, async (req, res, next) => {
   try {
     const { mimeType } = z.object({ mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']) }).parse(req.body);
     const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[mimeType];
@@ -160,7 +164,7 @@ router.post('/upload-url', requirePatient, requireEnrolledPatient, async (req, r
   } catch (error) { next(error); }
 });
 
-router.post('/complete-upload', requirePatient, requireEnrolledPatient, async (req, res, next) => {
+router.post('/complete-upload', requirePatient, requireEnrolledPatient, requireLegacyPhotoWriter, async (req, res, next) => {
   try {
     const input = z.object({
       storagePath: z.string(), skinScore: z.number().int().min(0).max(100).default(0),
@@ -188,6 +192,7 @@ router.post('/complete-upload', requirePatient, requireEnrolledPatient, async (r
     try {
       const photo = await prisma.$transaction(async tx => {
         await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+        await assertLegacyPhotoWriter(tx,req.user!.id);
         if (await tx.photoCleanup.findUnique({where:{photoId:id}})) throw Object.assign(new Error('Photo cleanup pending'), {statusCode:409,code:'PHOTO_CLEANUP_PENDING'});
         const {data:latestObject,error:latestError} = await supabaseAdmin.storage.from(PHOTO_BUCKET).info(path);
         if (latestError || !latestObject || latestObject.size <= 0 || latestObject.size > 10 * 1024 * 1024 || !['image/jpeg','image/png','image/webp'].includes(latestObject.contentType)) throw Object.assign(new Error('Upload is missing or invalid'), {statusCode:400,code:'INVALID_UPLOAD'});
@@ -208,7 +213,7 @@ router.post('/complete-upload', requirePatient, requireEnrolledPatient, async (r
 });
 
 // File upload endpoint - uploads to Supabase Storage and stores URL in database
-router.post('/upload', requirePatient, requireEnrolledPatient, upload.single('photo'), async (req, res, next) => {
+router.post('/upload', requirePatient, requireEnrolledPatient, requireLegacyPhotoWriter, upload.single('photo'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -276,7 +281,10 @@ router.post('/upload', requirePatient, requireEnrolledPatient, upload.single('ph
     const photoUrl = filePath;
 
     // Create photo record in database
-    const photo = await prisma.skinPhoto.create({
+    const photo = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+      await assertLegacyPhotoWriter(tx,req.user!.id);
+      const photo = await tx.skinPhoto.create({
       data: {
         id: filePath.split('/')[1].split('.')[0],
         photoUrl,
@@ -298,7 +306,7 @@ router.post('/upload', requirePatient, requireEnrolledPatient, upload.single('ph
 
     // Update user's current skin score and streak if skin score provided
     if (skinScore > 0) {
-      await prisma.user.update({
+      await tx.user.update({
         where: { id: req.user!.id },
         data: {
           currentSkinScore: skinScore,
@@ -308,6 +316,9 @@ router.post('/upload', requirePatient, requireEnrolledPatient, upload.single('ph
         }
       });
     }
+
+      return photo;
+    });
 
     res.status(201).json({
       message: 'Photo uploaded successfully to Supabase Storage',
@@ -472,62 +483,25 @@ router.get('/:id', requirePatient, async (req, res, next) => {
 });
 
 // Update photo details
-router.patch('/:id', requirePatient, requireEnrolledPatient, async (req, res, next) => {
+router.patch('/:id', requirePatient, requireEnrolledPatient, requireLegacyPhotoWriter, async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const validatedData = updatePhotoSchema.parse(req.body);
-
-    // Verify photo belongs to user
-    const existingPhoto = await prisma.skinPhoto.findUnique({
-      where: {
-        id,
-        userId: req.user!.id
-      }
+    const { id } = req.params, validatedData=updatePhotoSchema.parse(req.body);
+    const updatedPhoto=await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+      await assertLegacyPhotoWriter(tx,req.user!.id);
+      const photo=await tx.skinPhoto.findUnique({where:{id,userId:req.user!.id}});
+      if(!photo)throw Object.assign(new Error('Photo not found'),{statusCode:404,code:'PHOTO_NOT_FOUND'});
+      await assertMutableLaunchPhoto(tx,id);
+      const updated=await tx.skinPhoto.update({where:{id},data:validatedData,include:{relatedAppointment:{select:{id:true,scheduledDate:true,type:true}}}});
+      if(validatedData.skinScore!==undefined)await tx.user.update({where:{id:req.user!.id},data:{currentSkinScore:validatedData.skinScore}});
+      return updated;
     });
-
-    if (!existingPhoto) {
-      return res.status(404).json({
-        error: 'Photo not found',
-        code: 'PHOTO_NOT_FOUND'
-      });
-    }
-
-    const updatedPhoto = await prisma.skinPhoto.update({
-      where: { id },
-      data: validatedData,
-      include: {
-        relatedAppointment: {
-          select: {
-            id: true,
-            scheduledDate: true,
-            type: true
-          }
-        }
-      }
-    });
-
-    // Update user's current skin score if provided
-    if (validatedData.skinScore !== undefined) {
-      await prisma.user.update({
-        where: { id: req.user!.id },
-        data: {
-          currentSkinScore: validatedData.skinScore
-        }
-      });
-    }
-
-    res.json({
-      message: 'Photo updated successfully',
-      photo: await privatePhoto(updatedPhoto, req.user!.id)
-    });
-
-  } catch (error) {
-    next(error);
-  }
+    res.json({message:'Photo updated successfully',photo:await privatePhoto(updatedPhoto,req.user!.id)});
+  }catch(error){next(error)}
 });
 
 // Delete photo
-router.delete('/:id', requirePatient, async (req, res, next) => {
+router.delete('/:id', requirePatient, requireLegacyPhotoWriter, async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -535,6 +509,7 @@ router.delete('/:id', requirePatient, async (req, res, next) => {
     // object removal inside a transaction that could expire while it is in flight.
     const cleanup = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id = ${req.user!.id}::uuid FOR UPDATE`;
+        await assertLegacyPhotoWriter(tx,req.user!.id);
       const pending = await tx.photoCleanup.findUnique({where:{photoId:id}});
       if (pending) {
         if (pending.userId !== req.user!.id) throw Object.assign(new Error('Photo not found'), {statusCode:404, code:'PHOTO_NOT_FOUND'});
@@ -542,6 +517,7 @@ router.delete('/:id', requirePatient, async (req, res, next) => {
       }
       const photo = await tx.skinPhoto.findUnique({where: {id, userId: req.user!.id}});
       if (!photo) throw Object.assign(new Error('Photo not found'), {statusCode:404, code:'PHOTO_NOT_FOUND'});
+      await assertMutableLaunchPhoto(tx,id);
       const review = await tx.photoReview.findUnique({where:{photoId:id},select:{photoId:true}});
       if (review) throw Object.assign(new Error('Reviewed photos cannot be deleted'), {statusCode:409, code:'PHOTO_REVIEWED'});
       const decision = await tx.careDecision.findFirst({where:{photoId:id},select:{id:true}});

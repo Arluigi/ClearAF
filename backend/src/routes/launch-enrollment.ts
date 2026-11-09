@@ -1,0 +1,22 @@
+import express from 'express';
+import {z,ZodError} from 'zod';
+import {requirePatient} from '../middleware/auth';
+import {launchEnrollment} from '../services/launchEnrollment';
+import {launchCatalog} from '../services/launchSettings';
+import {readLaunchMultipart} from '../services/identityVerification';
+import {enrollmentError} from '../services/enrollment';
+const router=express.Router();
+// Authentication is supplied by the /api/launch mount; every patient mutation also enforces role.
+const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{res.set('Cache-Control','no-store');z.object({}).strict().parse(req.query);await handler(req,res,next)}catch(error){next(error instanceof ZodError||(error as any).statusCode?error:enrollmentError(500,'LAUNCH_OPERATION_FAILED'))}};
+const respond=(res:express.Response,result:any)=>res.status(result.created?201:200).json(result.response);
+router.get('/catalog',route(async(req,res)=>{res.json(await launchCatalog())}));
+router.get('/enrollment',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.get(req.user!.id))}));
+router.put('/enrollment/:caseId/consents',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.consents(req.user!.id,req.params.caseId,req.body,req.socket.remoteAddress!))}));
+router.put('/enrollment/:caseId/identity/:identityId',requirePatient,route(async(req,res)=>{const input=await readLaunchMultipart(req,'identity');respond(res,await launchEnrollment.identity(req.user!.id,req.params.caseId,req.params.identityId,input))}));
+router.put('/enrollment/:caseId/eligibility',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.eligibility(req.user!.id,req.params.caseId,req.body))}));
+router.put('/enrollment/:caseId/medical/:revisionId',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.medical(req.user!.id,req.params.caseId,req.params.revisionId,req.body))}));
+router.put('/enrollment/:caseId/destination',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.destination(req.user!.id,req.params.caseId,req.body))}));
+router.post('/photo-captures/:captureId',requirePatient,route(async(req,res)=>{const result=await launchEnrollment.capture(req.user!.id,req.params.captureId,await readLaunchMultipart(req,'skin'));res.status(result.created?201:200).json({capture:result.capture})}));
+router.put('/photo-sets/:setId',requirePatient,route(async(req,res)=>{const result=await launchEnrollment.photoSet(req.user!.id,req.params.setId,req.body);res.status(result.created?201:200).json({photoSet:result.photoSet})}));
+router.post('/enrollment/:caseId/submit',requirePatient,route(async(req,res)=>{res.json((await launchEnrollment.submit(req.user!.id,req.params.caseId,req.body)).response)}));
+export default router;

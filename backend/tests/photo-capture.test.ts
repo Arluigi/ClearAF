@@ -62,6 +62,7 @@ const skinPhoto = {
 };
 
 const db: any = {
+  launchCase:{findUnique:async()=>null},clinicalPhotoSetItem:{findFirst:async()=>null},
   skinPhoto,
   photoCleanup:{findUnique:async()=>pendingCleanup?{photoId:PHOTO_A,userId:OWNER_A,photoUrl:PATH_A}:null},
   $queryRaw:async()=>{afterLock?.();afterLock=undefined;return[]},

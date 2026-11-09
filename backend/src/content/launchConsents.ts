@@ -1,0 +1,9 @@
+import {createHash} from 'node:crypto';
+import {ConsentSchema,ConsentKeySchema} from '../contracts/unzitLaunch';
+// Source text is an operator publication, never reconstructed from a summary.
+export function validateLaunchDocuments(input:unknown){
+ const docs=ConsentSchema.array().length(4).parse(input);
+ if(new Set(docs.map(x=>x.key)).size!==4||ConsentKeySchema.options.some(k=>!docs.some(d=>d.key===k)))throw Error('Four distinct documents required');
+ for(const d of docs){if(createHash('sha256').update(d.body,'utf8').digest('hex')!==d.sha256)throw Error('Content digest mismatch');if(d.versionLabel==='0.9-draft'&&!d.body.includes('DRAFT'))throw Error('Draft label required')}
+ return docs;
+}

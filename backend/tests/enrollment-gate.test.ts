@@ -17,6 +17,7 @@ function model(rows:()=>any[],unique:(a:any,b:any)=>boolean){return {
 }}
 const proxyModel=()=>new Proxy({},{get:()=>async()=>{writes++;return null}});
 const db:any={
+ launchCase:{findUnique:async()=>null},clinicalPhotoSetItem:{findFirst:async()=>null},
  eligibilityScreening:model(()=>screenings,()=>false),
  consentAcceptance:model(()=>acceptances,(a,b)=>a.userId===b.userId&&a.documentVersion===b.documentVersion),
  skinPhoto:proxyModel(),photoCleanup:proxyModel(),user:proxyModel(),appointment:proxyModel(),
@@ -68,7 +69,7 @@ test('multipart legacy upload is refused before the file is parsed',async()=>{
 });
 test('enrolled patients, clinicians and disabled enforcement pass the gate',async()=>{
  process.env.ENROLLMENT_ENFORCEMENT='on';
- screenings.push({id:randomUUID(),userId:A,eligible:true,submittedAt:new Date()});acceptances.push({userId:A,documentVersion:1});
+ screenings.push({id:randomUUID(),userId:A,eligible:true,submittedAt:new Date()});acceptances.push({userId:A,documentKey:'legacy',documentVersion:1});
  for(const [method,path,body] of gated)assert.notEqual((await call(path,A,method,body)).body.code,'ENROLLMENT_REQUIRED',path);
  screenings=[];acceptances=[];
  assert.notEqual((await call(`/messages/patients/${A}/clinicians/${C}/messages/${randomUUID()}`,C,'PUT',{content:'Synthetic',reference:null})).body.code,'ENROLLMENT_REQUIRED');

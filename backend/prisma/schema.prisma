@@ -186,6 +186,9 @@ model Subscription {
 }
 
 model SkinPhoto {
+  launchTargetType String?
+  launchTargetId String? @db.Uuid
+  launchRequestHash String?
   id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   photoUrl           String
   skinScore          Int          @default(0)
