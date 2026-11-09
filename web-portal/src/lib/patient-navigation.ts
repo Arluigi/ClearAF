@@ -19,3 +19,18 @@ export function patientListQuery(page: number, search: string, filter: WorklistF
     ...(filter !== DEFAULT_WORKLIST_FILTER ? { filter } : {}),
   }).toString();
 }
+
+/** Carry only worklist context and opaque review identifiers. */
+export function launchReviewHref(item: import('../types/api').LaunchQueueItem, context: string) {
+  const list = patientListContext(new URLSearchParams(context));
+  const query = new URLSearchParams(patientListQuery(list.page, list.search, list.filter));
+  if (item.kind === 'check_in') query.set('tab', 'check-ins');
+  query.set('reviewKind', item.kind);
+  query.set('reviewTarget', item.targetId);
+  return `/patients/${encodeURIComponent(item.patientId)}?${query}`;
+}
+
+export function launchWaiting(receivedAt: string, now: Date) {
+  const hours = Math.max(0, Math.floor((now.getTime() - Date.parse(receivedAt)) / 3600000));
+  return !Number.isFinite(hours) || hours < 1 ? 'Waiting less than an hour' : hours < 24 ? `Waiting ${hours} ${hours === 1 ? 'hour' : 'hours'}` : `Waiting ${Math.floor(hours / 24)} days`;
+}

@@ -11,6 +11,7 @@ import WorklistSummary from './WorklistSummary';
 import WorklistTable from './WorklistTable';
 
 export type WorklistViewProps = {
+  launchQueue?: React.ReactNode;
   state: WorklistState;
   now: Date;
   onFilter: (filter: WorklistFilter) => void;
@@ -19,7 +20,7 @@ export type WorklistViewProps = {
   onRetry: () => void;
 };
 
-export default function WorklistView({ state, now, onFilter, onSearch, onPage, onRetry }: WorklistViewProps) {
+export default function WorklistView({ state, now, onFilter, onSearch, onPage, onRetry, launchQueue }: WorklistViewProps) {
   // Rows are shown only under the tab they belong to; a tab switch in flight shows its loading line.
   const current = state.result?.filter === state.filter ? state.result : null;
   const busy = state.status === 'loading';
@@ -90,6 +91,7 @@ export default function WorklistView({ state, now, onFilter, onSearch, onPage, o
           </TabsContent>
         ))}
       </Tabs>
+      {launchQueue}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import LegacyPatientList from '@/components/patients/LegacyPatientList';
 import { useClinicalAPI } from '@/lib/auth';
 import { patientListContext, patientListQuery } from '@/lib/patient-navigation';
 import { WorklistController } from '@/lib/worklist';
+import LaunchReviewQueue from '@/components/patients/LaunchReviewQueue';
 import WorklistView from './WorklistView';
 
 export default function Worklist() {
@@ -33,6 +34,7 @@ export default function Worklist() {
       onSearch={(search) => void controller.search(search)}
       onPage={(page) => void controller.goToPage(page)}
       onRetry={() => void controller.retry()}
+      launchQueue={<LaunchReviewQueue context={patientListQuery(state.page, state.search, state.filter)} />}
     />
   );
 }
