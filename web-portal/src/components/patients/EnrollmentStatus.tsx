@@ -12,6 +12,7 @@ export default function EnrollmentStatus({ patientId }: { patientId: string }) {
   const result = useRead(fetch);
   return (
     <div aria-label="Enrollment status">
+      <p className="text-xs text-ink-secondary">Launch identity and consent receipts are reviewed in Enrollment review.</p>
       {result.status === 'loading' && <p role="status" className="meta-mono">Checking eligibility</p>}
       {result.status === 'error' && <LoadState {...result} />}
       {result.data && (
