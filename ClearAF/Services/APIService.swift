@@ -83,6 +83,7 @@ class APIService: ObservableObject {
     private let baseURL = AppEnvironment.apiURL
     private let session = AccountNetwork.session()
     let access = AccountAccess()
+    let launchSession = AccountNetwork.session()
     enum Phase: Equatable { case loading, signedOut, profileError, enrollment, onboarding, ready, recovery }
     @Published var currentUser: APIUser?
     @Published var phase: Phase = .loading
@@ -98,6 +99,7 @@ class APIService: ObservableObject {
     @MainActor lazy var messaging = MessagingRepository(access: access, transport: self)
     @MainActor lazy var checkIns = CheckInRepository(access: access, transport: self)
     @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
+    @MainActor lazy var launchEnrollment = LaunchEnrollmentRepository(access: access, transport: self)
     @MainActor lazy var enrollment = EnrollmentRepository(access: access, transport: self)
     @MainActor lazy var careDecisions = CareDecisionRepository(access: access, transport: self)
     @MainActor lazy var urgentReports = UrgentReportRepository(access: access, transport: self)
@@ -183,6 +185,7 @@ class APIService: ObservableObject {
         messaging.cancel()
         photoReviews.cancel()
         enrollment.cancel()
+        launchEnrollment.cancel()
         careDecisions.cancel()
         urgentReports.cancel()
         recheckingEnrollment = false
