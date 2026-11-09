@@ -45,6 +45,10 @@ struct LaunchEnrollmentView: View {
         case .identity: IdentityCaptureView(repository: repository, ticket: ticket)
         case .eligibility: EligibilityView(repository: repository, ticket: ticket)
         case .payment: PlanChoiceView(enrollment: repository, billing: APIService.shared.billing, ticket: ticket)
+        case .medicalHistory: MedicalHistoryView(repository: repository, ticket: ticket)
+        case .destination:
+            if let plan = state.membership?.planId ?? state.case.planId { DestinationView(repository: repository, ticket: ticket, planId: plan) }
+            else { LaunchPage(title: "Pharmacy and delivery") { Text("Refresh your enrollment to load the selected plan."); Button("Refresh enrollment") { refresh() }.buttonStyle(.letterpress(.filled, fullWidth: true)) } }
         case .ineligible:
             LaunchPage(title: "UNZIT can't provide your care right now") {
                 Text("UNZIT provides online acne care for adults physically in North Carolina. Your answers may mean you need care in person.")
@@ -56,7 +60,7 @@ struct LaunchEnrollmentView: View {
             LaunchPage(title: "Your clinician needs an update") {
                 Text(state.case.patientMessage ?? "Refresh your enrollment to see the requested changes.")
                 if state.case.identity?.status == .needsChanges { IdentityCaptureView(repository: repository, ticket: ticket) }
-                else { Text("Your submitted records are preserved. Your clinician's requested correction will be saved as a new revision.") }
+                else { MedicalHistoryView(repository: repository, ticket: ticket) }
                 Button("Refresh enrollment") { refresh() }.buttonStyle(.letterpress(.outlined, fullWidth: true))
             }
         case .submitted, .approved, .rejected:

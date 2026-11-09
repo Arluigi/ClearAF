@@ -91,13 +91,28 @@ struct LaunchMedicalDraft: Codable, Equatable {
     enum Sex: String, Codable { case female, male, intersex, preferNotToSay = "prefer_not_to_say" }
     enum Answer: String, Codable { case yes, no, notSure = "not_sure", notApplicable = "not_applicable" }
     enum Preference: String, Codable { case topical, oral, noPreference = "no_preference" }
-    struct Contraception: Codable, Equatable { var method: String; var details: String? }
-    struct Signs: Codable, Equatable { var signs: [String]; var none: Bool; var details: String? }
+    struct Contraception: Codable, Equatable {
+        var method: String; var details: String?
+        func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(method, forKey: .method); try c.encode(details, forKey: .details) }
+    }
+    struct Signs: Codable, Equatable {
+        var signs: [String]; var none: Bool; var details: String?
+        func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(signs, forKey: .signs); try c.encode(none, forKey: .none); try c.encode(details, forKey: .details) }
+    }
     struct Treatment: Codable, Equatable { var name: String; var duration: String; var helped: String; var sideEffects: String }
     struct Treatments: Codable, Equatable { var none: Bool; var treatments: [Treatment] }
-    struct Detail: Codable, Equatable { var none: Bool; var details: String? }
-    struct Allergies: Codable, Equatable { var picks: [String]; var reaction: String? }
-    struct PCP: Codable, Equatable { var pcpName: String?; var pcpPhone: String?; var shareSummary: Bool }
+    struct Detail: Codable, Equatable {
+        var none: Bool; var details: String?
+        func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(none, forKey: .none); try c.encode(details, forKey: .details) }
+    }
+    struct Allergies: Codable, Equatable {
+        var picks: [String]; var reaction: String?
+        func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(picks, forKey: .picks); try c.encode(reaction, forKey: .reaction) }
+    }
+    struct PCP: Codable, Equatable {
+        var pcpName: String?; var pcpPhone: String?; var shareSummary: Bool
+        func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(pcpName, forKey: .pcpName); try c.encode(pcpPhone, forKey: .pcpPhone); try c.encode(shareSummary, forKey: .shareSummary) }
+    }
     var M1: Sex?; var M2: Answer?; var M3: Answer?; var M4: Contraception?; var M5: String?; var M6: [String]?; var M7: [String]?; var M8: Answer?
     var M9: Signs?; var M10: String?; var M11: Treatments?; var M12: String?; var M13: [String]?; var M14: Detail?; var M15: Allergies?; var M16: [String]?
     var M17: String?; var M18: String?; var M19: String?; var M20: PCP?; var M21: String?; var M22: Bool?; var medicationPreference: Preference?

@@ -21,6 +21,11 @@ struct MembershipView: View {
                 LetterpressRule()
                 if membership.destinationRequired == true {
                     Text("Your new plan needs a destination. Add your own pharmacy for Care or a North Carolina shipping address for All-In to continue care.")
+                    NavigationLink("Add required destination") {
+                        DestinationView(repository: enrollment, ticket: ticket, planId: membership.planId) {
+                            Task { _ = await billing.refresh(ticket: ticket); _ = await enrollment.refresh(ticket: ticket) }
+                        }
+                    }.buttonStyle(.letterpress(.outlined, fullWidth: true))
                 }
                 Text("Change plans or cancel in the secure Customer Portal. Plan changes take effect immediately; Stripe calculates any prorated charge or credit. Your check-in schedule refreshes after the provider confirms the change.")
                 Button(billing.saving ? "Opening secure portal…" : "Manage plan or cancel") {

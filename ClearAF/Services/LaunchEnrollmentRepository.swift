@@ -4,6 +4,7 @@ import Combine
 struct LaunchEnrollmentDraft: Codable, Equatable {
     let caseId: UUID; var expectedRevision: Int; let revisionId: UUID
     var answers: LaunchMedicalDraft; var captureIDs: [LaunchPhotoSlot: UUID]
+    var questionnaireVersion: String? = nil
 }
 @MainActor final class LaunchEnrollmentRepository: ObservableObject {
     @Published private(set) var state: LaunchEnrollmentResponse?
@@ -12,12 +13,13 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
     @Published private(set) var loading = false
     @Published private(set) var saving = false
     @Published private(set) var error: String?
+    @Published private(set) var medicalNeedsReapply = false
     private let access: AccountAccess; private let transport: any LaunchTransport; private let directory: URL?
     private var epoch = UUID(); private var ticket: AccountAccess.Ticket?; private var file: URL?
     init(access: AccountAccess, transport: any LaunchTransport, directory: URL? = nil) {
         self.access = access; self.transport = transport; self.directory = directory
     }
-    func cancel() { epoch = UUID(); ticket = nil; file = nil; state = nil; catalog = nil; draft = nil; loading = false; saving = false; error = nil }
+    func cancel() { medicalNeedsReapply = false; epoch = UUID(); ticket = nil; file = nil; state = nil; catalog = nil; draft = nil; loading = false; saving = false; error = nil }
     func resume(ticket: AccountAccess.Ticket) throws {
         try access.require(ticket)
         guard self.ticket != ticket else { return }
@@ -71,6 +73,7 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
             guard next.case.revision >= current.case.revision else { return }
         }
         state = next
+        medicalNeedsReapply = draft.map { $0.caseId == next.case.id && ($0.expectedRevision != next.case.revision || ($0.questionnaireVersion != nil && $0.questionnaireVersion != next.case.questionnaireVersion)) } ?? false
     }
     func loadCatalog(ticket: AccountAccess.Ticket) async {
         do { try resume(ticket: ticket) } catch { return }
@@ -99,4 +102,53 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
             return false
         }
     }
+    var canEditMedical: Bool {
+        guard let state, let membership = state.membership,
+              [.paidPendingReview, .active].contains(membership.status) else { return false }
+        return state.case.status == .medicalHistory || state.case.status == .needsChanges
+    }
+    func stageMedical(_ answers: LaunchMedicalDraft, ticket: AccountAccess.Ticket) throws {
+        try require(ticket, epoch: epoch)
+        guard canEditMedical, let current = state else { throw LaunchFailure.invalidData }
+        var next = answers; next.clearHiddenBranches()
+        guard LaunchMedicalValidation.validDraft(next) else { throw LaunchFailure.invalidData }
+        let previous = draft.flatMap { $0.caseId == current.case.id ? $0 : nil }
+        let revision = previous?.expectedRevision ?? current.case.revision
+        let unchanged = previous?.answers == next
+        try saveDraft(.init(caseId: current.case.id, expectedRevision: revision, revisionId: unchanged ? previous!.revisionId : UUID(), answers: next, captureIDs: previous?.captureIDs ?? [:], questionnaireVersion: previous?.questionnaireVersion ?? current.case.questionnaireVersion), ticket: ticket)
+        medicalNeedsReapply = revision != current.case.revision
+    }
+    func reapplyMedical(ticket: AccountAccess.Ticket) throws {
+        try require(ticket, epoch: epoch)
+        guard canEditMedical, let current = state, let draft, draft.caseId == current.case.id else { throw LaunchFailure.invalidData }
+        if draft.questionnaireVersion != nil && draft.questionnaireVersion != current.case.questionnaireVersion {
+            guard catalog?.questionnaireVersion == current.case.questionnaireVersion else { throw LaunchFailure.invalidData }
+        }
+        try saveDraft(.init(caseId: current.case.id, expectedRevision: current.case.revision, revisionId: UUID(), answers: draft.answers, captureIDs: draft.captureIDs, questionnaireVersion: current.case.questionnaireVersion), ticket: ticket)
+        medicalNeedsReapply = false
+    }
+    @discardableResult func saveMedical(ticket: AccountAccess.Ticket) async -> Bool {
+        guard canEditMedical, !medicalNeedsReapply, let draft, let current = state, draft.caseId == current.case.id else { return false }
+        struct Body: Encodable { let expectedRevision: Int; let questionnaireVersion: String; let answers: LaunchMedicalDraft }
+        do {
+            let request = try LaunchRequest.json("/enrollment/\(draft.caseId.uuidString.lowercased())/medical/\(draft.revisionId.uuidString.lowercased())", Body(expectedRevision: draft.expectedRevision, questionnaireVersion: draft.questionnaireVersion ?? current.case.questionnaireVersion, answers: draft.answers))
+            let saved = await mutate(request, ticket: ticket)
+            if !saved, state?.case.questionnaireVersion != draft.questionnaireVersion { await loadCatalog(ticket: ticket) }
+            if saved, let latest = state {
+                // A person can keep typing while an upload is in flight. Preserve those newer local edits,
+                // rebased only to our own acknowledged save; nothing is submitted automatically.
+                let local = self.draft.flatMap { $0.caseId == draft.caseId ? $0 : nil } ?? draft
+                try saveDraft(.init(caseId: draft.caseId, expectedRevision: latest.case.revision, revisionId: UUID(), answers: local.answers, captureIDs: local.captureIDs, questionnaireVersion: latest.case.questionnaireVersion), ticket: ticket)
+                medicalNeedsReapply = false
+            }
+            return saved
+        } catch { return false }
+    }
+    @discardableResult func saveDestination(_ destination: LaunchDestination, ticket: AccountAccess.Ticket) async -> Bool {
+        guard let state, LaunchDestinationValidation.valid(destination) else { return false }
+        struct Body: Encodable { let expectedRevision: Int; let destination: LaunchDestination }
+        do { return await mutate(try .json("/enrollment/\(state.case.id.uuidString.lowercased())/destination", Body(expectedRevision: state.case.revision, destination: destination)), ticket: ticket) }
+        catch { return false }
+    }
+
 }
