@@ -41,3 +41,15 @@ export function evaluate(input:ScreeningAnswers,rules:EligibilityRules,today:str
  const flags:ScreeningFlag[]=input.pregnancyStatus==='trying_to_conceive'?['trying_to_conceive']:[];
  return {eligible:reasons.length===0,reasons,flags};
 }
+
+// Launch rules are deliberately independent of legacy environment toggles.
+export function evaluateLaunchEligibility(answers:import('../contracts/unzitLaunch').Eligibility,identity:{dateOfBirth:string;attestedInNC:boolean},today:string){
+ const reasons:string[]=[],flags:string[]=[];
+ if(!identity.attestedInNC)reasons.push('state');
+ if(ageOn(identity.dateOfBirth,today)<18)reasons.push('age');
+ if(answers.E1==='something_else')reasons.push('condition');
+ if(answers.E2!=='yes')reasons.push('eligibility');
+ if(['pregnant','breastfeeding'].includes(answers.E3))flags.push('pregnancy_safe_review');
+ if(answers.E4==='yes')flags.push('overlapping_treatment');
+ return {eligible:reasons.length===0,reasons,flags,rulesVersion:'0.9-draft'};
+}
