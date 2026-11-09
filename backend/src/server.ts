@@ -8,6 +8,7 @@ import { enrollmentStartupLog } from './services/enrollmentRules';
 
 // Import routes
 import authRoutes from './routes/auth-supabase';
+import sendEmailHook from './routes/send-email-hook';
 import userRoutes from './routes/users';
 import appointmentRoutes from './routes/appointments';
 import messageRoutes from './routes/messages';
@@ -47,6 +48,9 @@ app.use(cors({
   origin: process.env.FRONTEND_URL?.split(',').map(origin => origin.trim()) || false,
   credentials: true
 }));
+
+// Signed auth hook must receive raw bytes before JSON parsing; no patient JWT.
+app.use('/api/auth-hooks/send-email', sendEmailHook);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
