@@ -13,7 +13,7 @@ export function screeningDTO(row:EligibilityScreening){return {id:row.id,stateCo
 const latest=(db:DB,userId:string)=>db.eligibilityScreening.findFirst({where:{userId},orderBy:[{submittedAt:'desc'},{id:'desc'}]});
 async function evaluateStatus(db:DB,userId:string){
  const screening=await latest(db,userId),consent=currentConsent();
- const acceptance:ConsentAcceptance|null=screening?.eligible?await db.consentAcceptance.findUnique({where:{userId_documentVersion:{userId,documentVersion:consent.version}}}):null;
+ const acceptance:ConsentAcceptance|null=screening?.eligible?await db.consentAcceptance.findFirst({where:{userId,documentKey:"legacy",documentVersion:consent.version}}):null;
  const status:EnrollmentStatus=!screening?'screening_required':!screening.eligible?'ineligible':!acceptance?'consent_required':'enrolled';
  return {status,screening,acceptance,consent};
 }
@@ -54,7 +54,7 @@ export async function acceptConsent(userId:string,version:number,sha256:string){
  const s=await evaluateStatus(db,userId);
  if(version!==s.consent.version||sha256!==s.consent.sha256)throw enrollmentError(409,'CONSENT_OUTDATED');
  if(s.status==='screening_required'||s.status==='ineligible')throw enrollmentError(409,'SCREENING_REQUIRED');
- const row=s.acceptance??await db.consentAcceptance.create({data:{userId,documentVersion:version,documentSha256:sha256}});
+ const row=s.acceptance??await db.consentAcceptance.create({data:{userId,documentKey:"legacy",documentVersion:version,documentSha256:sha256}});
  return {acceptance:{version:row.documentVersion,acceptedAt:row.acceptedAt.toISOString()},status:'enrolled' as EnrollmentStatus,created:!s.acceptance};
 }))}
 export async function clinicianSummary(patientId:string,clinicianId:string){return prisma.$transaction(async db=>{

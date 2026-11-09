@@ -5,7 +5,11 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const tables = ['assigned_messages','care_template_revisions','care_form_revisions','care_form_responses','appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','photo_reviews','photo_cleanup','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles','eligibility_screenings','consent_acceptances','care_decisions','urgent_reports'];
+const tables = ['launch_settings','launch_allowlist','launch_cases','identity_verifications','intake_revisions','care_memberships','billing_payments','billing_operations','stripe_events','launch_check_ins','clinical_photo_sets','clinical_photo_set_items','launch_reviews','assigned_messages','care_template_revisions','care_form_revisions','care_form_responses','appointments','care_routine_revisions','care_routine_completions','dermatologists','messages','photo_reviews','photo_cleanup','prescriptions','products','routine_steps','routines','skin_photos','subscriptions','user_profiles','eligibility_screenings','consent_acceptances','care_decisions','urgent_reports'];
+function validateLaunchSeed(rows) {
+ const expected={id:'00000000-0000-4000-8000-000000000039',version:1,active:true,careAmountCents:3900,allInAmountCents:8900,carePriceId:null,allInPriceId:null,clinicianId:null,contentVersion:'0.9-draft',content:{},weeklyWeeks:8,createdAt:'2026-11-09T00:00:00.000Z'};
+ assert.deepEqual(JSON.parse(JSON.stringify(rows)),[expected],'Unexpected launch settings seed');
+}
 let phase = 'local target and backup validation';
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 function local(value, protocol) {
@@ -98,7 +102,8 @@ async function run(mode) {
     assert.equal(archive,path.join(dir,'data.dump'),'Unexpected restore archive');
     // Render only into memory. SET must execute after login rather than as a
     // startup parameter, because local Supabase establishes privileges at login.
-    const sql = execute('pg_restore',['--file=-','--data-only','--no-owner','--no-privileges'],fs.readFileSync(archive));
+    const restored = execute('pg_restore',['--file=-','--data-only','--no-owner','--no-privileges'],fs.readFileSync(archive));
+    const sql=Buffer.concat([Buffer.from('TRUNCATE public.launch_settings CASCADE;\n'),restored]);
     return execute('psql',['-X','--username','postgres','--single-transaction','--set','ON_ERROR_STOP=on','--command','SET session_replication_role=replica','--file','-','--dbname',pgEnv.PGDATABASE],sql);
   };
   async function ledger() { return (await db.query('select version from supabase_migrations.schema_migrations order by version')).rows; }
@@ -128,7 +133,8 @@ async function run(mode) {
       assert.deepEqual(users,fixture.accounts.map(({id,email})=>({id,email})).sort((a,b)=>a.id.localeCompare(b.id)), 'Database contains accounts outside synthetic fixtures');
       const doctors = (await db.query('select id,email,name from public.dermatologists')).rows;
       assert(doctors.every(d=>fixture.accounts.some(a=>a.id===d.id&&a.email===d.email)&&d.name.startsWith('Synthetic')), 'Non-synthetic clinicians');
-      for (const table of tables.filter(t=>!['user_profiles','dermatologists','skin_photos','care_routine_revisions','care_routine_completions','eligibility_screenings','consent_acceptances'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
+      for (const table of tables.filter(t=>!['launch_settings','user_profiles','dermatologists','skin_photos','care_routine_revisions','care_routine_completions','eligibility_screenings','consent_acceptances'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
+      validateLaunchSeed((await db.query('select * from public.launch_settings')).rows);
       const revisions=(await db.query('select id,"userId","createdBy",name from public.care_routine_revisions')).rows;
       assert(revisions.length > 0 && revisions.every(r=>(fixture.routineRevisionIds||[]).includes(r.id) && fixture.accounts.some(a=>a.id===r.userId&&a.role.startsWith('patient')) && fixture.accounts.some(a=>a.id===r.createdBy&&a.role.startsWith('doctor')) && r.name.startsWith('Synthetic')), 'Non-fixture routine revision');
       const completions=(await db.query('select id,"userId","revisionId" from public.care_routine_completions')).rows;
@@ -168,7 +174,8 @@ async function run(mode) {
     } else {
       phase = 'fresh destination and migration validation';
       assert.deepEqual(await ledger(),manifest.ledger,'Destination canonical migrations differ');
-      for (const table of tables) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Destination application data is not empty');
+      validateLaunchSeed((await db.query('select * from public.launch_settings')).rows);
+      for (const table of tables.filter(t=>t!=='launch_settings')) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Destination application data is not empty');
       for (const table of ['auth.users','auth.identities','storage.objects']) assert.equal(Number((await db.query(`select count(*) from ${table}`)).rows[0].count),0,'Destination managed data is not empty');
       assert.equal(Number((await db.query('select count(*) from public._prisma_migrations')).rows[0].count),0,'Destination Prisma ledger is not empty');
       phase = 'transactional database restore';
@@ -198,5 +205,5 @@ async function run(mode) {
     }
   } finally { await db.end(); }
 }
-module.exports={local,validate,validateMigrationChain,applicationTables:tables};
+module.exports={local,validate,validateMigrationChain,applicationTables:tables,validateLaunchSeed};
 if(require.main===module) run(process.argv[2]).catch(()=>{console.error(`Recovery drill failed during ${phase}; no credentials or database contents logged.`);process.exitCode=1;});

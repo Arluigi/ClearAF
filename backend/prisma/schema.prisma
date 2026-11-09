@@ -102,6 +102,12 @@ model Appointment {
 
 model Prescription {
   id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  strength String?
+  sentAt DateTime? @db.Timestamp(3)
+  recordedAt DateTime? @db.Timestamp(3)
+  pharmacySnapshot Json?
+  source String?
+  launchCaseId String? @db.Uuid
   medicationName   String
   dosage           String
   instructions     String
@@ -371,11 +377,14 @@ model EligibilityScreening {
 model ConsentAcceptance {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId String @db.Uuid
+  documentKey String @default("legacy")
+  observedIp String? @db.Inet
+  versionLabel String @default("legacy")
   documentVersion Int
   documentSha256 String
   acceptedAt DateTime @default(now()) @db.Timestamp(3)
   user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  @@unique([userId, documentVersion], map: "consent_acceptances_user_version_key")
+  @@unique([userId, documentKey, documentVersion], map: "consent_acceptances_user_key_version_key")
   @@map("consent_acceptances")
 }
 model CareDecision {
@@ -412,4 +421,215 @@ model UrgentReport {
   resolver Dermatologist? @relation("UrgentReportResolver", fields: [resolvedBy], references: [id], onDelete: Restrict, onUpdate: NoAction)
   @@index([patientId, createdAt(sort: Desc), id(sort: Desc)], map: "urgent_reports_patient_latest_idx")
   @@map("urgent_reports")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model LaunchSettings {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  version Int @unique
+  active Boolean @default(false)
+  careAmountCents Int
+  allInAmountCents Int
+  carePriceId String?
+  allInPriceId String?
+  clinicianId String? @db.Uuid
+  contentVersion String
+  content Json
+  weeklyWeeks Int
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("launch_settings")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model LaunchAllowlist {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email String @unique
+  enabled Boolean @default(true)
+  importBatch String @db.Uuid
+  importedAt DateTime @db.Timestamp(3) @default(now())
+  @@map("launch_allowlist")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model LaunchCase {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId String @unique @db.Uuid
+  revision Int
+  status String
+  eligibility Json?
+  rulesVersion String?
+  planId String?
+  settingsVersion Int?
+  destination Json?
+  identityId String? @db.Uuid
+  intakeId String? @db.Uuid
+  photoSetId String? @db.Uuid
+  flags Json
+  submittedAt DateTime? @db.Timestamp(3)
+  approvedAt DateTime? @db.Timestamp(3)
+  patientMessage String?
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("launch_cases")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model IdentityVerification {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId String @db.Uuid
+  patientId String @db.Uuid
+  idPhotoPath String
+  selfiePath String
+  fullName String
+  dateOfBirth DateTime @db.Date
+  attestedInNC Boolean
+  attestedAt DateTime @db.Timestamp(3) @default(now())
+  status String
+  reviewedBy String? @db.Uuid
+  reviewedAt DateTime? @db.Timestamp(3)
+  patientMessage String?
+  requestHash String
+  @@map("identity_verifications")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model IntakeRevision {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId String @db.Uuid
+  patientId String @db.Uuid
+  questionnaireVersion String
+  answers Json
+  requestHash String
+  submittedAt DateTime? @db.Timestamp(3)
+  attestedAt DateTime? @db.Timestamp(3)
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("intake_revisions")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model CareMembership {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId String @unique @db.Uuid
+  caseId String @unique @db.Uuid
+  planId String
+  settingsVersion Int
+  amountCents Int
+  currency String
+  status String
+  stripeCustomerId String? @unique
+  stripeSubscriptionId String? @unique
+  checkoutSessionId String? @unique
+  activatedAt DateTime? @db.Timestamp(3)
+  currentPeriodEnd DateTime? @db.Timestamp(3)
+  paidThrough DateTime? @db.Timestamp(3)
+  cancelAtPeriodEnd Boolean @default(false)
+  cadenceAnchor DateTime? @db.Timestamp(3)
+  destinationRequired Boolean @default(false)
+  refundStatus String
+  providerUpdatedAt DateTime? @db.Timestamp(3)
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("care_memberships")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model BillingPayment {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  membershipId String @db.Uuid
+  patientId String @db.Uuid
+  providerPaymentId String @unique
+  providerInvoiceId String @unique
+  amountCents Int
+  refundedCents Int
+  confirmedAt DateTime @db.Timestamp(3)
+  refundedAt DateTime? @db.Timestamp(3)
+  @@map("billing_payments")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model BillingOperation {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  membershipId String @db.Uuid
+  patientId String @db.Uuid
+  requestHash String
+  providerKey String @unique
+  kind String
+  status String
+  attempts Int
+  nextAttemptAt DateTime? @db.Timestamp(3)
+  failureCode String?
+  result Json?
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("billing_operations")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model StripeEvent {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerEventId String @unique
+  objectId String
+  type String
+  providerCreatedAt DateTime @db.Timestamp(3)
+  status String
+  data Json
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("stripe_events")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model LaunchCheckIn {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  membershipId String @db.Uuid
+  patientId String @db.Uuid
+  cadenceAnchor DateTime @db.Timestamp(3)
+  ordinal Int
+  dueAt DateTime @db.Timestamp(3)
+  kind String
+  status String
+  formId String @db.Uuid
+  responseId String? @unique @db.Uuid
+  photoSetId String? @db.Uuid
+  answers Json?
+  submittedAt DateTime? @db.Timestamp(3)
+  reviewedAt DateTime? @db.Timestamp(3)
+  patientMessage String?
+  @@map("launch_check_ins")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model ClinicalPhotoSet {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId String @db.Uuid
+  purpose String
+  caseId String? @db.Uuid
+  checkInId String? @db.Uuid
+  requiredSlots Json
+  status String
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("clinical_photo_sets")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model ClinicalPhotoSetItem {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  setId String @db.Uuid
+  patientId String @db.Uuid
+  slot String
+  photoId String @unique @db.Uuid
+  captureId String @unique @db.Uuid
+  @@map("clinical_photo_set_items")
+}
+
+// Composite FKs/checks are maintained by the canonical SQL migration.
+model LaunchReview {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId String @db.Uuid
+  caseId String @db.Uuid
+  clinicianId String @db.Uuid
+  targetType String
+  targetId String @db.Uuid
+  outcome String
+  patientMessage String?
+  caseRevision Int
+  requestHash String
+  createdAt DateTime @db.Timestamp(3) @default(now())
+  @@map("launch_reviews")
 }

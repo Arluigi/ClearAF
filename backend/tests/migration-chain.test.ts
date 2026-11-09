@@ -15,3 +15,9 @@ test('recovery includes every application table represented in Prisma',()=>{
  const schema=fs.readFileSync('prisma/schema.prisma','utf8');
  for(const match of schema.matchAll(/@@map\("([a-z_]+)"\)/g)) assert(recovery.applicationTables?.includes(match[1]),`Recovery omits ${match[1]}`);
 });
+
+test('recovery accepts only the exact launch settings seed',()=>{
+ const seed={id:'00000000-0000-4000-8000-000000000039',version:1,active:true,careAmountCents:3900,allInAmountCents:8900,carePriceId:null,allInPriceId:null,clinicianId:null,contentVersion:'0.9-draft',content:{},weeklyWeeks:8,createdAt:'2026-11-09T00:00:00.000Z'};
+ assert.doesNotThrow(()=>recovery.validateLaunchSeed([seed]));
+ for(const rows of [[],[seed,seed],[{...seed,careAmountCents:1}],[{...seed,content:{unknown:true}}]])assert.throws(()=>recovery.validateLaunchSeed(rows));
+});
