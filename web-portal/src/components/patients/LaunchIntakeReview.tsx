@@ -20,7 +20,7 @@ export function LaunchIntakeDetails({enrollment,catalog}:{enrollment:LaunchEnrol
   const record=enrollment.case;
   const keys=[...Array.from({length:22},(_,i)=>`M${i+1}`),'medicationPreference'];
   return <div className="space-y-5">
-    <p className="text-sm">DRAFT clinical content · {record.questionnaireVersion}. Flags require clinician review.</p>
+    <p className="text-sm">{record.questionnaireVersion.includes('draft')?'DRAFT clinical content':'Clinical content'} · {record.questionnaireVersion}. Flags require clinician review.</p>
     <ul className="divide-y divide-rule">{consentReceipts(enrollment.consents).map(receipt=><li className="break-words py-2 text-sm" key={receipt.key}>{receipt.text}</li>)}</ul>
     <section aria-label="Eligibility and clinical flags"><h3 className="font-medium">Eligibility and flags</h3><p className="whitespace-pre-wrap break-words text-sm">{intakeAnswer(record.eligibility?.answers)} · {[...record.flags,...record.eligibility?.flags??[]].join(', ')||'No flags recorded'}</p></section>
     <dl className="divide-y divide-rule">{keys.map(key=>{const question=(catalog?.questionnaireVersion===record.questionnaireVersion?catalog:null)?.medicalQuestions.find(q=>q.id===key);const value=record.medicalHistory[key as keyof typeof record.medicalHistory];return <div key={key} className="grid gap-2 py-3 sm:grid-cols-2"><dt className="text-sm text-ink-secondary">{key} · {question?.prompt??'Question wording unavailable'}</dt><dd className="whitespace-pre-wrap break-words text-sm">{answer(value,question)}</dd></div>;})}</dl>
@@ -29,7 +29,7 @@ export function LaunchIntakeDetails({enrollment,catalog}:{enrollment:LaunchEnrol
     <p className="text-sm">{launchApprovalBlock(enrollment)??'Manual identity approved. Submitted package is ready for clinical review.'}</p>
   </div>;
 }
-export default function LaunchIntakeReview({patientId,targetId,kind}:{patientId:string;targetId?:string|null;kind?:string|null}) {
+export default function LaunchIntakeReview({patientId,targetId,kind,active=true}:{patientId:string;targetId?:string|null;kind?:string|null;active?:boolean}) {
   const api=useClinicalAPI();const [page,setPage]=useState(1);const section=useRef<HTMLElement>(null);
   const fetch=useCallback(()=>api.launch().chart(patientId,page),[api,patientId,page]);const chart=useRead(fetch);
   const fetchCatalog=useCallback(()=>api.launch().catalog(),[api]);const catalog=useRead(fetchCatalog);
@@ -38,7 +38,7 @@ export default function LaunchIntakeReview({patientId,targetId,kind}:{patientId:
     <div className="flex flex-wrap justify-between gap-3"><h2 className="editorial-title text-2xl">Enrollment review</h2><Button variant="outline" onClick={chart.retry}>Refresh enrollment</Button></div>
     <p className="text-sm text-ink-secondary">Review within 1 to 2 business days. Compare the submitted skin photos below as part of clinical review.</p>
     <LoadState {...chart} loading="Loading enrollment chart"/><LoadState {...catalog} loading="Loading versioned question wording"/>
-    {chart.data&&<><IdentityReview key={`${patientId}-${chart.data.enrollment.case.revision}`} patientId={patientId} identity={chart.data.enrollment.case.identity} revision={chart.data.enrollment.case.revision} onChanged={chart.retry}/><LaunchIntakeDetails enrollment={chart.data.enrollment} catalog={catalog.data}/><LaunchClinicalReview patientId={patientId} enrollment={chart.data.enrollment} onChanged={chart.retry}/><LaunchMembershipStatus membership={chart.data.enrollment.membership} caseStatus={chart.data.enrollment.case.status}/>
+    {chart.data&&<><IdentityReview key={`${patientId}-${chart.data.enrollment.case.revision}`} active={active} patientId={patientId} identity={chart.data.enrollment.case.identity} revision={chart.data.enrollment.case.revision} onChanged={chart.retry}/><LaunchIntakeDetails enrollment={chart.data.enrollment} catalog={catalog.data}/><LaunchClinicalReview patientId={patientId} enrollment={chart.data.enrollment} onChanged={chart.retry}/><LaunchMembershipStatus membership={chart.data.enrollment.membership} caseStatus={chart.data.enrollment.case.status}/>
       {targetId&&kind==='enrollment'&&targetId!==chart.data.enrollment.case.id&&<p role="alert">This review target is unavailable. Refresh the worklist.</p>}
       <details><summary className="cursor-pointer text-sm">Prior review decisions</summary><ul className="divide-y divide-rule">{chart.data.reviews.data.map(review=><li className="break-words py-2 text-sm" key={review.id}>{review.targetType} · {review.outcome.replaceAll('_',' ')} · {review.createdAt}{review.patientMessage&&<p className="whitespace-pre-wrap">{review.patientMessage}</p>}</li>)}</ul><Pages page={page} totalPages={chart.data.reviews.pagination.totalPages} onPage={setPage}/></details>
     </>}

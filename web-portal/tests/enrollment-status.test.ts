@@ -30,3 +30,9 @@ test("summaries become factual labels", () => {
     ).some((l) => l.text === "Reported trying to conceive"),
   );
 });
+
+test('launch consent receipt mapping does not substitute a missing document with another acceptance',async()=>{
+ const {consentReceipts}=await import('../src/lib/workspace');
+ const receipts=consentReceipts([{key:'telehealth',version:2,versionLabel:'0.9-draft',title:'DRAFT telehealth',body:'DRAFT',sha256:'synthetic-hash',effectiveAt:'2026-11-01T12:00:00Z',acceptedAt:'2026-11-09T12:00:00Z'}]);
+ assert.deepEqual(receipts.map(receipt=>receipt.accepted),[true,false,false,false]);assert.match(receipts[0].text,/0.9-draft/);assert.match(receipts[3].text,/Missing consent/);
+});

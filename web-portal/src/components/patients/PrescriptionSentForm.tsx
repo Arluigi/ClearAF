@@ -28,6 +28,9 @@ export function prescriptionBlock(chart:LaunchChart):string|null {
   if(!record.identity.attestedInNC||latest?.answers?.physicallyInNC===false)return 'Current affirmative NC attestation is required. The server confirms freshness.';
   return null;
 }
+export function PrescriptionDraftControls({dirty,pending,onDiscard}:{dirty:boolean;pending:boolean;onDiscard:()=>void}) {
+  return dirty?<Button type="button" variant="outline" disabled={pending} onClick={()=>{if(!pending)onDiscard();}}>Discard unsaved prescription</Button>:null;
+}
 export default function PrescriptionSentForm({patientId,chart,onSaved,onDenied,onPendingChange}:{patientId:string;chart:LaunchChart;onSaved:(record:LaunchPrescriptionSent)=>void;onDenied:()=>void;onPendingChange:(pending:boolean)=>void}) {
   const api=useClinicalAPI();const destination=chart.enrollment.case.destination;
   const [draft,setDraft]=useState<PrescriptionDraft>(()=>({drug:'',strength:'',sig:'',sentAt:'',pharmacy:destination?.planId==='care'?{...destination.pharmacy}:{...EMPTY_PHARMACY},confirmed:false,pharmacyConfirmed:false}));
@@ -55,6 +58,7 @@ export default function PrescriptionSentForm({patientId,chart,onSaved,onDenied,o
     </fieldset>
     <p role="status" className="text-sm text-ink-secondary">{state.status==='saved'?'Recorded in the patient chart':frozen?'Save not confirmed; retry preserves the same record and pharmacy snapshot':dirty?'Unsaved prescription record':'No unsaved prescription record'}</p>
     {(error||state.error)&&<p role="alert" className="text-sm">{error||state.error}</p>}
+    <PrescriptionDraftControls dirty={dirty} pending={frozen||busy} onDiscard={()=>{setDraft({drug:'',strength:'',sig:'',sentAt:'',pharmacy:destination?.planId==='care'?{...destination.pharmacy}:{...EMPTY_PHARMACY},confirmed:false,pharmacyConfirmed:false});setDirty(false);setError('');action.reset();}}/>
     <Button variant="outline" type="submit" disabled={!!block||busy||denied||state.status==='saved'}>{busy?'Saving record…':frozen?'Retry same prescription record':'Save already-sent prescription record'}</Button>
   </form>;
 }

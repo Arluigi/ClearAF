@@ -73,7 +73,7 @@ function Workspace() {
         <PatientUrgentReports key={'urgent-' + id} patientId={id} />
         <Tabs value={tab} onValueChange={value => openTab(value as WorkspaceTab)} activationMode="manual">
           <TabsList variant="underline" aria-label="Patient record">{WORKSPACE_TABS.map(value => <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>)}</TabsList>
-          {panel('photos', <div className="space-y-8"><LaunchIntakeReview key={'launch-' + id} patientId={id} kind={params.get('reviewKind')} targetId={params.get('reviewTarget')} /><PatientPhotoHistory key={'photos-' + id} patientId={id} patientName={patient.name} routine={routine.state} onCareDecision={() => setCareRefresh(value => value + 1)} rail={<CareRail patientId={id} routine={routine.state} onOpen={openTab} />} /></div>)}
+          {panel('photos', <div className="space-y-8"><LaunchIntakeReview active={tab === 'photos'} key={'launch-' + id} patientId={id} kind={params.get('reviewKind')} targetId={params.get('reviewTarget')} /><PatientPhotoHistory key={'photos-' + id} patientId={id} patientName={patient.name} routine={routine.state} onCareDecision={() => setCareRefresh(value => value + 1)} rail={<CareRail patientId={id} routine={routine.state} onOpen={openTab} />} /></div>)}
           {panel('routine', <PatientRoutineCare patientId={id} patientName={patient.name} controller={routine.controller} state={routine.state} onFeedback={revisionId => openTab('messages', { referenceType: 'routineRevision', referenceId: revisionId })} />)}
           {panel('check-ins', <PatientCheckIns key={'check-ins-' + id} patientId={id} patientName={patient.name} targetId={params.get('reviewKind') === 'check_in' ? params.get('reviewTarget') : null} onReply={() => openTab('messages')} />)}
           {panel('messages', user ? <ConversationView key={'messages-' + id + '-' + user.id} patientId={id} clinicianId={user.id} initialReference={reference} onConversationChange={ignoreConversation} activeVersion={activeRoutineVersion(routine.state)} /> : null)}
@@ -86,6 +86,10 @@ function Workspace() {
       </>}
   </div></DashboardLayout>;
 }
+function WorkspaceRoute() {
+  const { id } = useParams<{ id: string }>();
+  return <Workspace key={id} />;
+}
 export default function PatientWorkspacePage() {
-  return <Suspense fallback={<p className="p-8" role="status">Opening patient</p>}><Workspace /></Suspense>;
+  return <Suspense fallback={<p className="p-8" role="status">Opening patient</p>}><WorkspaceRoute /></Suspense>;
 }

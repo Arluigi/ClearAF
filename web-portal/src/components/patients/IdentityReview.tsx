@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- Private identity bytes must never enter the image optimizer cache. */
 'use client';
 import * as React from 'react';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useClinicalAPI } from '@/lib/auth';
@@ -20,8 +20,8 @@ export class ProtectedIdentityImages {
   dispose(){this.generation++;this.abort?.abort();if(this.state.data){this.urls.revokeObjectURL(this.state.data.idPhoto);this.urls.revokeObjectURL(this.state.data.selfie);}this.publish({status:'idle',data:null});}
   reviewFailure(error:unknown){
     const status=typeof error==='object'&&error!==null&&'status' in error?error.status:null;
-    if(status===403||status===404||status===409)this.dispose();
-    return status===409?'conflict':status===403||status===404?'denied':'retry';
+    if(status===401||status===403||status===404||status===409)this.dispose();
+    return status===409?'conflict':status===401||status===403||status===404?'denied':'retry';
   }
   async load(){
     this.dispose();const generation=this.generation;const abort=new AbortController();this.abort=abort;this.publish({status:'loading',data:null});
@@ -31,21 +31,24 @@ export class ProtectedIdentityImages {
       if(!Number.isFinite(expiresAt)||expiresAt<=this.now())throw new Error('Expired');
       const blobs=await Promise.all([pair.idPhoto,pair.selfie].map(async image=>{const response=await this.fetchBytes(image.url,{signal:abort.signal,cache:'no-store',referrerPolicy:'no-referrer',credentials:'omit'});if(!response.ok)throw new Error('Unavailable');return response.blob();}));
       if(generation!==this.generation||abort.signal.aborted)return;
+      if(expiresAt<=this.now())throw new Error('Expired during transfer');
       this.publish({status:'ready',data:{idPhoto:this.urls.createObjectURL(blobs[0]),selfie:this.urls.createObjectURL(blobs[1]),expiresAt}});
     }catch{if(generation===this.generation)this.publish({status:'error',data:null});}
   }
 }
-export default function IdentityReview({patientId,identity,revision,onChanged}:{patientId:string;identity:LaunchIdentity|null;revision:number;onChanged:()=>void}) {
+export default function IdentityReview({patientId,identity,revision,onChanged,active=true}:{patientId:string;identity:LaunchIdentity|null;revision:number;onChanged:()=>void;active?:boolean}) {
+  const changed=useRef(onChanged);changed.current=onChanged;
   const api=useClinicalAPI();const [open,setOpen]=useState(false);const [confirmed,setConfirmed]=useState(false);const [message,setMessage]=useState('');const [conflict,setConflict]=useState(false);
   const images=useMemo(()=>new ProtectedIdentityImages(signal=>api.launch().images(patientId,identity!.id,signal)),[api,patientId,identity?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const state=useSyncExternalStore(images.subscribe,images.snapshot,images.snapshot);
-  const action=useMemo(()=>new IdempotentAction<LaunchReviewBody,LaunchReviewResult>(async(id,body)=>{try{return await api.launch().review(patientId,id,body);}catch(error){const failure=images.reviewFailure(error);if(failure!=='retry'){setConflict(true);setOpen(false);setConfirmed(false);if(failure==='denied')onChanged();}throw error;}}),[api,patientId,images,onChanged]);
+  const action=useMemo(()=>new IdempotentAction<LaunchReviewBody,LaunchReviewResult>(async(id,body)=>{try{return await api.launch().review(patientId,id,body);}catch(error){const failure=images.reviewFailure(error);if(failure!=='retry'){setConflict(true);setOpen(false);setConfirmed(false);if(failure==='denied')changed.current();}throw error;}}),[api,patientId,images]);
   const save=useSyncExternalStore(action.subscribe,action.snapshot,action.snapshot);
   useEffect(()=>()=>{images.dispose();action.cancel();},[images,action]);
+  useEffect(()=>{if(!active){images.dispose();setOpen(false);setConfirmed(false);}},[active,images]);
   useEffect(()=>{setConflict(false);setConfirmed(false);setMessage('');},[revision]);
   useEffect(()=>{if(!open||!state.data)return;const timer=setTimeout(()=>void images.load(),Math.max(1000,state.data.expiresAt-Date.now()-15000));return()=>clearTimeout(timer);},[open,state.data,images]);
   if(!identity)return <p>Identity package missing.</p>;
-  const submit=async(outcome:LaunchReviewBody['outcome'])=>{const result=await action.submit({targetType:'identity',targetId:identity.id,expectedRevision:revision,outcome,patientMessage:message.trim()||null});if(result==='saved'){images.dispose();setOpen(false);setConfirmed(false);onChanged();}};
+  const submit=async(outcome:LaunchReviewBody['outcome'])=>{const result=await action.submit({targetType:'identity',targetId:identity.id,expectedRevision:revision,outcome,patientMessage:message.trim()||null});if(result==='saved'){images.dispose();setOpen(false);setConfirmed(false);changed.current();}else if(result==='cancelled'){changed.current();}};
   const frozen=action.frozenBody!==null;const busy=save.status==='saving';
   return <section aria-label="Manual identity review" className="space-y-3 border-t border-rule pt-4">
     <h3 className="font-medium">Identity · {identity.status.replaceAll('_',' ')}</h3><p className="text-sm">Claimed name: {identity.fullName} · Date of birth: {identity.dateOfBirth}</p><p className="meta-mono">NC attestation: {identity.attestedInNC?'Yes':'No'} · {identity.attestedAt}</p>

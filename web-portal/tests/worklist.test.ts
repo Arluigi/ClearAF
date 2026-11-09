@@ -227,3 +227,9 @@ test('mono figures (dates, times, counts) split out of prose lines for font-data
   ]);
   assert.deepEqual(dataSegments('14-day window'), [{ text: '14', data: true }, { text: '-day window', data: false }]);
 });
+
+test('launch review links retain worklist context while omitting clinical flags and patient text',async()=>{
+ const {launchReviewHref}=await import('../src/lib/patient-navigation');
+ const href=launchReviewHref({id:'queue-id',patientId:'patient',patientName:'Synthetic Patient',kind:'identity',targetId:'opaque-id',receivedAt:'2026-11-09T12:00:00Z',flags:['sensitive']} ,'page=2&filter=flagged&medicalHistory=private');
+ const query=new URLSearchParams(href.split('?')[1]);assert.equal(query.get('reviewKind'),'identity');assert.equal(query.get('filter'),'flagged');assert.equal(query.get('page'),'2');assert.equal(query.has('medicalHistory'),false);assert.ok(!href.includes('sensitive'));
+});
