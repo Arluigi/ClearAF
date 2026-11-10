@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Shared names only: never load dotenv files or hold secret values in shell variables.
+CLOUDRUN_PROJECT=unzit-prod-514222
+CLOUDRUN_REGION=us-east1
+CLOUDRUN_SERVICE=unzit-api
+CLOUDRUN_REPOSITORY=unzit
+CLOUDRUN_RUNTIME_NAMES=(
+  DATABASE_URL
+  SUPABASE_URL
+  SUPABASE_ANON_KEY
+  SUPABASE_SERVICE_ROLE_KEY
+  FRONTEND_URL
+  LICENSED_STATES
+  MINIMUM_PATIENT_AGE
+  ENROLLMENT_ENFORCEMENT
+  SEND_EMAIL_HOOK_SECRET
+  PAUBOX_API_KEY
+  PAUBOX_API_USERNAME
+  PAUBOX_FROM
+)
+
+cloudrun_secret_name() {
+  printf '%s' "$1" | tr '[:upper:]_' '[:lower:]-'
+}

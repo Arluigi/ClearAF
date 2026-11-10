@@ -1,0 +1,20 @@
+# Allowlist doubles as gcloud builds submit --ignore-file (gitignore-compatible patterns).
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!tsconfig.json
+!prisma/
+!prisma/schema.prisma
+!src/
+!src/**
+# Defense in depth, including files nested below src.
+**/.env*
+**/node_modules
+**/tests
+**/*.test.ts
+**/coverage
+**/test-results
+**/dist
+src/scripts

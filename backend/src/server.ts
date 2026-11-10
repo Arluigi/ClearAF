@@ -8,6 +8,7 @@ import { enrollmentStartupLog } from './services/enrollmentRules';
 
 // Import routes
 import authRoutes from './routes/auth-supabase';
+import sendEmailHook from './routes/send-email-hook';
 import userRoutes from './routes/users';
 import appointmentRoutes from './routes/appointments';
 import messageRoutes from './routes/messages';
@@ -55,6 +56,8 @@ app.use(cors({
 // Stripe signature verification requires the exact bytes, before global JSON parsing.
 app.post('/api/launch/billing/webhook',express.raw({type:'application/json',limit:'256kb'}),launchBillingWebhook);
 app.get('/api/launch/billing/return',launchBillingReturn);
+// Signed auth hook must receive raw bytes before JSON parsing; no patient JWT.
+app.use('/api/auth-hooks/send-email', sendEmailHook);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
