@@ -39,6 +39,20 @@ struct PhotoReviewSheet: View {
     @State private var image: UIImage?
     @State private var confirmingDiscard = false
 
+#if DEBUG
+    /// The offline capture inspector owns a separate synthetic account; preserve the loader's account guard.
+    init(draft: Binding<PhotoReviewDraft>, saving: Bool, onRetake: @escaping () -> Void,
+         onDiscard: @escaping () -> Void, onSave: @escaping () -> Void,
+         launchSlot: LaunchPhotoSlot? = nil, mockAccess: AccountAccess? = nil) {
+        _draft = draft
+        self.saving = saving
+        self.onRetake = onRetake
+        self.onDiscard = onDiscard
+        self.onSave = onSave
+        self.launchSlot = launchSlot
+        _images = State(initialValue: PhotoImageLoader(access: mockAccess ?? APIService.shared.access))
+    }
+#endif
     var body: some View {
         NavigationStack {
             ScrollView {

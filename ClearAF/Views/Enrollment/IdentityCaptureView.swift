@@ -58,6 +58,19 @@ struct IdentityCaptureView: View {
     @State private var camera: IdentityCameraKind?
     @State private var error: String?
     @State private var processing = false
+#if DEBUG
+    init(repository: LaunchEnrollmentRepository, ticket: AccountAccess.Ticket, mockReview: Bool = false) {
+        self.repository = repository
+        self.ticket = ticket
+        if mockReview {
+            _fullName = State(initialValue: "Synthetic Adult")
+            _dateOfBirth = State(initialValue: ScreeningDates.date(from: "1990-01-01")!)
+            _birthSelected = State(initialValue: true)
+            _idPhoto = State(initialValue: CaptureReviewMockContent.image(label: "Government ID"))
+            _selfie = State(initialValue: CaptureReviewMockContent.image(label: "Live selfie preview"))
+        }
+    }
+#endif
     var body: some View {
         LaunchPage(title: repository.catalog?.identityGuidance?.title ?? "Verify your identity") {
             if let guidance = repository.catalog?.identityGuidance {

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import ClearAF
 
@@ -23,10 +24,28 @@ struct UNZITLaunchTests {
             await session.load()
             #expect(session.loaded)
             #expect(session.enrollment.state != nil, "Missing mock case for \(route.rawValue)")
-            #expect(session.enrollment.catalog?.questionnaireVersion == "0.9-draft")
+            #expect(session.enrollment.catalog?.questionnaireVersion == (route.isCaptureReview ? "2.0-pending-review" : "0.9-draft"))
             #expect(session.enrollment.catalog?.consents.count == 4)
             #expect(session.enrollment.error == nil)
         }
+    }
+    @Test func captureReviewGuidanceMatchesPendingReviewCatalog() throws {
+        let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("backend/src/content/catalogs/2.0-pending-review.json")
+        let catalog = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
+        for field in ["identityGuidance", "photoGuidance"] {
+            let expected = try JSONSerialization.data(withJSONObject: try #require(catalog[field]), options: .sortedKeys)
+            let actual = try JSONSerialization.data(withJSONObject: try #require(CaptureReviewMockContent.guidance[field]), options: .sortedKeys)
+            #expect(actual == expected, "Review fixture drifted from \(field)")
+        }
+    }
+    @Test @MainActor func captureReviewImageUsesItsSyntheticAccount() async throws {
+        let session = LaunchMockSession(route: .reviewFront)
+        let loader = PhotoImageLoader(access: session.access)
+        let bytes = CaptureReviewMockContent.image(label: "Review test")
+        let image = await loader.image(for: "mock-review", maxPixelSize: 600, data: { bytes })
+        #expect(image != nil)
+        #expect(loader.cachedCount == 1)
     }
     @Test func paidReviewCopyPreservesTurnaroundAndNeverClaimsNoCharge() {
         #expect(LaunchCaseReceipt.copy(status: .submitted, refund: nil).contains("1 to 2 business days"))
