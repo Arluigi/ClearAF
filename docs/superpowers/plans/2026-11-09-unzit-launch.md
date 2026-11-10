@@ -1,5 +1,27 @@
 # UNZIT launch implementation plan — December 1, 2026
 
+
+## Amendment — clinician enrollment review, 2026-11-10
+
+This amendment supersedes the enrollment order above **only for new catalog `2.2-pending-review` cases**. Existing 2.0/2.1 publications, consent legal bodies and started cases remain immutable. Requested implementation is authorized by the clinician review brief; no further design approval is required.
+
+**Order:** account → start/quick eligibility E1–E4 → four consents on one screen → plan/payment → ID/selfie and NC attestation → grouped medical history → clinical photos → pharmacy/shipping → submitted. Catalog start copy: “About 15 minutes. You’ll need your ID and good lighting.” Progress uses named steps and native iOS controls, never scores. Identity remains mandatory before submission and clinician approval. An identity rejection after payment must use the existing durable full-refund rejection path; uploaded ID appears in the clinician identity queue even before case submission.
+
+**Compatibility and persistence:** gate changed ordering by the case’s pinned questionnaire version, retain v1/2.0/2.1 behavior and all per-document consent version/hash receipts. Add optional typed enrollment-flow catalog metadata and optional server resume metadata, with revision-controlled/idempotent writes. Reuse immutable intake revisions, private identity/capture storage and draft photo sets; fill gaps for draft answers, current topic and photo associations. Server state wins after restart or device change; preserve drafts on errors and surface revision conflicts. Clients continue using the single authenticated API; no direct database/Storage access. Add database fields only through a new pinned-CLI migration if required.
+
+**Medical topics:** catalog-driven six groups: about you, your acne, treatment history, medicines and allergies, health conditions, routine and preferences. Retain all v2 conditional questions, safety exits, screening and attestations; keep capture and destination questions in their own later steps. Quick E1–E4 screening is provisional; age and physical NC are confirmed by the later identity check and medical screening remains authoritative. Never infer a verified identity from successful payment.
+
+**Legal conflict for counsel:** the existing consent language says ineligible patients are not charged. Payment now precedes identity and full medical screening, so some ineligible patients have already paid and receive a full refund. Do not edit the four 2.x consent legal bodies, hashes or physician/license text. Inventory each affected line with a proposed “refunded” replacement in the handoff; counsel approval is a release prerequisite.
+
+### Implementation and acceptance
+
+- [x] Phase 1: failing catalog/copy tests → immutable 2.2 copy and patient-facing physician-name substitutions (except legal documents) → focused tests/review → separate commit with requested coauthor trailer.
+- [x] Phase 2 backend: failing tests for new ordering, resume/revisions, payment without ID, paid identity rejection/refund and approval gate; implement additive contract/service changes and update local integration live script for 2.2.
+- [x] Phase 2 iOS: failing routing/resume/grouping/consent tests; implement catalog start, native named progress, one expandable four-consent screen, server-backed drafts and six branched medical topics; update Codable models for all additive fields.
+- [x] Phase 2 portal: align shared types, pending identity queue/review and rejection/refund copy; verify approval remains blocked until identity approval.
+- [x] Run care-access and API-contract reviewers before phase commits. Run backend test/build, portal test/typecheck/lint, iOS unit tests with `/tmp/clearaf-unzit-int-build` and xcbeautify, Release simulator build, then one loopback integration live pass using 2.2; rerun focused checks only after fixes.
+- [x] Generate a new compact clinician pack at `~/Desktop/unzit-enrollment-flow-review.pdf` (≤14 pages), one page per distinct requested patient screen, from the actual 2.2 catalog and UI; render and inspect before delivery. Report commits, every replacement, legal proposals, evidence and limitations in ≤30 lines.
+
 ## Orchestrator amendments (Nov 9) — these OVERRIDE anything below that conflicts
 
 Scope is a closed launch in three weeks. Prefer the simplest design that is safe.

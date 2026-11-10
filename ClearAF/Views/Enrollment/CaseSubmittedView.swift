@@ -40,7 +40,7 @@ struct CaseFinalReviewView: View {
             if repository.state?.case.intakeV2?.evaluation.hold == true, let notice = repository.catalog?.intakeV2?.holdNotice { Text(notice) }
             if let state = repository.state {
                 Text(state.case.photoSet.map { "\($0.items.count) photos shared" } ?? "Photos are not complete").font(Letterpress.data(13))
-                Text(state.case.destination == nil ? (state.case.intakeV2 != nil && state.case.planId == .care ? "Pharmacy can be added before a prescription is sent." : "Destination needed") : "Destination saved")
+                Text(state.case.destination == nil ? (!Enrollment22Routing.usesNewOrder(state) && state.case.intakeV2 != nil && state.case.planId == .care ? "Pharmacy can be added before a prescription is sent." : "Destination needed") : "Destination saved")
                 Text("Review within 1 to 2 business days.")
                 Button(repository.saving ? "Submitting…" : "Submit for clinical review") { Task { _ = await repository.submitCase(ticket: ticket) } }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!repository.canSubmitCase || repository.saving)
                 if !repository.canSubmitCase { Text("Complete the required photos and save your destination before submitting.").font(Letterpress.ui(13)) }
@@ -54,7 +54,7 @@ extension LaunchEnrollmentRepository {
         guard let state, let set = state.case.photoSet, IntakeV2Routing.canSubmitPhotoSet(set, previouslySubmitted: state.case.submittedAt != nil) else { return false }
         if let intake = state.case.intakeV2 {
             guard state.case.identity != nil, !IntakeV2Routing.needsIdentity(state.case.identity) else { return false }
-            return [.medicalHistory, .destination, .photos, .needsChanges].contains(state.case.status) && intake.evaluation.missingRequired.isEmpty && intake.evaluation.exitPage == nil && state.membership?.status == .paidPendingReview && LaunchPhotoRules.complete(set) && (state.case.planId == .care || state.case.destination != nil)
+            return [.medicalHistory, .destination, .photos, .needsChanges].contains(state.case.status) && intake.evaluation.missingRequired.isEmpty && intake.evaluation.exitPage == nil && state.membership?.status == .paidPendingReview && LaunchPhotoRules.complete(set) && (Enrollment22Routing.usesNewOrder(state) ? state.case.destination != nil : (state.case.planId == .care || state.case.destination != nil))
         }
         guard [.destination, .photos, .needsChanges].contains(state.case.status), state.case.destination != nil else { return false }
         return LaunchPhotoRules.complete(set)

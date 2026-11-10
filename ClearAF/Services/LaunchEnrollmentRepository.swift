@@ -118,13 +118,13 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         try bytes.write(to: file.deletingLastPathComponent().appendingPathComponent("intake-v2.json"), options: [.atomic, .completeFileProtection])
         intakeV2Draft = answers; intakeV2DraftRevision = revision
     }
-    @discardableResult func saveIntakeV2(_ answers: [String: IntakeValue], ticket: AccountAccess.Ticket, reapply: Bool = false) async -> Bool {
+    @discardableResult func saveIntakeV2(_ answers: [String: IntakeValue], ticket: AccountAccess.Ticket, reapply: Bool = false, advance: Bool? = nil) async -> Bool {
         guard let current = state, IntakeV2Routing.isV2(current.case.questionnaireVersion) else { return false }
         guard reapply || intakeV2DraftRevision == nil || intakeV2DraftRevision == current.case.revision else { return false }
-        struct Body: Encodable { let expectedRevision: Int; let questionnaireVersion: String; let answers: [String: IntakeValue] }
+        struct Body: Encodable { let expectedRevision: Int; let questionnaireVersion: String; let answers: [String: IntakeValue]; let advance: Bool? }
         do {
             let cleaned = IntakeV2Rules.cleaned(answers, questions: (catalog?.eligibilityQuestions ?? []) + (catalog?.medicalQuestions ?? []))
-            let request = try LaunchRequest.json("/enrollment/\(current.case.id.uuidString.lowercased())/medical/\(UUID().uuidString.lowercased())", Body(expectedRevision: current.case.revision, questionnaireVersion: current.case.questionnaireVersion, answers: cleaned))
+            let request = try LaunchRequest.json("/enrollment/\(current.case.id.uuidString.lowercased())/medical/\(UUID().uuidString.lowercased())", Body(expectedRevision: current.case.revision, questionnaireVersion: current.case.questionnaireVersion, answers: cleaned, advance: advance))
             guard await mutate(request, ticket: ticket), let latest = state else { return false }
             intakeV2DraftRevision = latest.case.revision
             try stageIntakeV2(cleaned, ticket: ticket)

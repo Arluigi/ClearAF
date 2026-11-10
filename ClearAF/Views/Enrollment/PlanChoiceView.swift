@@ -10,7 +10,7 @@ struct PlanChoiceView: View {
     var body: some View {
         LaunchPage(title: "Choose your care plan") {
             if let catalog = enrollment.catalog {
-                ForEach(catalog.plans.filter { enrollment.state?.case.intakeV2 == nil || $0.id.rawValue == enrollment.state?.case.intakeV2?.answers["planId"]?.string }) { plan in
+                ForEach(catalog.plans.filter { Enrollment22Routing.usesNewOrder(enrollment.state) || enrollment.state?.case.intakeV2 == nil || $0.id.rawValue == enrollment.state?.case.intakeV2?.answers["planId"]?.string }) { plan in
                     VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                         LetterpressRadioRow(title: plan.name, selected: selected == plan.id) { selected = plan.id }
                         Text(LaunchBillingCopy.price(cents: plan.amountCents, currency: plan.currency) + " / month").font(Letterpress.data(24))
@@ -20,7 +20,7 @@ struct PlanChoiceView: View {
                     }
                 }
                 Text("Your subscription renews monthly until you cancel. The billing period begins when payment is confirmed. Clinical care and check-in cadence begin only after your clinician approves your identity and medical information.")
-                if enrollment.state?.case.intakeV2 != nil && billing.checkoutRequired { NavigationLink("Review intake before payment") { IntakeV2View(repository: enrollment, ticket: ticket) }.buttonStyle(.letterpress(.outlined, fullWidth: true)) }
+                if !Enrollment22Routing.usesNewOrder(enrollment.state) && enrollment.state?.case.intakeV2 != nil && billing.checkoutRequired { NavigationLink("Review intake before payment") { IntakeV2View(repository: enrollment, ticket: ticket) }.buttonStyle(.letterpress(.outlined, fullWidth: true)) }
                 if !billing.checkoutRequired {
                     PaymentStatusView(billing: billing, enrollment: enrollment, ticket: ticket)
                 } else {
@@ -40,8 +40,15 @@ struct PlanChoiceView: View {
             }
             if let error = billing.error { Text(error).foregroundStyle(Letterpress.error) }
         }
-        .task { selected = enrollment.state?.case.planId ?? enrollment.state?.case.intakeV2?.answers["planId"].flatMap { LaunchPlanID(rawValue: $0.string) }; _ = await billing.refresh(ticket: ticket) }
+        .task { selected = enrollment.state?.case.enrollmentProgress?.selectedPlan ?? enrollment.state?.case.planId ?? enrollment.state?.case.intakeV2?.answers["planId"].flatMap { LaunchPlanID(rawValue: $0.string) }; _ = await billing.refresh(ticket: ticket) }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refresh() } }
+        .task(id: selected) {
+            guard Enrollment22Routing.usesNewOrder(enrollment.state), let selected, selected != enrollment.state?.case.enrollmentProgress?.selectedPlan else { return }
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+            while enrollment.saving { do { try await Task.sleep(for: .milliseconds(80)) } catch { return } }
+            guard !Task.isCancelled else { return }
+            _ = await enrollment.saveProgress(step: "payment", selectedPlan: selected, ticket: ticket)
+        }
         .onChange(of: enrollment.catalog?.settingsVersion) { _, _ in selected = nil }
     }
     private func checkout(_ catalog: LaunchCatalog) {

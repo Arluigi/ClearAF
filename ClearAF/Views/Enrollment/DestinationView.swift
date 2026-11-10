@@ -28,6 +28,10 @@ struct DestinationView: View {
     @State private var phone = ""
     @State private var saved = false
     @State private var initialized = false
+    @State private var draftRevision: Int?
+    @Environment(\.scenePhase) private var scenePhase
+    private var conflict: Bool { Enrollment22Routing.usesNewOrder(repository.state) && draftRevision != nil && draftRevision != repository.state?.case.revision }
+    private var partial: LaunchEnrollmentProgress.DestinationDraft { .init(planId: planId, name: name, line1: line1, line2: line2, city: city, state: state, postalCode: postalCode, phone: phone) }
     private var destination: LaunchDestination {
         if planId == .care { return .care(.init(name: name, addressLine1: line1, addressLine2: line2.isEmpty ? nil : line2, city: city, state: state, postalCode: postalCode, phone: phone)) }
         return .allIn(.init(recipient: name, line1: line1, line2: line2.isEmpty ? nil : line2, city: city, state: "NC", postalCode: postalCode))
@@ -49,24 +53,51 @@ struct DestinationView: View {
             field("ZIP code", value: $postalCode).keyboardType(.numbersAndPunctuation)
             if planId == .care { field("Pharmacy phone", value: $phone).keyboardType(.phonePad) }
             Button(repository.saving ? "Saving…" : "Save destination") {
-                Task { saved = await repository.saveDestination(destination, ticket: ticket); if saved { onSaved() } }
-            }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!LaunchDestinationValidation.valid(destination) || repository.saving)
+                Task { saved = await repository.saveDestination(destination, ticket: ticket); if saved { draftRevision = repository.state?.case.revision; onSaved() } }
+            }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!LaunchDestinationValidation.valid(destination) || repository.saving || conflict)
             if !LaunchDestinationValidation.valid(destination) { Text("Enter the complete name, address and ZIP code\(planId == .care ? ", including the pharmacy phone number" : "").").font(Letterpress.ui(13)) }
+            if Enrollment22Routing.usesNewOrder(repository.state) {
+                Button("Save and come back") { Task { _ = await savePartial() } }.buttonStyle(.letterpress(.outlined, fullWidth: true)).disabled(repository.saving || conflict)
+            }
             if saved { Text("Your destination was saved to your enrollment.") }
+            if conflict {
+                Text("Your saved destination changed. Review it before continuing.")
+                Button("Use current saved destination") { initialized = false; populate() }.buttonStyle(.letterpress(.outlined, fullWidth: true))
+            }
             if repository.canSubmitCase {
                 NavigationLink("Review and submit case") { CaseFinalReviewView(repository: repository, ticket: ticket) }.buttonStyle(.letterpress(.outlined, fullWidth: true))
             }
             if let error = repository.error { Text(error).foregroundStyle(Letterpress.error) }
         }
         .onAppear { populate() }
+        .task(id: partial) {
+            guard initialized, Enrollment22Routing.usesNewOrder(repository.state) else { return }
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+            _ = await savePartial()
+        }
+        .onChange(of: scenePhase) { _, phase in if phase != .active && initialized { Task { _ = await savePartial() } } }
+    }
+    private func savePartial() async -> Bool {
+        guard Enrollment22Routing.usesNewOrder(repository.state) else { return false }
+        while repository.saving { do { try await Task.sleep(for: .milliseconds(80)) } catch { return false } }
+        guard !Task.isCancelled, !conflict, [.destination, .needsChanges].contains(repository.state?.case.status) else { return false }
+        if repository.state?.case.enrollmentProgress?.destinationDraft == partial { return true }
+        let saved = await repository.saveProgress(step: "destination", destinationDraft: partial, ticket: ticket)
+        if saved { draftRevision = repository.state?.case.revision }
+        return saved
     }
     private func field(_ label: String, value: Binding<String>) -> some View { TextField(label, text: value).letterpressField(isEmpty: value.wrappedValue.isEmpty) }
     private func populate() {
-        guard !initialized else { return }; initialized = true
+        guard !initialized else { return }; draftRevision = repository.state?.case.revision; initialized = true
+        if let progress = repository.state?.case.enrollmentProgress, progress.step == "destination", let draft = progress.destinationDraft, draft.planId == planId {
+            name = draft.name; line1 = draft.line1; line2 = draft.line2; city = draft.city; state = draft.state; postalCode = draft.postalCode; phone = draft.phone
+            return
+        }
         switch repository.state?.case.destination {
         case .care(let p) where planId == .care: name = p.name; line1 = p.addressLine1; line2 = p.addressLine2 ?? ""; city = p.city; state = p.state; postalCode = p.postalCode; phone = p.phone
         case .allIn(let a) where planId == .allIn: name = a.recipient; line1 = a.line1; line2 = a.line2 ?? ""; city = a.city; state = a.state; postalCode = a.postalCode
-        default: break
+        default:
+            if let draft = repository.state?.case.enrollmentProgress?.destinationDraft, draft.planId == planId { name = draft.name; line1 = draft.line1; line2 = draft.line2; city = draft.city; state = draft.state; postalCode = draft.postalCode; phone = draft.phone }
         }
     }
 }

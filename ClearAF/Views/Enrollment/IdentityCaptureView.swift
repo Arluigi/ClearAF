@@ -58,6 +58,16 @@ struct IdentityCaptureView: View {
     @State private var camera: IdentityCameraKind?
     @State private var error: String?
     @State private var processing = false
+    @State private var restoredDraft = false
+    @State private var draftRevision: Int?
+    @State private var stoppingReason: LaunchIdentityIneligibleReason?
+    @State private var uploadedID: Data?
+    @State private var uploadedSelfie: Data?
+    @Environment(\.scenePhase) private var scenePhase
+    private struct DraftSnapshot: Equatable { let fullName: String; let dateOfBirth: String?; let physicallyInNC: Bool; let idPhoto: Data?; let selfie: Data? }
+    private var draftSnapshot: DraftSnapshot { .init(fullName: fullName, dateOfBirth: birthSelected ? birthString : nil, physicallyInNC: inNC, idPhoto: idPhoto, selfie: selfie) }
+    private var conflict: Bool { isNewOrder && draftRevision != nil && draftRevision != repository.state?.case.revision }
+    private var isNewOrder: Bool { Enrollment22Routing.usesNewOrder(repository.state) }
 #if DEBUG
     init(repository: LaunchEnrollmentRepository, ticket: AccountAccess.Ticket, mockReview: Bool = false) {
         self.repository = repository
@@ -103,25 +113,88 @@ struct IdentityCaptureView: View {
             Toggle(repository.catalog?.identityGuidance?.attestation ?? "I can read my name and date of birth, and both photos clearly show my face.", isOn: $readable).toggleStyle(.letterpressCheck)
             Toggle(repository.catalog?.identityGuidance?.item("nc_attestation", legacy: "I am physically in North Carolina right now.") ?? "I am physically in North Carolina right now.", isOn: $inNC).toggleStyle(.letterpressCheck)
             if !inNC { Text(copy("ncWarning", "You must be physically in North Carolina for this care. If you are elsewhere, seek local care.")).font(Letterpress.ui(13)) }
+            if isNewOrder {
+                Text("If you are under 18 or outside North Carolina, stop enrollment and receive a full refund.").font(Letterpress.ui(13))
+                Button("I’m outside North Carolina") { stoppingReason = .outsideNC }.buttonStyle(.letterpress(.underline)).disabled(repository.saving)
+                Button("I’m under 18") { stoppingReason = .under18 }.buttonStyle(.letterpress(.underline)).disabled(repository.saving)
+            }
             if let error { Text(error).foregroundStyle(Letterpress.error) }
+            if conflict {
+                Text("Your saved identity draft changed. Review it before continuing.")
+                Button("Use current saved identity draft") { restoredDraft = false; Task { await restoreIdentityDraft() } }.buttonStyle(.letterpress(.outlined, fullWidth: true))
+            }
             if processing { Text("Preparing your photo…") }
             Button(repository.saving ? "Uploading…" : "Upload and continue", action: submit)
                 .buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!canSubmit || repository.saving || processing)
             if !canSubmit { Text(copy("completionHint", "Add both readable photos, confirm your date of birth, and attest your current location to continue. UNZIT is for adults 18+.")).font(Letterpress.ui(13)) }
+            if isNewOrder {
+                Button("Save and come back") { Task { _ = await savePartialIdentity() } }.buttonStyle(.letterpress(.outlined, fullWidth: true)).disabled(repository.saving || processing)
+            }
             Button("Open camera settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.buttonStyle(.letterpress(.underline))
         }
+        .confirmationDialog("Stop enrollment and request a full refund?", isPresented: Binding(get: { stoppingReason != nil }, set: { if !$0 { stoppingReason = nil } }), titleVisibility: .visible, presenting: stoppingReason) { reason in
+            Button("Stop and refund my payment", role: .destructive) {
+                stoppingReason = nil
+                Task { _ = await repository.stopIdentityEnrollment(reason: reason, ticket: ticket) }
+            }
+            Button("Keep enrolling", role: .cancel) { stoppingReason = nil }
+        } message: { _ in Text("Your enrollment will stop and your payment will be refunded in full.") }
         .sheet(isPresented: $showingIDLibrary) { PhotoLibraryPicker { receive($0, kind: .id) } }
         .fullScreenCover(item: $camera) { kind in IdentityNativeCamera(kind: kind) { receive($0, kind: kind) } }
         .onChange(of: fullName) { _, _ in attemptID = UUID() }
         .onChange(of: dateOfBirth) { _, _ in attemptID = UUID() }
         .onChange(of: inNC) { _, _ in attemptID = UUID() }
         .onChange(of: repository.state?.case.revision) { _, _ in attemptID = UUID() }
-        // Identity bytes exist only in this account-bound view state; removal/signout releases them.
+        .task { await restoreIdentityDraft() }
+        .task(id: draftSnapshot) {
+            guard restoredDraft, isNewOrder else { return }
+            do { try await Task.sleep(for: .milliseconds(450)) } catch { return }
+            _ = await savePartialIdentity()
+        }
+        .onChange(of: scenePhase) { _, phase in if phase != .active && restoredDraft && isNewOrder { Task { _ = await savePartialIdentity() } } }
+        // Draft photos are kept in private server storage; view bytes are released on sign-out.
         // Do not purge on camera presentation: a full-screen picker may make its presenter disappear.
+    }
+    private func restoreIdentityDraft() async {
+        guard !restoredDraft else { return }
+        guard isNewOrder, let draft = repository.state?.case.enrollmentProgress?.identityDraft else { draftRevision = repository.state?.case.revision; restoredDraft = true; return }
+        fullName = draft.fullName; inNC = draft.physicallyInNC
+        if let value = draft.dateOfBirth, let date = ScreeningDates.date(from: value) { dateOfBirth = date; birthSelected = true }
+        idPhoto = await readDraftImage(draft.idPhoto); selfie = await readDraftImage(draft.selfie)
+        uploadedID = idPhoto; uploadedSelfie = selfie
+        if (draft.idPhoto != nil && idPhoto == nil) || (draft.selfie != nil && selfie == nil) { error = "Your saved photos could not be loaded. Refresh your enrollment and try again." }
+        // Re-confirm sharpness and readability after reopening the saved photos.
+        readable = false; draftRevision = repository.state?.case.revision; restoredDraft = true
+    }
+    private func readDraftImage(_ image: LaunchEnrollmentProgress.SignedImage?) async -> Data? {
+        guard let image, let expiry = LaunchDates.instant(image.expiresAt), expiry > .now,
+              let url = URL(string: image.url), url.scheme == "https" || (url.scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(url.host ?? "")),
+              APIService.shared.access.snapshot() == ticket else { return nil }
+        let session = AccountNetwork.session()
+        defer { session.invalidateAndCancel() }
+        do {
+            var request = URLRequest(url: url); request.cachePolicy = .reloadIgnoringLocalCacheData
+            let (bytes, response) = try await session.data(for: request)
+            guard APIService.shared.access.snapshot() == ticket, !Task.isCancelled,
+                  (response as? HTTPURLResponse)?.statusCode == 200, bytes.count <= LaunchIdentityInput.imageLimit else { return nil }
+            return try LaunchIdentityInput.jpeg(bytes)
+        } catch { return nil }
+    }
+    private func savePartialIdentity() async -> Bool {
+        guard isNewOrder, restoredDraft else { return false }
+        while repository.saving { do { try await Task.sleep(for: .milliseconds(80)) } catch { return false } }
+        guard !Task.isCancelled, !conflict, [.identity, .needsChanges].contains(repository.state?.case.status) else { return false }
+        let snapshot = draftSnapshot
+        let current = repository.state?.case.enrollmentProgress?.identityDraft
+        if current?.fullName == snapshot.fullName && current?.dateOfBirth == snapshot.dateOfBirth && current?.physicallyInNC == snapshot.physicallyInNC && snapshot.idPhoto == uploadedID && snapshot.selfie == uploadedSelfie { return true }
+        let saved = await repository.saveIdentityDraft(attemptId: UUID(), fullName: snapshot.fullName, dateOfBirth: snapshot.dateOfBirth, physicallyInNC: snapshot.physicallyInNC, idPhoto: snapshot.idPhoto == uploadedID ? nil : snapshot.idPhoto, selfie: snapshot.selfie == uploadedSelfie ? nil : snapshot.selfie, ticket: ticket)
+        if saved { uploadedID = snapshot.idPhoto; uploadedSelfie = snapshot.selfie; draftRevision = repository.state?.case.revision; error = nil }
+        else { error = "Your identity draft could not be saved online. Keep this screen open and try again." }
+        return saved
     }
     private func copy(_ key: String, _ legacy: String) -> String { repository.catalog?.identityGuidance?.text(key, legacy: legacy) ?? legacy }
     private var birthString: String { ScreeningDates.string(from: dateOfBirth) }
-    private var canSubmit: Bool { birthSelected && LaunchIdentityInput.valid(fullName: fullName, dateOfBirth: birthString, physicallyInNC: inNC, readable: readable, idPhoto: idPhoto, selfie: selfie) }
+    private var canSubmit: Bool { !conflict && birthSelected && LaunchIdentityInput.valid(fullName: fullName, dateOfBirth: birthString, physicallyInNC: inNC, readable: readable, idPhoto: idPhoto, selfie: selfie) }
     @ViewBuilder private func identityImage(_ bytes: Data?, title: String, previewLabel: String) -> some View {
         Text(title).font(Letterpress.ui(17, weight: .medium))
         if let bytes, let image = UIImage(data: bytes) {

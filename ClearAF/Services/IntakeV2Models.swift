@@ -7,11 +7,13 @@ enum IntakeV2Routing {
         return isV2(state.case.questionnaireVersion) && catalog.questionnaireVersion == state.case.questionnaireVersion && catalog.intakeV2 != nil
     }
     static func usesQuestionnaire(_ state: LaunchEnrollmentResponse) -> Bool {
+        if state.case.questionnaireVersion == "2.2-pending-review" { return [.medicalHistory, .needsChanges].contains(state.case.status) }
         guard isV2(state.case.questionnaireVersion), ![.payment, .submitted, .approved, .rejected].contains(state.case.status) else { return false }
         return state.case.status != .consents || (state.consents.count == 4 && state.consents.allSatisfy { $0.acceptedAt != nil })
     }
     static func showsFinalReview(_ state: LaunchEnrollmentResponse) -> Bool {
-        state.case.status != .needsChanges && state.membership?.status == .paidPendingReview && state.case.intakeV2?.evaluation.missingRequired.isEmpty == true
+        if state.case.questionnaireVersion == "2.2-pending-review" { return false }
+        return state.case.status != .needsChanges && state.membership?.status == .paidPendingReview && state.case.intakeV2?.evaluation.missingRequired.isEmpty == true
     }
     static func needsIdentity(_ identity: LaunchIdentity?) -> Bool { identity == nil || identity?.status == .needsChanges || identity?.status == .rejected }
     static func canSubmitPhotoSet(_ set: LaunchPhotoSet, previouslySubmitted: Bool) -> Bool {

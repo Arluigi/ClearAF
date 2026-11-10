@@ -16,7 +16,10 @@ struct ClinicalPhotoSetView: View {
     let requiredSlots: [LaunchPhotoSlot]
     var serverSet: LaunchPhotoSet? = nil
     var guidance: LaunchPhotoGuidance? = nil
+    var confirmationPrompt: String? = nil
+    var initialConfirmation = false
     var onContinue: (LaunchPhotoSet) -> Void = { _ in }
+    @State private var confirmed = false
     @State private var capturing: LaunchPhotoSlot?
     @State private var review: PhotoReviewDraft?
     @State private var localError: String?
@@ -55,15 +58,16 @@ struct ClinicalPhotoSetView: View {
                     LetterpressRule()
                 }
             }
+            if let confirmationPrompt { Toggle(confirmationPrompt, isOn: $confirmed).toggleStyle(.letterpressCheck) }
             Button(repository.saving ? "Sharing…" : "Continue") { if let set = repository.photoSet { onContinue(set) } }
-                .buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!repository.isComplete || repository.saving)
+                .buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!repository.isComplete || repository.saving || (confirmationPrompt != nil && !confirmed))
             if !repository.isComplete { Text(guidance?.text("completionHint", legacy: "Share every required angle before continuing. A photo saved only on this device is not yet part of your clinical photo set.") ?? "Share every required angle before continuing. A photo saved only on this device is not yet part of your clinical photo set.").font(Letterpress.ui(13)) }
             if let error = localError ?? repository.error { Text(error).foregroundStyle(Letterpress.error) }
             if repository.error != nil || repository.associationNeedsRetry, !repository.isReadOnly {
                 Button("Retry photo set update") { Task { _ = await repository.retryAssociation(ticket: ticket) } }.buttonStyle(.letterpress(.outlined, fullWidth: true)).disabled(repository.saving)
             }
         }
-        .onAppear { resume() }
+        .onAppear { resume(); confirmed = initialConfirmation }
         .onChange(of: serverSet) { _, _ in resume() }
         .onChange(of: requiredSlots) { _, _ in resume() }
         .sheet(item: $capturing, onDismiss: { review = nil }) { slot in
@@ -104,8 +108,14 @@ struct EnrollmentClinicalPhotosView: View {
     }
     var body: some View {
         if let state = enrollment.state, let catalog = enrollment.catalog {
-            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: state.case.id, purpose: .enrollment, requiredSlots: state.case.intakeV2?.evaluation.requiredPhotoSlots ?? LaunchPhotoRules.required(sites: state.case.medicalHistory.M6 ?? []), serverSet: correctionSet(state), guidance: catalog.photoGuidance) { _ in
-                Task { _ = await enrollment.refresh(ticket: ticket) }
+            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: state.case.id, purpose: .enrollment, requiredSlots: state.case.intakeV2?.evaluation.requiredPhotoSlots ?? LaunchPhotoRules.required(sites: state.case.medicalHistory.M6 ?? []), serverSet: correctionSet(state), guidance: catalog.photoGuidance, confirmationPrompt: Enrollment22Routing.usesNewOrder(state) ? catalog.medicalQuestions.first(where: { $0.id == "F2" })?.prompt : nil, initialConfirmation: state.case.intakeV2?.answers["F2"]?.checked == true) { _ in
+                Task {
+                    if Enrollment22Routing.usesNewOrder(state) {
+                        var answers = enrollment.state?.case.intakeV2?.answers ?? [:]; answers["F2"] = .bool(true)
+                        guard await enrollment.saveIntakeV2(answers, ticket: ticket, reapply: true, advance: true) else { return }
+                    }
+                    _ = await enrollment.refresh(ticket: ticket)
+                }
             }
         } else {
             ProgressView()

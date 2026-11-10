@@ -1,17 +1,18 @@
 import {randomUUID} from 'node:crypto';
 import type {BillingProvider} from './billingProvider';
 import {enrollmentError} from './enrollment';
-// Caller holds patient profile lock and has rechecked current clinician assignment.
-// This helper participates in the clinical review transaction; no provider I/O occurs here.
-export async function queueRejectionRefund(tx:any,{membership:m,decisionId,now=new Date()}:{membership:any;decisionId:string;now?:Date}){
+// Caller holds the patient profile lock and has validated ownership/eligibility,
+// or current clinician assignment for a manual review. Automatic eligibility exits
+// do not fabricate a clinician decision. No provider I/O occurs in this transaction.
+export async function queueRejectionRefund(tx:any,{membership:m,decisionId,now=new Date()}:{membership:any;decisionId?:string;now?:Date}){
  const existing=await tx.billingOperation.findFirst({where:{membershipId:m.id,kind:'refund'}});
  if(existing){
   await tx.careMembership.update({where:{id:m.id},data:{status:'rejected'}});
-  if(existing.status==='succeeded'){const decision=await tx.careDecision.findUnique({where:{id:decisionId}});if(decision?.patientId===m.patientId)await tx.careDecision.update({where:{id:decisionId},data:{refundStatus:'issued',refundUpdatedAt:now}})}
-  const result={...(existing.result??{}),decisionIds:[...new Set([...(existing.result?.decisionIds??[]),decisionId])]};return tx.billingOperation.update({where:{id:existing.id},data:{result}})}
+  if(existing.status==='succeeded'&&decisionId){const decision=await tx.careDecision.findUnique({where:{id:decisionId}});if(decision?.patientId===m.patientId)await tx.careDecision.update({where:{id:decisionId},data:{refundStatus:'issued',refundUpdatedAt:now}})}
+  const result={...(existing.result??{}),decisionIds:[...new Set([...(existing.result?.decisionIds??[]),...(decisionId?[decisionId]:[])])]};return tx.billingOperation.update({where:{id:existing.id},data:{result}})}
  const payments=await tx.billingPayment.findMany({where:{membershipId:m.id},orderBy:[{confirmedAt:'desc'},{id:'desc'}],take:1});const payment=payments[0];
  if(!m.stripeSubscriptionId||!payment||payment.refundedCents!==0)throw enrollmentError(409,'REFUND_NOT_PENDING');
- const id=randomUUID(),result={decisionIds:[decisionId],subscriptionId:m.stripeSubscriptionId,paymentId:payment.providerPaymentId,invoiceId:payment.providerInvoiceId,amountCents:payment.amountCents,canceled:false,targetBound:false};
+ const id=randomUUID(),result={decisionIds:decisionId?[decisionId]:[],subscriptionId:m.stripeSubscriptionId,paymentId:payment.providerPaymentId,invoiceId:payment.providerInvoiceId,amountCents:payment.amountCents,canceled:false,targetBound:false};
  const operation=await tx.billingOperation.create({data:{id,membershipId:m.id,patientId:m.patientId,kind:'refund',status:'pending',attempts:0,providerKey:'unzit-rejection-'+id,requestHash:'rejection:'+m.id,result,createdAt:now}});
  await tx.careMembership.update({where:{id:m.id},data:{status:'rejected',refundStatus:'pending'}});return operation;
 }

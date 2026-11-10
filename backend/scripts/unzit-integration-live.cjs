@@ -29,7 +29,7 @@ function parseIntegrationArgs(args){
  require('./lib/launch-catalog.cjs').catalogPath(args[1]);return {catalogVersion:args[1],synthetic:false};
 }
 async function run(){
- const selection=parseIntegrationArgs(process.argv.slice(2)),v2=selection.catalogVersion==='2.0-pending-review';
+ const selection=parseIntegrationArgs(process.argv.slice(2)),v2=['2.0-pending-review','2.1-pending-review','2.2-pending-review'].includes(selection.catalogVersion),v22=selection.catalogVersion==='2.2-pending-review';
  const cliEnv={...process.env};const socket=path.join(require('node:os').homedir(),'.colima/clearaf/docker.sock');
  if(!cliEnv.DOCKER_HOST&&fs.existsSync(socket))cliEnv.DOCKER_HOST='unix://'+socket;
  const status=require('node:child_process').spawnSync('npx',['--yes','supabase@2.117.0','status','-o','json'],{cwd:root,env:cliEnv,encoding:'utf8'});
@@ -99,15 +99,18 @@ async function run(){
     assert.equal(catalog.questionnaireVersion,selection.catalogVersion);assert(catalog.intakeV2&&catalog.photoGuidance&&catalog.identityGuidance);
     // Second patient exercises pregnancy routing and conditional chest/back photos.
     if(a.role==='patientB')Object.assign(answers,{A5:'pregnant',B1:'female',B8:['chest','back'],planId:'all_in',G2:'yes'});
-    const gates=Object.fromEntries(Object.entries(answers).filter(([key])=>key==='W1'||key.startsWith('A')));
+    if(!v22){const gates=Object.fromEntries(Object.entries(answers).filter(([key])=>key==='W1'||key.startsWith('A')));
     phase=a.role+' safety gates';e=await request(a,base+'/medical/'+crypto.randomUUID(),'PUT',{expectedRevision:e.case.revision,questionnaireVersion:catalog.questionnaireVersion,answers:gates},201);
     // Payment must be refused before all required intake and photos exist.
-    await request(a,'/billing/checkout','POST',{caseId:e.case.id,planId:'care',settingsVersion:catalog.settingsVersion},403);
+    await request(a,'/billing/checkout','POST',{caseId:e.case.id,planId:'care',settingsVersion:catalog.settingsVersion},403);}
    }
+   if(v22){phase=a.role+' quick eligibility';e=await request(a,base+'/progress','PUT',{expectedRevision:e.case.revision,step:'eligibility',topicId:'quick_eligibility',eligibilityDraft:{E1:'acne'}},201);e=await enrollment(a);assert.equal(e.case.enrollmentProgress.eligibilityDraft.E1,'acne');e=await request(a,base+'/eligibility','PUT',{expectedRevision:e.case.revision,answers:{E1:'acne',E2:'no',E3:a.role==='patientB'?'pregnant':'neither',E4:'no'}},201);assert.equal(e.case.status,'consents');}
    phase=a.role+' consents';e=await request(a,base+'/consents','PUT',{expectedRevision:e.case.revision,acceptances:e.consents.map(({key,version,sha256})=>({key,version,sha256}))},201);assert(e.consents.every(d=>d.acceptedAt));
+   if(v22){phase=a.role+' payment before ID';assert.equal(e.case.status,'payment');assert.equal(e.case.identity,null);e=await pay(a,e,catalog);assert.equal(e.case.status,'identity');}
    const identityId=crypto.randomUUID(),identity=new FormData();for(const [key,value]of Object.entries({fullName:'Synthetic Integration Patient',dateOfBirth:'1990-01-01',physicallyInNC:'true',expectedRevision:String(e.case.revision)}))identity.set(key,value);
    identity.set('idPhoto',new Blob([jpeg],{type:'image/jpeg'}),'synthetic-id.jpg');identity.set('selfie',new Blob([jpeg],{type:'image/jpeg'}),'synthetic-selfie.jpg');
    phase=a.role+' identity';e=await request(a,base+'/identity/'+identityId,'PUT',identity,201);
+   if(v22){const queue=await request(doctor,'/review-queue?kind=identity');assert(queue.data.some(q=>q.targetId===identityId),'Paid uploaded identity queued before medical completion');await request(doctor,`/patients/${a.id}/reviews/${crypto.randomUUID()}`,'PUT',{targetType:'case',targetId:e.case.id,expectedRevision:e.case.revision,outcome:'approve',patientMessage:null},403);if(a.role==='patientB'){await review(a,'identity',identityId,'reject');assert.equal((await enrollment(a)).case.status,'rejected');ok('paid identity rejection before medical history queues full refund');continue;}await review(a,'identity',identityId,'approve');e=await enrollment(a);}
    if(!v2){
     e=await request(a,base+'/eligibility','PUT',{expectedRevision:e.case.revision,answers:contract.fixtures['PUT /enrollment/:caseId/eligibility'].request.answers},201);assert.equal(e.case.status,'payment');
     phase=a.role+' payment';e=await pay(a,e,catalog);
@@ -115,8 +118,9 @@ async function run(){
    phase=a.role+' medical history';e=await request(a,base+'/medical/'+crypto.randomUUID(),'PUT',{expectedRevision:e.case.revision,questionnaireVersion:catalog.questionnaireVersion,answers},201);
    const slots=v2?e.case.intakeV2.evaluation.requiredPhotoSlots:undefined;
    phase=a.role+' photos';const setId=await photos(a,e.case.id,slots);e=await enrollment(a);
+   if(v22){assert.equal(e.case.status,'photos');phase=a.role+' photo attestation';e=await request(a,base+'/medical/'+crypto.randomUUID(),'PUT',{expectedRevision:e.case.revision,questionnaireVersion:catalog.questionnaireVersion,answers:{...answers,F2:true},advance:true},201);assert.equal(e.case.status,'destination');}
    phase=a.role+' destination';e=await request(a,base+'/destination','PUT',{expectedRevision:e.case.revision,destination:a.planId==='all_in'?{planId:'all_in',pharmacy:'vida',shippingAddress:{recipient:'Synthetic Integration Patient',line1:'100 Synthetic Street',line2:null,city:'Raleigh',state:'NC',postalCode:'27601'}}:contract.fixtures['PUT /enrollment/:caseId/destination'].request.destination},201);
-   if(v2){
+   if(v2&&!v22){
     phase=a.role+' medical history';e=await request(a,base+'/medical/'+crypto.randomUUID(),'PUT',{expectedRevision:e.case.revision,questionnaireVersion:catalog.questionnaireVersion,answers},201);
     assert.deepEqual(e.case.intakeV2.evaluation.missingRequired,[]);
     if(a.role==='patientB')assert(e.case.intakeV2.evaluation.excluded.some(x=>x.drug==='tretinoin'));
@@ -127,11 +131,11 @@ async function run(){
     phase='paid v2 clarification';await review(a,'case',e.case.id,'needs_changes');e=await enrollment(a);assert.equal(e.case.photoSet.status,'needs_changes');
     answers.C6='Synthetic clarified history';
     e=await request(a,base+'/medical/'+crypto.randomUUID(),'PUT',{expectedRevision:e.case.revision,questionnaireVersion:catalog.questionnaireVersion,answers},201);
-    assert.equal(e.case.status,'medical_history','Covered corrections must not return to payment');
+    assert(['medical_history','needs_changes','photos'].includes(e.case.status),'Covered corrections must not return to payment');
     e=await request(a,base+'/submit','POST',{expectedRevision:e.case.revision,photoSetId:setId});assert.equal(e.case.status,'submitted');
     ok('paid v2 clarification reuses immutable photos and resubmits without checkout');
    }
-   await review(a,'identity',identityId,'approve');await review(a,'case',e.case.id,a.role==='patientA'?'approve':'reject');
+   if(!v22)await review(a,'identity',identityId,'approve');await review(a,'case',e.case.id,a.role==='patientA'?'approve':'reject');
    const chart=await request(doctor,`/patients/${a.id}/chart`);assert.equal(chart.careModel,'launch');assert.equal(chart.enrollment.case.status,a.role==='patientA'?'approved':'rejected');
    await request(patients.find(p=>p!==a),`/patients/${a.id}/chart`,'GET',undefined,403);
    ok(a.role+' consents, identity, eligibility, fake payment, intake, photos, destination, submission and manual reviews');

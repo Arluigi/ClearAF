@@ -47,7 +47,7 @@
   "eligibilityQuestions": [
     {
       "id": "W1",
-      "prompt": "Welcome to UNZIT. UNZIT is online acne care from your doctor, a board-certified dermatologist. Here is how it works. You answer questions and send photos of your skin. Your doctor reviews everything himself, usually within 1 to 2 business days, and sends you a treatment plan. If prescription medicine is right for you, he sends it to your pharmacy. UNZIT is not for emergencies. If you ever have an emergency, call 911. Sometimes the safest care is in person. If your doctor thinks you need to be seen in person, he will tell you, and he may not prescribe. This visit takes about 10 minutes. You can save and come back.",
+      "prompt": "Welcome to UNZIT. UNZIT is online acne care from your doctor, a board-certified dermatologist. Here is how it works. You answer questions and send photos of your skin. Your doctor reviews everything himself, usually within 1 to 2 business days, and sends you a treatment plan. If prescription medicine is right for you, he sends it to your pharmacy. UNZIT is not for emergencies. If you ever have an emergency, call 911. Sometimes the safest care is in person. If your doctor thinks you need to be seen in person, he will tell you, and he may not prescribe. This visit takes about 15 minutes. You can save and come back.",
       "kind": "attestation",
       "required": true,
       "options": [],
@@ -191,7 +191,7 @@
     },
     {
       "id": "A6choice",
-      "prompt": "UNZIT does not treat patients while they are taking isotretinoin. Combining it with other acne medicines, especially antibiotic pills, can be unsafe, and your prescribing doctor needs to be the only one directing your acne care. You can stop here and come back after your course ends, at no charge. Or you can finish this visit and your doctor will personally decide whether UNZIT can help you, before any plan or prescription is made.",
+      "prompt": "UNZIT does not treat patients while they are taking isotretinoin. Combining it with other acne medicines, especially antibiotic pills, can be unsafe, and your prescribing doctor needs to be the only one directing your acne care. You can stop here and come back after your course ends, and receive a full refund. Or you can finish this visit and your doctor will personally decide whether UNZIT can help you, before any plan or prescription is made.",
       "kind": "choice",
       "required": true,
       "options": [
@@ -2149,11 +2149,11 @@
       }
     ],
     "exitPages": {
-      "A": "Stop here: your skin needs in-person care today. The symptoms you selected can be a sign of a severe form of acne that becomes dangerous quickly and cannot be treated safely online. Please go to urgent care or see a dermatologist today. If you feel very unwell, have a high fever, or your symptoms are getting worse fast, go to an emergency department or call 911. You have not been charged. Your doctor will see the answers you gave today and will review them today, but please do not wait for that review to get care in person.",
-      "B": "Stop here: what you described needs urgent in-person care, not online care. Swelling of the face, lips, or eyes, or skin that is painful, blistering, or peeling, can be a sign of a serious reaction or infection. Please go to urgent care or an emergency department now. If you have trouble breathing or your throat feels tight, call 911. You have not been charged.",
-      "C": "UNZIT is for adults 18 and older, so we cannot treat you yet. Acne in your teens is very treatable, and a parent or guardian can help you find in-person care, or care designed for teens. You have not been charged.",
-      "D": "UNZIT can only treat patients who are physically in North Carolina, because that is where your doctor is licensed. If you will be in North Carolina, you are welcome to come back and start then. You have not been charged.",
-      "E": "UNZIT treats acne only, so it is not the right place for this concern. Rashes, eczema, moles, changing spots, and hair or scalp problems need in-person care, where a dermatologist can examine and test the skin directly. Please do not delay in-person care for anything that is new, changing, or worrying. You have not been charged."
+      "A": "Stop here: your skin needs in-person care today. The symptoms you selected can be a sign of a severe form of acne that becomes dangerous quickly and cannot be treated safely online. Please go to urgent care or see a dermatologist today. If you feel very unwell, have a high fever, or your symptoms are getting worse fast, go to an emergency department or call 911. If you have paid, your payment will be refunded in full. Your doctor will see the answers you gave today and will review them today, but please do not wait for that review to get care in person.",
+      "B": "Stop here: what you described needs urgent in-person care, not online care. Swelling of the face, lips, or eyes, or skin that is painful, blistering, or peeling, can be a sign of a serious reaction or infection. Please go to urgent care or an emergency department now. If you have trouble breathing or your throat feels tight, call 911. If you have paid, your payment will be refunded in full.",
+      "C": "UNZIT is for adults 18 and older, so we cannot treat you yet. Acne in your teens is very treatable, and a parent or guardian can help you find in-person care, or care designed for teens. If you have paid, your payment will be refunded in full.",
+      "D": "UNZIT can only treat patients who are physically in North Carolina, because that is where your doctor is licensed. If you will be in North Carolina, you are welcome to come back and start then. If you have paid, your payment will be refunded in full.",
+      "E": "UNZIT treats acne only, so it is not the right place for this concern. Rashes, eczema, moles, changing spots, and hair or scalp problems need in-person care, where a dermatologist can examine and test the skin directly. Please do not delay in-person care for anything that is new, changing, or worrying. If you have paid, your payment will be refunded in full."
     },
     "holdNotice": "Your case is on hold for your doctor's personal decision, because you are currently taking isotretinoin. UNZIT does not issue a plan or prescription to anyone taking isotretinoin until your doctor has reviewed the case himself and decided UNZIT can help safely. You will hear within 1 to 2 business days. If your doctor decides UNZIT is not right for you now, your payment is refunded in full under the subscription terms.",
     "attestationIntro": "Please confirm each of these. They protect you, and they are part of your medical record.",
@@ -2169,5 +2169,188 @@
       "W1": "I understand how UNZIT works.",
       "A7": "This ID is mine, and the selfie is really me."
     }
+  },
+  "enrollmentFlow": {
+    "expectation": "About 15 minutes. You’ll need your ID and good lighting.",
+    "quickEligibilityQuestions": [
+      {
+        "id": "E1",
+        "prompt": "What do you want help with?",
+        "kind": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "acne",
+            "label": "Acne"
+          },
+          {
+            "id": "dark_marks",
+            "label": "Dark marks from acne"
+          },
+          {
+            "id": "something_else",
+            "label": "Something else"
+          }
+        ],
+        "fields": [],
+        "showWhen": []
+      },
+      {
+        "id": "E2",
+        "prompt": "Do you have any of these right now: fever or feeling sick with your acne; joint pain; open, bleeding or crusted sores; or acne that suddenly got much worse in the last 2 weeks?",
+        "kind": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "yes",
+            "label": "Yes"
+          },
+          {
+            "id": "no",
+            "label": "No"
+          }
+        ],
+        "fields": [],
+        "showWhen": []
+      },
+      {
+        "id": "E3",
+        "prompt": "Are you pregnant or breastfeeding?",
+        "kind": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "pregnant",
+            "label": "Pregnant"
+          },
+          {
+            "id": "breastfeeding",
+            "label": "Breastfeeding"
+          },
+          {
+            "id": "neither",
+            "label": "Neither"
+          },
+          {
+            "id": "not_applicable",
+            "label": "Not applicable"
+          }
+        ],
+        "fields": [],
+        "showWhen": []
+      },
+      {
+        "id": "E4",
+        "prompt": "Are you currently being treated for acne by another doctor?",
+        "kind": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "yes",
+            "label": "Yes"
+          },
+          {
+            "id": "no",
+            "label": "No"
+          }
+        ],
+        "fields": [],
+        "showWhen": []
+      }
+    ],
+    "medicalSections": [
+      {
+        "id": "about_you",
+        "title": "About you",
+        "intro": "",
+        "questionIds": [
+          "W1",
+          "A4",
+          "A5",
+          "A6",
+          "A6choice",
+          "A6b",
+          "B1",
+          "B2",
+          "B3",
+          "B4",
+          "B4_other",
+          "B4b",
+          "B5",
+          "B6",
+          "B6_details"
+        ]
+      },
+      {
+        "id": "your_acne",
+        "title": "Your acne",
+        "intro": "",
+        "questionIds": [
+          "B7",
+          "B8",
+          "B9",
+          "B10",
+          "B11"
+        ]
+      },
+      {
+        "id": "treatment_history",
+        "title": "Treatment history",
+        "intro": "",
+        "questionIds": [
+          "C1",
+          "C2",
+          "C2_other",
+          "C6"
+        ]
+      },
+      {
+        "id": "medicines",
+        "title": "Medicines and allergies",
+        "intro": "",
+        "questionIds": [
+          "D1",
+          "D2",
+          "D2_none",
+          "D3",
+          "D3b",
+          "D3c"
+        ]
+      },
+      {
+        "id": "health_conditions",
+        "title": "Health conditions",
+        "intro": "",
+        "questionIds": [
+          "D4"
+        ]
+      },
+      {
+        "id": "routine",
+        "title": "Routine and preferences",
+        "intro": "",
+        "questionIds": [
+          "B12",
+          "B12_details",
+          "B12_prescription",
+          "C3",
+          "C4",
+          "C5",
+          "E1",
+          "E1_other",
+          "E2",
+          "E2_other",
+          "E3",
+          "E4",
+          "E5",
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5",
+          "H6"
+        ]
+      }
+    ]
   }
 }

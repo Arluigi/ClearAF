@@ -11,6 +11,7 @@ import { LaunchClinicalReview } from './CareDecisionDialog';
 import { LaunchMembershipStatus } from './CareStatusCard';
 import IdentityReview from './IdentityReview';
 import IntakeV2Summary from './IntakeV2Summary';
+import {EnrollmentFlowStatus} from './EnrollmentFlowStatus';
 
 function answer(value:unknown,question?:LaunchQuestion):string {
   if(typeof value==='string')return question?.options.find(option=>option.id===value)?.label??intakeAnswer(value);
@@ -42,7 +43,7 @@ export default function LaunchIntakeReview({patientId,targetId,kind,active=true}
     <div className="flex flex-wrap justify-between gap-3"><h2 className="editorial-title text-2xl">Enrollment review</h2><Button variant="outline" onClick={chart.retry}>Refresh enrollment</Button></div>
     <p className="text-sm text-ink-secondary">Review within 1 to 2 business days. Compare the submitted skin photos below as part of clinical review.</p>
     <LoadState {...chart} loading="Loading enrollment chart"/><LoadState {...catalog} loading="Loading versioned question wording"/>
-    {chart.data&&<><IdentityReview key={`${patientId}-${chart.data.enrollment.case.revision}`} active={active} patientId={patientId} identity={chart.data.enrollment.case.identity} revision={chart.data.enrollment.case.revision} onChanged={chart.retry}/><LaunchIntakeDetails enrollment={chart.data.enrollment} catalog={catalog.data}/><LaunchClinicalReview patientId={patientId} enrollment={chart.data.enrollment} onChanged={chart.retry}/><LaunchMembershipStatus membership={chart.data.enrollment.membership} caseStatus={chart.data.enrollment.case.status}/>
+    {chart.data&&<><EnrollmentFlowStatus enrollment={chart.data.enrollment} catalog={catalog.data}/><IdentityReview key={`${patientId}-${chart.data.enrollment.case.revision}`} active={active} patientId={patientId} identity={chart.data.enrollment.case.identity} revision={chart.data.enrollment.case.revision} onChanged={chart.retry}/><LaunchIntakeDetails enrollment={chart.data.enrollment} catalog={catalog.data}/><LaunchClinicalReview patientId={patientId} enrollment={chart.data.enrollment} onChanged={chart.retry}/><LaunchMembershipStatus membership={chart.data.enrollment.membership} caseStatus={chart.data.enrollment.case.status}/>
       {targetId&&kind==='enrollment'&&targetId!==chart.data.enrollment.case.id&&<p role="alert">This review target is unavailable. Refresh the worklist.</p>}
       <details><summary className="cursor-pointer text-sm">Prior review decisions</summary><ul className="divide-y divide-rule">{chart.data.reviews.data.map(review=><li className="break-words py-2 text-sm" key={review.id}>{review.targetType} · {review.outcome.replaceAll('_',' ')} · {review.createdAt}{review.patientMessage&&<p className="whitespace-pre-wrap">{review.patientMessage}</p>}</li>)}</ul><Pages page={page} totalPages={chart.data.reviews.pagination.totalPages} onPage={setPage}/></details>
     </>}

@@ -1,3 +1,4 @@
+import {isEnrollment22} from './enrollmentFlow22';
 import {randomUUID} from 'node:crypto';
 import {prisma} from '../config/database';
 import {contracts,UUIDSchema,ReviewSchema,DestinationSchema} from '../contracts/unzitLaunch';
@@ -24,7 +25,7 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
   assertCareAccess(row,m,'approval',now(),await currentNCEvidence(tx,row.patientId,id));
   if(row.status!=='submitted'||!row.submittedAt||!row.settingsVersion||!row.eligibility?.eligible)throw enrollmentError(409,'INCOMPLETE_CASE');
   const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null,set=row.photoSetId?await tx.clinicalPhotoSet.findUnique({where:{id:row.photoSetId}}):null,settings=await tx.launchSettings.findUnique({where:{version:row.settingsVersion}});
-  let answers:any,docs:any[];try{answers=isIntakeV2(intake?.questionnaireVersion)?completeIntakeV2(intake?.answers,now().toISOString().slice(0,10)):completeMedicalHistory(intake?.answers);if(isIntakeV2(intake?.questionnaireVersion)&&((evaluateIntakeV2(answers).hold&&!row.eligibility?.holdDecision)||(answers.A3==='dark_marks'&&row.eligibility?.screeningDecisions?.marksAcneRelated!==true)))throw Error();if(isIntakeV2(intake?.questionnaireVersion)&&(answers.planId!==m.planId||answers.A1!==new Date(id.dateOfBirth).toISOString().slice(0,10)))throw Error();docs=validateLaunchDocuments(settings?.content?.consents);const dest=isIntakeV2(intake?.questionnaireVersion)&&m.planId==='care'&&!row.destination?{planId:'care'}:DestinationSchema.parse(row.destination);if(dest.planId!==m.planId)throw Error()}catch{throw enrollmentError(409,'INCOMPLETE_CASE')}
+  let answers:any,docs:any[];try{answers=isIntakeV2(intake?.questionnaireVersion)?completeIntakeV2(intake?.answers,now().toISOString().slice(0,10)):completeMedicalHistory(intake?.answers);if(isIntakeV2(intake?.questionnaireVersion)&&((evaluateIntakeV2(answers).hold&&!row.eligibility?.holdDecision)||(answers.A3==='dark_marks'&&row.eligibility?.screeningDecisions?.marksAcneRelated!==true)))throw Error();if(isIntakeV2(intake?.questionnaireVersion)&&(answers.planId!==m.planId||answers.A1!==new Date(id.dateOfBirth).toISOString().slice(0,10)))throw Error();docs=validateLaunchDocuments(settings?.content?.consents);const dest=isIntakeV2(intake?.questionnaireVersion)&&!isEnrollment22(intake?.questionnaireVersion)&&m.planId==='care'&&!row.destination?{planId:'care'}:DestinationSchema.parse(row.destination);if(dest.planId!==m.planId)throw Error()}catch{throw enrollmentError(409,'INCOMPLETE_CASE')}
   if(!intake||intake.patientId!==row.patientId||intake.caseId!==row.id||!intake.submittedAt||intake.questionnaireVersion!==settings.contentVersion||!set||set.patientId!==row.patientId||set.caseId!==row.id||set.status!=='submitted')throw enrollmentError(409,'INCOMPLETE_CASE');
   const receipts=await tx.consentAcceptance.findMany({where:{userId:row.patientId}});if(!docs.every(d=>receipts.some((r:any)=>r.documentKey===d.key&&r.documentVersion===d.version&&r.documentSha256===d.sha256)))throw enrollmentError(409,'INCOMPLETE_CASE');
   const items=await tx.clinicalPhotoSetItem.findMany({where:{setId:set.id}});await validateClinicalPhotoItems(tx,row.patientId,set.id,items,requiredClinicalSlots(answers),{purpose:'enrollment',id:row.id});
@@ -43,7 +44,13 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
     FROM public.launch_cases c JOIN assigned p ON p.id=c."patientId"
     LEFT JOIN public.identity_verifications i ON i.id=c."identityId" AND i.status='uploaded'
     CROSS JOIN LATERAL (SELECT c.id,'enrollment'::text AS kind UNION ALL SELECT i.id,'identity' WHERE i.id IS NOT NULL) v
-    WHERE (c.status='submitted' AND c."submittedAt" IS NOT NULL) OR (c.status='ineligible' AND c.eligibility->>'rulesVersion' IN ('2.0-pending-review','2.1-pending-review') AND c.eligibility->'reasons' ? 'A')
+    WHERE (c.status='submitted' AND c."submittedAt" IS NOT NULL) OR (c.status='ineligible' AND c.eligibility->>'rulesVersion' IN ('2.0-pending-review','2.1-pending-review','2.2-pending-review') AND c.eligibility->'reasons' ? 'A')
+    UNION ALL
+    SELECT i.id,c."patientId",p.name,'identity',i.id,COALESCE(i."attestedAt",c."createdAt") AT TIME ZONE 'UTC',COALESCE(c.flags,'[]'::jsonb)
+    FROM public.launch_cases c JOIN assigned p ON p.id=c."patientId"
+    JOIN public.launch_settings s ON s.version=c."settingsVersion" AND s."contentVersion"='2.2-pending-review'
+    JOIN public.identity_verifications i ON i.id=c."identityId" AND i.status='uploaded'
+    WHERE c."submittedAt" IS NULL AND c.status IN ('medical_history','photos','destination','needs_changes')
     UNION ALL
     SELECT c.id,c."patientId",p.name,'check_in',c.id,COALESCE(c."submittedAt",TIMESTAMP '1970-01-01') AT TIME ZONE 'UTC',
      to_jsonb(array_remove(ARRAY[
@@ -73,7 +80,7 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
   const id=row.identityId?await tx.identityVerification.findUnique({where:{id:row.identityId}}):null,m=await tx.careMembership.findUnique({where:{patientId}});let c:any=null,changes:any={};
   if(a.screeningDecisions){if(a.targetType!=='case')throw enrollmentError(400,'VALIDATION_ERROR');const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null;if(!isIntakeV2(intake?.questionnaireVersion))throw enrollmentError(400,'VALIDATION_ERROR');row={...row,eligibility:{...row.eligibility,screeningDecisions:{...row.eligibility?.screeningDecisions,...a.screeningDecisions,clinicianId,decidedAt:now().toISOString()}}};changes.eligibility=row.eligibility}
   if(a.targetType==='identity'){
-   if(!id||id.id!==a.targetId||id.patientId!==patientId||id.caseId!==row.id)throw enrollmentError(404,'NOT_FOUND');if(!row.submittedAt||row.status!=='submitted'||id.status!=='uploaded')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+   if(!id||id.id!==a.targetId||id.patientId!==patientId||id.caseId!==row.id)throw enrollmentError(404,'NOT_FOUND');const settings=row.settingsVersion?await tx.launchSettings.findUnique({where:{version:row.settingsVersion}}):null,early=isEnrollment22(settings?.contentVersion)&&!row.submittedAt&&['medical_history','photos','destination','needs_changes'].includes(row.status);if((!early&&(!row.submittedAt||row.status!=='submitted'))||id.status!=='uploaded')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
    if(a.outcome==='approve'){
     const paths=identityObjectPaths(patientId,id.id);
     if(id.idPhotoPath!==paths.idPhotoPath||id.selfiePath!==paths.selfiePath||!id.attestedInNC||ageOn(new Date(id.dateOfBirth).toISOString().slice(0,10),now().toISOString().slice(0,10))<18)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');

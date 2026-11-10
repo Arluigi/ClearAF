@@ -40,7 +40,9 @@ struct LaunchEnrollmentView: View {
         .onChange(of: repository.state, initial: true) { _, _ in APIService.shared.launchEnrollmentFinished() }
     }
     @ViewBuilder private func step(_ state: LaunchEnrollmentResponse) -> some View {
-        if IntakeV2Routing.usesQuestionnaire(state) {
+        if Enrollment22Routing.usesNewOrder(state) {
+            Enrollment22View(repository: repository, ticket: ticket)
+        } else if IntakeV2Routing.usesQuestionnaire(state) {
             IntakeV2View(repository: repository, ticket: ticket)
         } else { switch state.case.status {
         case .consents: ConsentDocumentsView(repository: repository, ticket: ticket)

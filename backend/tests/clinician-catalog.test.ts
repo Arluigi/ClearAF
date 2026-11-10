@@ -46,3 +46,9 @@ test('2.2 projection requires capture copy',async()=>{
  assert.equal(projected.questionnaireVersion,value.versionLabel);assert.deepEqual(projected.identityGuidance,value.identityGuidance);
  assert.equal(CatalogSchema.safeParse({...projected,identityGuidance:undefined}).success,false);
 });
+
+test('2.2 enrollment metadata names six complete medical topics and excludes capture/logistics from them',()=>{
+ const c=JSON.parse(readFileSync(new URL('../src/content/catalogs/2.2-pending-review.json',import.meta.url),'utf8'));
+ assert.equal(c.enrollmentFlow.expectation,'About 15 minutes. You’ll need your ID and good lighting.');
+ const topics=c.enrollmentFlow.medicalSections;assert.equal(topics.length,6);const ids=topics.flatMap((s:any)=>s.questionIds);assert.equal(new Set(ids).size,ids.length);assert.ok(ids.includes('W1'));assert.ok(ids.includes('A4'));assert.ok(ids.includes('H6'));assert.equal(ids.includes('F2'),false);assert.equal(ids.includes('G1'),false);assert.deepEqual(c.enrollmentFlow.quickEligibilityQuestions.map((q:any)=>q.id),['E1','E2','E3','E4']);
+});

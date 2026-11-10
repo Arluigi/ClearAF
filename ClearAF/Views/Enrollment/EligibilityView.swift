@@ -13,7 +13,12 @@ struct EligibilityView: View {
     @ObservedObject var repository: LaunchEnrollmentRepository
     let ticket: AccountAccess.Ticket
     @State private var answers: [String: String] = [:]
-    private var questions: [LaunchQuestion] { repository.catalog?.eligibilityQuestions ?? [] }
+    @State private var initialized = false
+    @State private var draftRevision: Int?
+    @Environment(\.scenePhase) private var scenePhase
+    private var conflict: Bool { isNewOrder && draftRevision != nil && draftRevision != repository.state?.case.revision }
+    private var isNewOrder: Bool { Enrollment22Routing.usesNewOrder(repository.state) }
+    private var questions: [LaunchQuestion] { isNewOrder ? repository.catalog?.enrollmentFlow?.quickEligibilityQuestions ?? [] : repository.catalog?.eligibilityQuestions ?? [] }
     private var value: LaunchEligibility? {
         guard let e1 = answers["E1"].flatMap(LaunchEligibility.Concern.init(rawValue:)), let e2 = answers["E2"].flatMap(LaunchEligibility.YesNo.init(rawValue:)), let e3 = answers["E3"].flatMap(LaunchEligibility.Pregnancy.init(rawValue:)), let e4 = answers["E4"].flatMap(LaunchEligibility.YesNo.init(rawValue:)) else { return nil }
         return LaunchEligibility(E1: e1, E2: e2, E3: e3, E4: e4)
@@ -42,8 +47,33 @@ struct EligibilityView: View {
                 guard let value, let current = repository.state else { return }
                 struct Body: Encodable { let expectedRevision: Int; let answers: LaunchEligibility }
                 Task { if let request = try? LaunchRequest.json("/enrollment/\(current.case.id.uuidString.lowercased())/eligibility", Body(expectedRevision: current.case.revision, answers: value)) { _ = await repository.mutate(request, ticket: ticket) } }
-            }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(value == nil || questions.count != 4 || repository.saving)
+            }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(value == nil || questions.count != 4 || repository.saving || conflict)
+            if isNewOrder { Button("Save and come back") { Task { _ = await savePartial() } }.buttonStyle(.letterpress(.outlined, fullWidth: true)).disabled(repository.saving) }
             if value == nil { Text("Answer all four questions to continue.").font(Letterpress.ui(13)) }
+            if conflict {
+                Text("Your saved eligibility changed. Review the saved answers before continuing.")
+                Button("Use current saved eligibility") { answers = repository.state?.case.enrollmentProgress?.eligibilityDraft ?? [:]; draftRevision = repository.state?.case.revision }.buttonStyle(.letterpress(.outlined, fullWidth: true))
+            }
         }
+        .onAppear {
+            guard !initialized else { return }
+            if isNewOrder { answers = repository.state?.case.enrollmentProgress?.eligibilityDraft ?? [:] }
+            else if let saved = repository.state?.case.eligibility?.answers { answers = ["E1": saved.E1.rawValue, "E2": saved.E2.rawValue, "E3": saved.E3.rawValue, "E4": saved.E4.rawValue] }
+            draftRevision = repository.state?.case.revision; initialized = true
+        }
+        .task(id: answers) {
+            guard isNewOrder, initialized else { return }
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+            _ = await savePartial()
+        }
+        .onChange(of: scenePhase) { _, phase in if phase != .active && isNewOrder { Task { _ = await savePartial() } } }
+    }
+    private func savePartial() async -> Bool {
+        while repository.saving { do { try await Task.sleep(for: .milliseconds(80)) } catch { return false } }
+        guard !Task.isCancelled, !conflict, repository.state?.case.status == .eligibility else { return false }
+        if repository.state?.case.enrollmentProgress?.eligibilityDraft == answers { return true }
+        let saved = await repository.saveProgress(step: "eligibility", topicId: "quick_eligibility", eligibilityDraft: answers, ticket: ticket)
+        if saved { draftRevision = repository.state?.case.revision }
+        return saved
     }
 }

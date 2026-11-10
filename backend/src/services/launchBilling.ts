@@ -1,3 +1,4 @@
+import {isEnrollment22} from './enrollmentFlow22';
 import {careAccess} from './careAccess';
 import {createBillingLifecycle} from './billingLifecycle';
 import {randomUUID,createHash} from 'node:crypto';
@@ -89,7 +90,7 @@ export function createLaunchBilling({db,provider,now=()=>new Date(),returnOrigin
      const cadenceFloor=maxDate(m.cadenceAnchor,m.activatedAt);
      if(caseRow?.status==='approved'&&changeAt&&(!cadenceFloor||changeAt>cadenceFloor))update.cadenceAnchor=changeAt;
      await tx.careMembership.update({where:{id:m.id},data:update});
-     if(hasPaid&&caseRow?.status==='payment')await tx.launchCase.update({where:{id:caseRow.id},data:{status:'medical_history',revision:caseRow.revision+1}});
+     if(hasPaid&&caseRow?.status==='payment')await tx.launchCase.update({where:{id:caseRow.id},data:{status:isEnrollment22((await tx.launchSettings.findUnique({where:{version:caseRow.settingsVersion}}))?.contentVersion)?'identity':'medical_history',revision:caseRow.revision+1}});
      if(hasPaid){const operation=await tx.billingOperation.findFirst({where:{membershipId:m.id,kind:'checkout'}});if(operation)await tx.billingOperation.update({where:{id:operation.id},data:{status:'succeeded',failureCode:null}})}
      await tx.stripeEvent.update({where:{id:e.id},data:{status:'processed'}});return true;
     });
@@ -107,9 +108,9 @@ export function createLaunchBilling({db,provider,now=()=>new Date(),returnOrigin
     let m=await tx.careMembership.findUnique({where:{patientId}});
     if(m&&m.status!=='awaiting_payment'){if(m.planId!==a.planId)throw enrollmentError(409,'OPERATION_CONFLICT');return {done:await response(tx,m)}}
     let settings=c.settingsVersion?await tx.launchSettings.findUnique({where:{version:c.settingsVersion}}):await activeLaunchSettings(tx);if(!settings)throw unavailable();if(!isIntakeV2(settings.contentVersion))settings=await selectedLaunchSettings(tx);assertSettingsVersion(settings,a.settingsVersion);
-    if(c.status!=='payment'||!c.eligibility?.eligible||!c.identityId)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
-    const identity=await tx.identityVerification.findUnique({where:{id:c.identityId}});if(!identity||identity.patientId!==patientId||identity.caseId!==c.id||!identity.attestedInNC||['rejected','needs_changes'].includes(identity.status))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
-    if(isIntakeV2(settings.contentVersion)){
+    if(c.status!=='payment'||!c.eligibility?.eligible||(!isEnrollment22(settings.contentVersion)&&!c.identityId))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+    const identity=c.identityId?await tx.identityVerification.findUnique({where:{id:c.identityId}}):null;if(!isEnrollment22(settings.contentVersion)&&(!identity||identity.patientId!==patientId||identity.caseId!==c.id||!identity.attestedInNC||['rejected','needs_changes'].includes(identity.status)))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+    if(isIntakeV2(settings.contentVersion)&&!isEnrollment22(settings.contentVersion)){
      const intake=c.intakeId?await tx.intakeRevision.findUnique({where:{id:c.intakeId}}):null;
      let answers:any;try{if(intake?.questionnaireVersion!==settings.contentVersion)throw Error();answers=completeIntakeV2(intake.answers,now().toISOString().slice(0,10))}catch{throw enrollmentError(403,'LAUNCH_STEP_REQUIRED')}
      if(answers.planId!==a.planId||new Date(identity.dateOfBirth).toISOString().slice(0,10)!==answers.A1)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {contracts, MembershipSchema, DestinationSchema, MedicalHistorySchema, InstantSchema, DateOnlySchema, pageSchema, PlanSchema, endpoints, fixtures} from '../src/contracts/unzitLaunch';
 test('each amended endpoint has a parseable request and response fixture',()=>{
- assert.equal(endpoints.length,24);
+ assert.equal(endpoints.length,27);
  for(const endpoint of endpoints){assert.ok(fixtures[endpoint],endpoint);const c=contracts[endpoint];c.request.parse(fixtures[endpoint].request);c.response.parse(fixtures[endpoint].response)}
 });
 test('server owned fields and obsolete billing endpoints cannot be supplied',()=>{
@@ -39,3 +39,4 @@ test('launch route fallback errors satisfy the shared error contract',async()=>{
   ErrorSchema.parse(result.body);
  }finally{launchEnrollment.get=original}
 });
+test('enrollment resume and identity draft endpoints are part of the shared additive contract',()=>{for(const path of ['PUT /enrollment/:caseId/progress','PUT /enrollment/:caseId/identity-draft/:attemptId','POST /enrollment/:caseId/identity-ineligible'])assert.ok(contracts[path],path)});

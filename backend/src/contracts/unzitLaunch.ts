@@ -1,3 +1,5 @@
+export {EnrollmentFlowSchema} from '../services/enrollmentFlow22';
+import {EnrollmentProgressSchema,EnrollmentFlowSchema,ProgressInputSchema,IdentityDraftInputSchema,IdentityIneligibleSchema} from '../services/enrollmentFlow22';
 import {z} from 'zod';
 import {IntakeV2DraftSchema,IntakeV2Answers,IntakeV2Evaluation,ScreeningDecisionsSchema} from '../services/intakeV2';
 export type UUID = string;
@@ -15,7 +17,7 @@ export type Consent = {key:ConsentKey;version:number;versionLabel:string;title:s
   sha256:string;effectiveAt:Instant;acceptedAt:Instant|null};
 export type Catalog = {contractVersion:1;settingsVersion:number;plans:Plan[];consents:Consent[];
   reviewCopy:'Review within 1 to 2 business days.';questionnaireVersion:string;
-  eligibilityQuestions:Question[];medicalQuestions:Question[];photoGuidance?:PhotoGuidance;identityGuidance?:IdentityGuidance;intakeV2?:unknown};
+  eligibilityQuestions:Question[];medicalQuestions:Question[];enrollmentFlow?:z.infer<typeof EnrollmentFlowSchema>;photoGuidance?:PhotoGuidance;identityGuidance?:IdentityGuidance;intakeV2?:unknown};
 export type Question = {id:string;prompt:string;kind:'choice'|'multi_choice'|'text'|'repeat'|'attestation';
   required:boolean;options:{id:string;label:string}[];fields:Question[];
   showWhen:{questionId:string;operator:'in'|'not_in';values:string[]}[]};
@@ -55,7 +57,7 @@ export type MedicalDraft = Partial<MedicalHistory>;
 export type PhotoSet = {id:UUID;purpose:'enrollment'|'check_in';status:'draft'|'submitted'|'needs_changes'|'reviewed';
   requiredSlots:PhotoSlot[];items:{slot:PhotoSlot;photoId:UUID;captureId:UUID}[]};
 export type Capture = {id:UUID;captureId:UUID;captureDate:Instant;uploadedAt:Instant};
-export type Case = {id:UUID;revision:number;status:CaseStatus;identity:Identity|null;
+export type Case = {id:UUID;revision:number;status:CaseStatus;enrollmentProgress?:z.infer<typeof EnrollmentProgressSchema>;identity:Identity|null;
   eligibility:EligibilityResult|null;medicalHistory:MedicalDraft;questionnaireVersion:string;
   intakeV2?:{answers:IntakeV2Answers;evaluation:IntakeV2Evaluation;summary:unknown;holdDecision:{decisionNote:string;clinicianId:string;decidedAt:string}|null;screeningDecisions?:unknown};
   photoSet:PhotoSet|null;destination:Destination|null;planId:PlanId|null;flags:string[];
@@ -107,7 +109,7 @@ export const PhotoGuidanceSchema=obj({title:captureText,instructions:z.array(cap
 export const IdentityGuidanceSchema=obj({title:captureText,prompt:captureText.optional(),attestation:captureText.optional(),items:z.array(obj({id:z.enum(['government_id','selfie','nc_attestation']),required:z.literal(true),instructions:captureText})).length(3),copy:IdentityCaptureCopySchema.optional()}).refine(v=>new Set(v.items.map(i=>i.id)).size===3,'Invalid identity guidance');
 export type PhotoGuidance=z.infer<typeof PhotoGuidanceSchema>;
 export type IdentityGuidance=z.infer<typeof IdentityGuidanceSchema>;
-export const CatalogSchema=obj({contractVersion:z.literal(1),settingsVersion:z.number().int().positive(),plans:z.array(PlanSchema).length(2),consents:z.array(ConsentSchema).length(4),reviewCopy:z.literal('Review within 1 to 2 business days.'),questionnaireVersion:str,eligibilityQuestions:z.array(QuestionSchema),medicalQuestions:z.array(QuestionSchema),photoGuidance:PhotoGuidanceSchema.optional(),identityGuidance:IdentityGuidanceSchema.optional(),intakeV2:z.unknown().optional()}).superRefine((value,ctx)=>{
+export const CatalogSchema=obj({contractVersion:z.literal(1),settingsVersion:z.number().int().positive(),plans:z.array(PlanSchema).length(2),consents:z.array(ConsentSchema).length(4),reviewCopy:z.literal('Review within 1 to 2 business days.'),questionnaireVersion:str,eligibilityQuestions:z.array(QuestionSchema),medicalQuestions:z.array(QuestionSchema),enrollmentFlow:EnrollmentFlowSchema.optional(),photoGuidance:PhotoGuidanceSchema.optional(),identityGuidance:IdentityGuidanceSchema.optional(),intakeV2:z.unknown().optional()}).superRefine((value,ctx)=>{
  if(['2.1-pending-review','2.2-pending-review'].includes(value.questionnaireVersion)){
   for(const key of ['photoGuidance','identityGuidance'] as const)if(!value[key]?.copy)ctx.addIssue({code:'custom',path:[key,'copy'],message:'Complete capture copy required for this publication'});
  }
@@ -127,7 +129,7 @@ export const MedicalDraftSchema=MedicalHistorySchema.partial();
 const item=obj({slot:PhotoSlotSchema,photoId:UUIDSchema,captureId:UUIDSchema});
 export const PhotoSetSchema=obj({id:UUIDSchema,purpose:z.enum(['enrollment','check_in']),status:z.enum(['draft','submitted','needs_changes','reviewed']),requiredSlots:z.array(PhotoSlotSchema),items:z.array(item).max(6)});
 export const CaptureSchema=obj({id:UUIDSchema,captureId:UUIDSchema,captureDate:InstantSchema,uploadedAt:InstantSchema});
-export const CaseSchema=obj({id:UUIDSchema,revision:rev,status:z.enum(['consents','identity','eligibility','payment','medical_history','photos','destination','submitted','needs_changes','approved','rejected','ineligible']),identity:IdentitySchema.nullable(),eligibility:EligibilityResultSchema.nullable(),medicalHistory:MedicalDraftSchema,questionnaireVersion:str,intakeV2:z.object({answers:IntakeV2DraftSchema,evaluation:z.unknown(),summary:z.unknown(),holdDecision:z.unknown().nullable(),screeningDecisions:z.unknown().nullable().optional()}).strict().optional(),photoSet:PhotoSetSchema.nullable(),destination:DestinationSchema.nullable(),planId:PlanIdSchema.nullable(),flags:z.array(str),submittedAt:InstantSchema.nullable(),approvedAt:InstantSchema.nullable(),patientMessage:nt});
+export const CaseSchema=obj({id:UUIDSchema,revision:rev,enrollmentProgress:EnrollmentProgressSchema.optional(),status:z.enum(['consents','identity','eligibility','payment','medical_history','photos','destination','submitted','needs_changes','approved','rejected','ineligible']),identity:IdentitySchema.nullable(),eligibility:EligibilityResultSchema.nullable(),medicalHistory:MedicalDraftSchema,questionnaireVersion:str,intakeV2:z.object({answers:IntakeV2DraftSchema,evaluation:z.unknown(),summary:z.unknown(),holdDecision:z.unknown().nullable(),screeningDecisions:z.unknown().nullable().optional()}).strict().optional(),photoSet:PhotoSetSchema.nullable(),destination:DestinationSchema.nullable(),planId:PlanIdSchema.nullable(),flags:z.array(str),submittedAt:InstantSchema.nullable(),approvedAt:InstantSchema.nullable(),patientMessage:nt});
 export const MembershipSchema=obj({id:UUIDSchema,planId:PlanIdSchema,status:z.enum(['awaiting_payment','paid_pending_review','active','past_due','ended','rejected']),amountCents:z.number().int().positive(),currency:z.literal('usd'),activatedAt:InstantSchema.nullable(),currentPeriodEnd:InstantSchema.nullable(),paidThrough:InstantSchema.nullable(),cancelAtPeriodEnd:z.boolean(),cadenceAnchor:InstantSchema.nullable(),destinationRequired:z.boolean(),refundStatus:z.enum(['not_applicable','pending','issued','failed']),access:z.enum(['enrollment','care','read_only'])});
 export const EnrollmentResponseSchema=obj({case:CaseSchema,membership:MembershipSchema.nullable(),consents:z.array(ConsentSchema)});
 export const PaymentActionSchema=obj({url:z.string().url(),expiresAt:InstantSchema});
@@ -147,6 +149,9 @@ export const contracts:Record<string,{request:z.ZodTypeAny;response:z.ZodTypeAny
 function endpoint(path:string,request:z.ZodTypeAny,response:z.ZodTypeAny){contracts[path]={request,response}}
 endpoint('GET /catalog',empty,CatalogSchema);
 endpoint('GET /enrollment',empty,EnrollmentResponseSchema);
+endpoint('PUT /enrollment/:caseId/progress',ProgressInputSchema,EnrollmentResponseSchema);
+endpoint('PUT /enrollment/:caseId/identity-draft/:attemptId',IdentityDraftInputSchema,EnrollmentResponseSchema);
+endpoint('POST /enrollment/:caseId/identity-ineligible',IdentityIneligibleSchema,EnrollmentResponseSchema);
 endpoint('PUT /enrollment/:caseId/consents',obj({expectedRevision:rev,acceptances:z.array(obj({key:ConsentKeySchema,version:z.number().int().positive(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})).length(4).refine(v=>new Set(v.map(x=>x.key)).size===4)}),EnrollmentResponseSchema);
 endpoint('PUT /enrollment/:caseId/identity/:identityId',obj({idPhoto:image,selfie:image,fullName:str.max(160),dateOfBirth:DateOnlySchema,physicallyInNC:z.enum(['true','false']),expectedRevision:z.string().regex(/^(0|[1-9]\d*)$/)}),EnrollmentResponseSchema);
 endpoint('PUT /enrollment/:caseId/eligibility',obj({expectedRevision:rev,answers:EligibilitySchema}),EnrollmentResponseSchema);
@@ -155,7 +160,7 @@ endpoint('GET /billing',empty,obj({membership:MembershipSchema.nullable()}));
 endpoint('POST /billing/portal',obj({membershipId:UUIDSchema}),PaymentActionSchema);
 endpoint('POST /billing/webhook',obj({rawBody:image,signature:str}),obj({received:z.literal(true)}));
 endpoint('GET /billing/return',empty,z.literal('Return to UNZIT'));
-endpoint('PUT /enrollment/:caseId/medical/:revisionId',obj({expectedRevision:rev,questionnaireVersion:str,answers:z.union([MedicalDraftSchema,IntakeV2DraftSchema])}),EnrollmentResponseSchema);
+endpoint('PUT /enrollment/:caseId/medical/:revisionId',obj({expectedRevision:rev,questionnaireVersion:str,answers:z.union([MedicalDraftSchema,IntakeV2DraftSchema]),advance:z.boolean().optional()}),EnrollmentResponseSchema);
 endpoint('POST /photo-captures/:captureId',obj({photo:image,captureDate:InstantSchema,notes:str.optional(),targetType:z.enum(['enrollment','check_in']),targetId:UUIDSchema}),obj({capture:CaptureSchema}));
 endpoint('PUT /photo-sets/:setId',obj({purpose:z.enum(['enrollment','check_in']),targetId:UUIDSchema,items:z.array(item).max(6)}),obj({photoSet:PhotoSetSchema}));
 endpoint('PUT /enrollment/:caseId/destination',obj({expectedRevision:rev,destination:DestinationSchema}),EnrollmentResponseSchema);
@@ -187,6 +192,9 @@ export const fixtures:Record<string,{request:any;response:any}>={};
 function fixture(path:string,request:any,response:any){fixtures[path]={request,response}}
 fixture('GET /catalog',{}, {contractVersion:1,settingsVersion:1,plans:PlanIdSchema.options.map(planId=>({id:planId,name:planId,amountCents:planId==='care'?3900:8900,currency:'usd',interval:'month',includesPartnerRx:planId==='all_in',cadence:{weeklyWeeks:planId==='care'?0:8,then:'monthly'}})),consents,reviewCopy:'Review within 1 to 2 business days.',questionnaireVersion:'0.9-draft',eligibilityQuestions:[],medicalQuestions:[]});
 fixture('GET /enrollment',{},enrollment);
+fixture('PUT /enrollment/:caseId/progress',{expectedRevision:0,step:'eligibility',topicId:null},{...enrollment,case:{...enrollment.case,enrollmentProgress:{step:'eligibility',topicId:null}}});
+fixture('PUT /enrollment/:caseId/identity-draft/:attemptId',{expectedRevision:'0',fullName:'',dateOfBirth:'',physicallyInNC:'false'},enrollment);
+fixture('POST /enrollment/:caseId/identity-ineligible',{expectedRevision:0,reason:'outside_nc'},enrollment);
 fixture('PUT /enrollment/:caseId/consents',{expectedRevision:0,acceptances:consents.map(({key,version,sha256})=>({key,version,sha256}))},enrollment);
 fixture('PUT /enrollment/:caseId/identity/:identityId',{idPhoto:Buffer.from('synthetic'),selfie:Buffer.from('synthetic'),fullName:'Synthetic Example',dateOfBirth:'1995-01-01',physicallyInNC:'true',expectedRevision:'0'},enrollment);
 fixture('PUT /enrollment/:caseId/eligibility',{expectedRevision:0,answers:{E1:'acne',E2:'yes',E3:'neither',E4:'no'}},enrollment);

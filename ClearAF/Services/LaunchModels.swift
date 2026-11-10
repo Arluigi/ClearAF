@@ -39,6 +39,7 @@ struct LaunchCatalog: Codable, Equatable {
     let reviewCopy: String; let questionnaireVersion: String; let eligibilityQuestions: [LaunchQuestion]; let medicalQuestions: [LaunchQuestion]
     var photoGuidance: LaunchPhotoGuidance? = nil; var identityGuidance: LaunchIdentityGuidance? = nil
     var intakeV2: IntakeV2Catalog? = nil
+    var enrollmentFlow: LaunchEnrollmentFlow? = nil
 }
 struct LaunchIdentity: Codable, Equatable, Identifiable {
     enum Status: String, Codable { case uploaded, approved, needsChanges = "needs_changes", rejected }
@@ -158,6 +159,7 @@ struct LaunchCase: Codable, Equatable, Identifiable {
     let medicalHistory: LaunchMedicalDraft; let questionnaireVersion: String; let photoSet: LaunchPhotoSet?; let destination: LaunchDestination?; let planId: LaunchPlanID?
     let flags: [String]; let submittedAt: String?; let approvedAt: String?; let patientMessage: String?
     var intakeV2: IntakeV2Record? = nil
+    var enrollmentProgress: LaunchEnrollmentProgress? = nil
 }
 struct LaunchMembership: Codable, Equatable, Identifiable {
     enum Status: String, Codable { case awaitingPayment = "awaiting_payment", paidPendingReview = "paid_pending_review", active, pastDue = "past_due", ended, rejected }
