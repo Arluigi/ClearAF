@@ -680,6 +680,8 @@ struct LaunchCheckInDetailView: View {
         LaunchPage(title: "Your check-in") {
             if let occurrence {
                 Text("Due \(LaunchCheckInCopy.date(occurrence.dueAt)) · \(occurrence.kind.rawValue)").font(Letterpress.data(12))
+                Text(occurrence.form.title).font(Letterpress.ui(13))
+                Text("Form version \(occurrence.form.version)").font(Letterpress.data(12))
                 Text(LaunchCheckInCopy.status(occurrence, draft: draft))
                 if let message = occurrence.patientMessage { Text(message).font(Letterpress.display(22)) }
                 if let draft, !draft.sent, repository.membership?.access == .care, repository.isCurrent(draft, occurrence: occurrence) {
@@ -757,11 +759,13 @@ private struct LaunchCheckInPhotosView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var error: String?
     var body: some View {
-        ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: occurrence.id, purpose: .checkIn, requiredSlots: LaunchPhotoRules.required(sites: sites), serverSet: occurrence.photoSet) { set in
-            do { try checkIns.attach(set, occurrenceId: occurrence.id, ticket: ticket); dismiss() }
-            catch { self.error = "Your photo set could not be attached. Refresh and try again." }
+        VStack(spacing: 0) {
+            if let error { Text(error).font(Letterpress.ui(13)).foregroundStyle(Letterpress.error).padding(.horizontal, Letterpress.Space.s22) }
+            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: occurrence.id, purpose: .checkIn, requiredSlots: LaunchPhotoRules.required(sites: sites), serverSet: occurrence.photoSet) { set in
+                do { try checkIns.attach(set, occurrenceId: occurrence.id, ticket: ticket); dismiss() }
+                catch { self.error = "Your photo set could not be attached. Refresh and try again." }
+            }
         }.onAppear { do { try checkIns.clearPhotos(occurrenceId: occurrence.id, ticket: ticket) } catch { self.error = "Your check-in draft changed. Return and refresh." } }
-        .safeAreaInset(edge: .bottom) { if let error { Text(error).foregroundStyle(Letterpress.error).padding() } }
     }
 }
 struct LaunchFollowUpSummary: View {

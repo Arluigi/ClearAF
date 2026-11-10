@@ -8,6 +8,10 @@ struct MedicalHistoryView: View {
     @State private var loaded = false
     @State private var localError: String?
     @State private var saved = false
+    init(repository: LaunchEnrollmentRepository, ticket: AccountAccess.Ticket, initialSection: Int = 0) {
+        self.repository = repository; self.ticket = ticket
+        _section = State(initialValue: min(max(initialSection, 0), 3))
+    }
     private let sectionTitles = ["Your health history", "Your acne history", "Medicines and health", "Your preferences"]
     private var questions: [LaunchQuestion] { repository.catalog?.medicalQuestions ?? [] }
     private var catalogComplete: Bool { Set(questions.map(\.id)).isSuperset(of: Set((1...22).map { "M\($0)" } + ["medicationPreference"])) }

@@ -45,18 +45,6 @@ struct CheckInPrototype: View {
 
     var body: some View {
         PrototypePage(title: "Your check-in", eyebrow: "UNZIT · Follow-up · Prototype") {
-            VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                Text("UNZIT Score").letterpressEyebrow(color: Letterpress.ink)
-                HStack(alignment: .firstTextBaseline) {
-                    Text("64").font(Letterpress.display(44))
-                    Text("Sample value").font(Letterpress.data(11)).foregroundStyle(Letterpress.inkSecondary)
-                }
-                Text("Prototype — scoring method to be defined by Dr. Om")
-                    .font(Letterpress.ui(12)).foregroundStyle(Letterpress.inkSecondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Letterpress.Space.s14)
-            .overlay { Rectangle().strokeBorder(Letterpress.rule, lineWidth: 1) }
             HStack {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
                     Text("New photo set").font(Letterpress.ui(16, weight: .medium))

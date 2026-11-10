@@ -5,6 +5,14 @@ struct ContentView: View {
     @StateObject private var apiService = APIService.shared
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
+        #if DEBUG
+        if let route = LaunchMockRoute.requested() { LaunchMockRoot(route: route) }
+        else { production }
+        #else
+        production
+        #endif
+    }
+    private var production: some View {
         Group {
             switch apiService.phase {
             case .loading:
@@ -61,6 +69,7 @@ struct ContentView: View {
     }
     private func resumeRepositories() {
         guard scenePhase == .active, (apiService.phase == .ready || apiService.phase == .onboarding), let ticket = apiService.access.snapshot() else { return }
+        apiService.recheckEnrollment()
         Task { @MainActor in
             await apiService.reminders.resume(ticket: ticket)
             await apiService.reminders.refreshPermission()
