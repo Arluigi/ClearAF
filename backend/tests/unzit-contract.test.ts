@@ -26,3 +26,16 @@ test('medical contract preserves explicit null branches and requires active sele
  assert.equal(MedicalHistorySchema.safeParse({...valid,M22:false}).success,false);
 });
 test('consent bodies preserve exact published bytes for the recorded SHA-256',async()=>{const {ConsentSchema}=await import('../src/contracts/unzitLaunch');const {createHash}=await import('node:crypto');const body='  DRAFT Synthetic original legal text.\n';const doc={...fixtures['GET /catalog'].response.consents[0],body,sha256:createHash('sha256').update(body).digest('hex')};const parsed=ConsentSchema.parse(doc);assert.equal(parsed.body,body);assert.equal(createHash('sha256').update(parsed.body).digest('hex'),parsed.sha256)});
+test('launch route fallback errors satisfy the shared error contract',async()=>{
+ process.env.SUPABASE_URL='https://synthetic.example.invalid';process.env.SUPABASE_ANON_KEY='synthetic';process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic';
+ const [{default:express},{default:request},{default:router},{launchEnrollment},{errorHandler},{ErrorSchema}]=await Promise.all([
+  import('express'),import('supertest'),import('../src/routes/launch-enrollment'),import('../src/services/launchEnrollment'),import('../src/middleware/errorHandler'),import('../src/contracts/unzitLaunch')
+ ]);
+ const original=launchEnrollment.get;launchEnrollment.get=async()=>{throw new Error('Synthetic internal detail')};
+ try{
+  const app=express();app.use((req:any,_res,next)=>{req.user={id:'synthetic',userType:'patient'};next()});app.use('/api/launch',router);app.use(errorHandler);
+  const result=await request(app).get('/api/launch/enrollment').expect(500);
+  assert.equal(result.body.code,'LAUNCH_OPERATION_FAILED');assert.equal(JSON.stringify(result.body).includes('Synthetic internal detail'),false);
+  ErrorSchema.parse(result.body);
+ }finally{launchEnrollment.get=original}
+});
