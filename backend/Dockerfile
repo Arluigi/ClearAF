@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+# Supabase Root 2021 CA (public; SHA-256 80:70:25:AD...:CA:FA) so pg verifies the pooler certificate.
+COPY --chown=node:node certs/supabase-prod-ca-2021.crt ./certs/supabase-prod-ca-2021.crt
+ENV NODE_EXTRA_CA_CERTS=/app/certs/supabase-prod-ca-2021.crt
 USER node
 EXPOSE 8080
 # server.ts listens on process.env.PORT when executed directly, but not when Vercel imports it.

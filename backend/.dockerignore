@@ -9,6 +9,8 @@
 !prisma/schema.prisma
 !src/
 !src/**
+!certs/
+!certs/supabase-prod-ca-2021.crt
 # Defense in depth, including files nested below src.
 **/.env*
 **/node_modules
