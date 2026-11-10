@@ -69,9 +69,9 @@ enum LaunchBillingURL {
         } catch { return nil }
     }
     func portal(ticket: AccountAccess.Ticket) async -> URL? {
-        guard membership != nil else { return nil }
-        struct Body: Encodable {}
-        do { return await hosted(try .json("/billing/portal", method: "POST", Body()), purpose: .portal, ticket: ticket) }
+        guard let membership else { return nil }
+        struct Body: Encodable { let membershipId: String }
+        do { return await hosted(try .json("/billing/portal", method: "POST", Body(membershipId: membership.id.uuidString.lowercased())), purpose: .portal, ticket: ticket) }
         catch { return nil }
     }
     private func hosted(_ request: LaunchRequest, purpose: LaunchBillingURL.Purpose, ticket: AccountAccess.Ticket) async -> URL? {
@@ -82,7 +82,18 @@ enum LaunchBillingURL {
         do {
             let bytes = try await transport.send(request, ticket: ticket)
             try require(ticket, current)
-            let action = try JSONDecoder().decode(LaunchPaymentAction.self, from: bytes)
+            let action: LaunchPaymentAction
+            if purpose == .checkout {
+                let response = try JSONDecoder().decode(LaunchCheckoutResponse.self, from: bytes)
+                if let confirmed = response.membership {
+                    guard confirmed.amountCents >= 0, confirmed.currency == "usd" else { throw LaunchFailure.invalidData }
+                }
+                membership = response.membership
+                guard let checkout = response.action else { return nil }
+                action = checkout
+            } else {
+                action = try JSONDecoder().decode(LaunchPaymentAction.self, from: bytes)
+            }
             guard let url = LaunchBillingURL.valid(action, purpose: purpose, now: now()) else { throw LaunchFailure.invalidData }
             hostedAction = action
             return url

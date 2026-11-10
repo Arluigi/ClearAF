@@ -23,7 +23,7 @@ test('a retry freezes the pharmacy snapshot and uses the same chart record id',a
  assert.deepEqual(calls[0],calls[1]);assert.equal((calls[1] as [string,typeof body])[1].pharmacy.name,'Synthetic Pharmacy');
 });
 test('identity, clinical approval, paid care and latest NC evidence gate prescription recording',()=>{
- const chart={enrollment:{case:{identity:{status:'approved',attestedInNC:true},status:'approved'},membership:{status:'active',access:'care'}},checkIns:{data:[]}} as unknown as LaunchChart;
+ const chart={enrollment:{case:{identity:{status:'approved',attestedInNC:true},status:'approved',destination:{planId:'care'}},membership:{status:'active',access:'care',paidThrough:'2099-01-01T00:00:00Z',planId:'care'}},checkIns:{data:[]}} as unknown as LaunchChart;
  assert.equal(prescriptionBlock(chart),null);chart.enrollment.case.identity!.status='uploaded';assert.match(prescriptionBlock(chart)!,/identity/i);chart.enrollment.case.identity!.status='approved';chart.checkIns.data=[{submittedAt:'2026-11-09',answers:{physicallyInNC:false}}] as LaunchChart['checkIns']['data'];assert.match(prescriptionBlock(chart)!,/NC/);
 });
 test('persisted entries show external source and immutable pharmacy; legacy records do not invent sent confirmations',()=>{

@@ -74,3 +74,12 @@ extension LaunchContractTests {
         XCTAssertEqual(prescriptions.data.first?.strength, "1%")
     }
 }
+
+extension LaunchContractTests {
+    func testExplicitLegacyChartDiscriminatorNeedsNoLaunchEnrollment() throws {
+        let response = try JSONDecoder().decode(LaunchChartResponse.self, from: Data(#"{"careModel":"legacy"}"#.utf8))
+        XCTAssertEqual(response.careModel, .legacy)
+        XCTAssertNil(response.enrollment)
+        XCTAssertThrowsError(try JSONDecoder().decode(LaunchChartResponse.self, from: Data(#"{}"#.utf8)))
+    }
+}

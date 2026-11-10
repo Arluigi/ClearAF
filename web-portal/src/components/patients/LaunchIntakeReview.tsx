@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useClinicalAPI } from '@/lib/auth';
+import { readLaunchChart } from '@/lib/care-decisions';
 import { useRead, LoadState, Pages } from '@/components/care-support/shared';
 import { Button } from '@/components/ui/button';
 import { consentReceipts, intakeAnswer, launchApprovalBlock } from '@/lib/workspace';
@@ -31,7 +32,7 @@ export function LaunchIntakeDetails({enrollment,catalog}:{enrollment:LaunchEnrol
 }
 export default function LaunchIntakeReview({patientId,targetId,kind,active=true}:{patientId:string;targetId?:string|null;kind?:string|null;active?:boolean}) {
   const api=useClinicalAPI();const [page,setPage]=useState(1);const section=useRef<HTMLElement>(null);
-  const fetch=useCallback(()=>api.launch().chart(patientId,page),[api,patientId,page]);const chart=useRead(fetch);
+  const fetch=useCallback(()=>readLaunchChart(()=>api.launch().chart(patientId,page)),[api,patientId,page]);const chart=useRead(fetch);
   const fetchCatalog=useCallback(()=>api.launch().catalog(),[api]);const catalog=useRead(fetchCatalog);
   useEffect(()=>{if(kind==='identity'||kind==='enrollment')section.current?.scrollIntoView({block:'start'});},[kind,targetId]);
   return <section ref={section} aria-label="Enrollment review" className="space-y-5 border-t-2 border-ink pt-5">

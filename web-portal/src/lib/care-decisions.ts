@@ -100,13 +100,18 @@ export class IdempotentAction<B, R> {
   }
 }
 
-/** The contract cannot distinguish absent launch enrollment from concealed assignment denial.
- * Fail closed. Preserve legacy implementations without selecting them on an ambiguous error. */
-export async function readLaunchChart(read:()=>Promise<import('../types/api').LaunchChart>):Promise<import('../types/api').LaunchChart|null> {
-  return read();
+/** Only a successful, assignment-authorized legacy discriminator enables legacy screens. */
+export async function readLaunchChart(read:()=>Promise<import('../types/api').LaunchChartResponse>):Promise<import('../types/api').LaunchChart|null> {
+  const chart=await read();
+  if(chart.careModel==='legacy')return null;
+  if(chart.careModel!=='launch')throw new Error('Care model not confirmed. Refresh the chart.');
+  return chart;
 }
-export function launchMembershipWords(membership:import('../types/api').LaunchMembership|null,status:import('../types/api').LaunchCaseStatus) {
-  if(status==='approved'&&membership?.status==='active'&&membership.access==='care')return 'Care active';
+export function hasLaunchCareAccess(membership:import('../types/api').LaunchMembership|null,now=Date.now()) {
+  return membership?.access==='care'&&membership.paidThrough!==null&&Date.parse(membership.paidThrough)>now;
+}
+export function launchMembershipWords(membership:import('../types/api').LaunchMembership|null,status:import('../types/api').LaunchCaseStatus,now=Date.now()) {
+  if(status==='approved'&&hasLaunchCareAccess(membership,now))return 'Care active';
   if(status==='approved')return 'Clinical approval recorded. Care not yet confirmed active. Refresh to confirm.';
   if(status==='rejected')return 'Rejected. Full refund and immediate subscription cancellation requested.';
   return `Case ${status.replaceAll('_',' ')} · Membership ${membership?.status.replaceAll('_',' ')??'not available'}`;

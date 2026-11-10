@@ -131,7 +131,7 @@ function LegacyCareStatusCard({ patientId, refresh }: { patientId: string; refre
 }
 
 export function LaunchMembershipStatus({membership,caseStatus}:{membership:LaunchMembership|null;caseStatus:LaunchCaseStatus}) {
-  return <section aria-label="Launch care and refund status" className="space-y-2 border-y-2 border-ink py-4"><h3 className="font-medium">{launchMembershipWords(membership,caseStatus)}</h3>{membership&&<><p className="text-sm">{`Refund ${membership.refundStatus.replaceAll('_',' ')}`}</p><p className="text-sm">Paid through: {membership.paidThrough?stamp(membership.paidThrough):'Not confirmed'}</p>{membership.refundStatus==='failed'&&<p className="text-sm">Refund failed. Provider reconciliation must retry the durable operation; refresh to check confirmation.</p>}</>}</section>;
+  return <section aria-label="Launch care and refund status" className="space-y-2 border-y-2 border-ink py-4"><h3 className="font-medium">{launchMembershipWords(membership,caseStatus)}</h3>{membership&&<><p className="text-sm">Billing status: {membership.status.replaceAll('_',' ')}</p><p className="text-sm">{`Refund ${membership.refundStatus.replaceAll('_',' ')}`}</p><p className="text-sm">Paid through: {membership.paidThrough?stamp(membership.paidThrough):'Not confirmed'}</p>{membership.refundStatus==='failed'&&<p className="text-sm">Refund failed. Provider reconciliation must retry the durable operation; refresh to check confirmation.</p>}</>}</section>;
 }
 export default function CareStatusCard({patientId,refresh}:{patientId:string;refresh:number}) {
   const api=useClinicalAPI();const fetch=useCallback(()=>{void refresh;return readLaunchChart(()=>api.launch().chart(patientId));},[api,patientId,refresh]);const chart=useRead(fetch);

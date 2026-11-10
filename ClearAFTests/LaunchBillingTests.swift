@@ -63,7 +63,7 @@ import XCTest
         XCTAssertEqual(repo.membership?.status, .ended)
         XCTAssertEqual(repo.membership?.access, .readOnly)
     }
-    func testPortalUsesOnlyPortalEndpointAndRequiresServerMembership() async {
+    func testPortalUsesOnlyPortalEndpointAndRequiresServerMembership() async throws {
         let fake = BillingFake(), access = AccountAccess(), ticket = access.activate(UUID()), repo = BillingRepository(access: access, transport: fake)
         let unavailable = await repo.portal(ticket: ticket)
         XCTAssertNil(unavailable)
@@ -73,6 +73,9 @@ import XCTest
         fake.action = Data(#"{"url":"https://billing.stripe.com/p/session/synthetic","expiresAt":"2099-01-01T00:00:00Z"}"#.utf8)
         let url = await repo.portal(ticket: ticket)
         XCTAssertEqual(url?.host, "billing.stripe.com")
+        let body = try JSONSerialization.jsonObject(with: XCTUnwrap(fake.requests.last?.body)) as! [String: Any]
+        XCTAssertEqual(Set(body.keys), ["membershipId"])
+        XCTAssertEqual(body["membershipId"] as? String, "00000000-0000-4000-8000-000000000001")
         XCTAssertEqual(fake.requests.last?.path, "/billing/portal")
         XCTAssertEqual(fake.requests.last?.method, "POST")
         XCTAssertFalse(fake.requests.contains { $0.path.contains("operations") || $0.path.contains("cancel") || $0.path.contains("switch") })
@@ -109,6 +112,16 @@ import XCTest
         let retry = await repo.checkout(caseId: UUID(), planId: .care, settingsVersion: 2, ticket: ticket)
         XCTAssertNotNil(retry)
     }
+    func testPaidCheckoutRetryUsesMembershipEnvelopeWithoutOpeningAnotherSession() async {
+        let fake = BillingFake(), access = AccountAccess(), ticket = access.activate(UUID()), repo = BillingRepository(access: access, transport: fake)
+        fake.billing = Self.membership(status: "paid_pending_review", access: "enrollment", cancel: false, destination: false)
+        fake.nullCheckoutAction = true
+        let url = await repo.checkout(caseId: UUID(), planId: .care, settingsVersion: 1, ticket: ticket)
+        XCTAssertNil(url)
+        XCTAssertTrue(repo.paymentConfirmed)
+        XCTAssertNil(repo.error)
+        XCTAssertNil(repo.hostedAction)
+    }
     static func membership(status: String, access: String, cancel: Bool, destination: Bool) -> Data {
         Data("""
         {"membership":{"id":"00000000-0000-4000-8000-000000000001","planId":"care","status":"\(status)","amountCents":4123,"currency":"usd","activatedAt":null,"currentPeriodEnd":"2026-12-09T12:00:00Z","paidThrough":"2026-12-09T12:00:00Z","cancelAtPeriodEnd":\(cancel),"cadenceAnchor":"2026-11-09T12:00:00Z","refundStatus":"pending","access":"\(access)","destinationRequired":\(destination)}}
@@ -119,6 +132,7 @@ import XCTest
     var requests: [LaunchRequest] = []
     var billing = Data(#"{"membership":null}"#.utf8)
     var action = Data(#"{"url":"https://checkout.stripe.com/c/pay/synthetic","expiresAt":"2099-01-01T00:00:00Z"}"#.utf8)
+    var nullCheckoutAction = false
     var failure: Error?
     var pause = false
     var continuation: CheckedContinuation<Data, Never>?
@@ -126,6 +140,11 @@ import XCTest
         requests.append(request)
         if let failure { throw failure }
         if pause { return await withCheckedContinuation { continuation = $0 } }
+        if request.path == "/billing/checkout" {
+            var envelope = try JSONSerialization.jsonObject(with: billing) as! [String: Any]
+            envelope["action"] = nullCheckoutAction ? NSNull() : try JSONSerialization.jsonObject(with: action)
+            return try JSONSerialization.data(withJSONObject: envelope)
+        }
         return request.method == "GET" ? billing : action
     }
 }

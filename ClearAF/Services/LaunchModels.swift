@@ -172,6 +172,7 @@ struct LaunchEnrollmentResponse: Codable, Equatable {
     }
 }
 struct LaunchBillingResponse: Codable, Equatable { let membership: LaunchMembership? }
+struct LaunchCheckoutResponse: Decodable { let membership: LaunchMembership?; let action: LaunchPaymentAction? }
 /// Hosted-session response for the amended Checkout/Customer Portal contract; never evidence of payment.
 struct LaunchPaymentAction: Codable, Equatable { let url: String; let expiresAt: String }
 struct LaunchFollowUp: Codable, Equatable {
@@ -198,4 +199,18 @@ enum LaunchFailure: LocalizedError {
         case .busy: return "Please wait for the current request to finish."
         }
     }
+}
+
+/// Additive clinician-chart discriminator. Patient builds continue to ignore unknown response keys.
+enum LaunchCareModel: String, Codable { case launch, legacy }
+struct LaunchChartResponse: Decodable {
+    let careModel: LaunchCareModel
+    let enrollment: LaunchEnrollmentResponse?
+    let checkIns: SupportPage<LaunchCheckIn>?
+    let reviews: SupportPage<LaunchChartReview>?
+    let prescriptions: SupportPage<LaunchPrescription>?
+}
+struct LaunchChartReview: Codable {
+    let id: UUID; let targetType: String; let targetId: UUID; let outcome: String
+    let patientMessage: String?; let createdAt: String; let clinicianId: UUID
 }

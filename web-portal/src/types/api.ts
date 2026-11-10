@@ -258,7 +258,9 @@ export type LaunchReview = {id:LaunchUUID;targetType:'identity'|'case'|'check_in
   outcome:'approve'|'needs_changes'|'reject';patientMessage:string|null;createdAt:LaunchInstant;clinicianId:LaunchUUID};
 export type LaunchQueueItem = {id:LaunchUUID;patientId:LaunchUUID;patientName:string|null;
   kind:'identity'|'enrollment'|'check_in';targetId:LaunchUUID;receivedAt:LaunchInstant;flags:string[]};
-export type LaunchChart = {enrollment:LaunchEnrollmentResponse;checkIns:LaunchPage<LaunchCheckIn>;reviews:LaunchPage<LaunchReview>;
+export type LaunchChart = {careModel:'launch';enrollment:LaunchEnrollmentResponse;checkIns:LaunchPage<LaunchCheckIn>;reviews:LaunchPage<LaunchReview>;
   prescriptions:LaunchPage<LaunchPrescriptionSent>};
 export type LaunchPrescriptionSent = {id:LaunchUUID;patientId:LaunchUUID;clinicianId:LaunchUUID;drug:string;strength:string;
   sig:string;pharmacy:LaunchPharmacy;sentAt:LaunchInstant;recordedAt:LaunchInstant;source:'treatrx_external'};
+
+export type LaunchChartResponse = LaunchChart | {careModel:'legacy'};

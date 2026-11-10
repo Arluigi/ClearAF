@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 import { useClinicalAPI } from '@/lib/auth';
+import { readLaunchChart } from '@/lib/care-decisions';
 import { useRead, LoadState, Pages } from '@/components/care-support/shared';
 import { Button } from '@/components/ui/button';
 import { stamp } from '@/lib/worklist';
@@ -23,8 +24,9 @@ export function PrescriptionRecordControls({locked,page,totalPages,onRefresh,onP
 export default function PrescriptionSentHistory({patientId}:{patientId:string}) {
   const api=useClinicalAPI();const [page,setPage]=useState(1);const [saved,setSaved]=useState(false);const [locked,setLocked]=useState(false);
   const fetch=useCallback(async()=>{
-    if(page===1)return api.launch().chart(patientId,1);
-    const [history,current]=await Promise.all([api.launch().chart(patientId,page),api.launch().chart(patientId,1)]);
+    if(page===1)return readLaunchChart(()=>api.launch().chart(patientId,1));
+    const [history,current]=await Promise.all([readLaunchChart(()=>api.launch().chart(patientId,page)),readLaunchChart(()=>api.launch().chart(patientId,1))]);
+    if(!history||!current)return null;
     return {...history,enrollment:current.enrollment,checkIns:current.checkIns};
   },[api,patientId,page]);const chart=useRead(fetch);
   return <section id="prescription-sent" aria-label="Prescription sent records" className="space-y-4 border-t-2 border-ink pt-5"><div className="flex flex-wrap justify-between gap-3"><h2 className="editorial-title text-2xl">Prescription sent</h2></div><LoadState {...chart} loading="Loading prescription records"/>

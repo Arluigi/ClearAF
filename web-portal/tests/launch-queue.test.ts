@@ -25,3 +25,12 @@ test('reloading removes resolved reviews, stale pages cannot reappear, errors cl
  await read.load(async()=>items);assert.equal(read.snapshot().status,'ready');
  const pending=read.load(()=>new Promise(r=>{resolve=r;}));read.cancel();resolve([]);await pending;assert.equal(read.snapshot().data,null);
 });
+test('refresh on a removed last page clamps and reloads; an empty queue returns to page one',async()=>{
+ const {readLaunchQueue}=await import('../src/lib/launch');const calls:number[]=[];
+ const response=(page:number,totalPages:number,data:LaunchQueueItem[]=[])=>({data,pagination:{page,limit:20,total:totalPages*20,totalPages}});
+ let totalPages=3;
+ const read=async(page:number)=>{calls.push(page);return response(page,totalPages,page<=totalPages?[items[0]]:[]);};
+ assert.equal((await readLaunchQueue(read,3)).pagination.page,3);
+ totalPages=1;const refreshed=await readLaunchQueue(read,3);assert.deepEqual(calls,[3,3,1]);assert.equal(refreshed.pagination.page,1);assert.equal(refreshed.data.length,1);
+ totalPages=0;calls.length=0;const empty=await readLaunchQueue(read,3);assert.deepEqual(calls,[3,1]);assert.equal(empty.pagination.page,1);assert.deepEqual(empty.data,[]);
+});

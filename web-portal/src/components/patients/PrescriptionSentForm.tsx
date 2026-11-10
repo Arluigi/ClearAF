@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useUnsaved } from '@/components/care-support/shared';
 import { useClinicalAPI } from '@/lib/auth';
-import { IdempotentAction } from '@/lib/care-decisions';
+import { IdempotentAction, hasLaunchCareAccess } from '@/lib/care-decisions';
 import type { PrescriptionSentBody } from '@/lib/launch';
 import type { LaunchChart, LaunchPharmacy, LaunchPrescriptionSent } from '@/types/api';
 export type PrescriptionDraft=PrescriptionSentBody&{confirmed:boolean;pharmacyConfirmed:boolean};
@@ -19,11 +19,12 @@ export function prescriptionBody(draft:PrescriptionDraft,now=Date.now()):Prescri
   const time=new Date(draft.sentAt).getTime();if(!Number.isFinite(time))throw new Error('A valid date and time sent is required.');if(time>now)throw new Error('Date sent cannot be in the future.');
   return {drug:draft.drug.trim(),strength:draft.strength.trim(),sig:draft.sig.trim(),sentAt:new Date(time).toISOString(),pharmacy:{...draft.pharmacy,name:draft.pharmacy.name.trim(),addressLine1:draft.pharmacy.addressLine1.trim(),addressLine2:draft.pharmacy.addressLine2?.trim()||null,city:draft.pharmacy.city.trim(),state:draft.pharmacy.state.trim().toUpperCase(),postalCode:draft.pharmacy.postalCode.trim(),phone:draft.pharmacy.phone.trim()}};
 }
-export function prescriptionBlock(chart:LaunchChart):string|null {
+export function prescriptionBlock(chart:LaunchChart,now=Date.now()):string|null {
   const record=chart.enrollment.case,membership=chart.enrollment.membership;
   if(record.identity?.status!=='approved')return 'Server-approved manual identity review is required.';
   if(record.status!=='approved')return 'Clinical case approval is required.';
-  if(membership?.status!=='active'||membership.access!=='care')return 'Current paid care access is required.';
+  if(!hasLaunchCareAccess(membership,now))return 'Current paid care access is required.';
+  if(membership?.destinationRequired||!record.destination||record.destination.planId!==membership?.planId)return 'A current destination matching the membership plan is required.';
   const latest=[...chart.checkIns.data].filter(row=>row.submittedAt&&row.answers).sort((a,b)=>Date.parse(b.submittedAt!)-Date.parse(a.submittedAt!))[0];
   if(!record.identity.attestedInNC||latest?.answers?.physicallyInNC===false)return 'Current affirmative NC attestation is required. The server confirms freshness.';
   return null;

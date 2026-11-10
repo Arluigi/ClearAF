@@ -79,8 +79,9 @@ export type Review = {id:UUID;targetType:'identity'|'case'|'check_in';targetId:U
   outcome:'approve'|'needs_changes'|'reject';patientMessage:string|null;createdAt:Instant;clinicianId:UUID};
 export type QueueItem = {id:UUID;patientId:UUID;patientName:string|null;
   kind:'identity'|'enrollment'|'check_in';targetId:UUID;receivedAt:Instant;flags:string[]};
-export type Chart = {enrollment:EnrollmentResponse;checkIns:Page<CheckIn>;reviews:Page<Review>;
+export type Chart = {careModel:'launch';enrollment:EnrollmentResponse;checkIns:Page<CheckIn>;reviews:Page<Review>;
   prescriptions:Page<PrescriptionSent>};
+export type ChartResponse = Chart | {careModel:'legacy'};
 export type PrescriptionSent = {id:UUID;patientId:UUID;clinicianId:UUID;drug:string;strength:string;
   sig:string;pharmacy:Pharmacy;sentAt:Instant;recordedAt:Instant;source:'treatrx_external'};
 
@@ -122,7 +123,7 @@ export const ReviewSchema=obj({id:UUIDSchema,targetType:z.enum(['identity','case
 export const QueueItemSchema=obj({id:UUIDSchema,patientId:UUIDSchema,patientName:nt,kind:z.enum(['identity','enrollment','check_in']),targetId:UUIDSchema,receivedAt:InstantSchema,flags:z.array(str)});
 export const PrescriptionSentSchema=obj({id:UUIDSchema,patientId:UUIDSchema,clinicianId:UUIDSchema,drug:str,strength:str,sig:str,pharmacy:PharmacySchema,sentAt:InstantSchema,recordedAt:InstantSchema,source:z.literal('treatrx_external')});
 export const pageSchema=<T extends z.ZodTypeAny>(s:T)=>obj({data:z.array(s),pagination:obj({page:z.number().int().positive(),limit:z.number().int().min(1).max(50),total:integer,totalPages:integer})});
-export const ChartSchema=obj({enrollment:EnrollmentResponseSchema,checkIns:pageSchema(CheckInSchema),reviews:pageSchema(ReviewSchema),prescriptions:pageSchema(PrescriptionSentSchema)});
+export const ChartSchema=obj({careModel:z.literal('launch'),enrollment:EnrollmentResponseSchema,checkIns:pageSchema(CheckInSchema),reviews:pageSchema(ReviewSchema),prescriptions:pageSchema(PrescriptionSentSchema)});
 export const ErrorSchema=obj({error:str,code:z.enum(['VALIDATION_ERROR','INVALID_TOKEN','INVALID_SESSION','INSUFFICIENT_PERMISSIONS','LAUNCH_STEP_REQUIRED','CARE_ACCESS_REQUIRED','NOT_FOUND','REVISION_CONFLICT','CONSENT_OUTDATED','OPERATION_CONFLICT','SETTINGS_CHANGED','INCOMPLETE_CASE','INCOMPLETE_PHOTO_SET','PAYLOAD_TOO_LARGE','BILLING_UNAVAILABLE']),details:z.array(obj({field:str,message:str})).optional()});
 // PUT client IDs replay identical bodies; changed body/revision returns 409. No Idempotency-Key.
 const empty=obj({}), pagination=obj({page:z.coerce.number().int().positive().optional(),limit:z.coerce.number().int().min(1).max(50).optional()}),image=z.instanceof(Buffer);
@@ -146,7 +147,7 @@ endpoint('POST /enrollment/:caseId/submit',obj({expectedRevision:rev,photoSetId:
 endpoint('GET /check-ins',pagination,pageSchema(CheckInSchema));
 endpoint('PUT /check-ins/:checkInId/submissions/:responseId',obj({formId:UUIDSchema,photoSetId:UUIDSchema,answers:FollowUpSchema}),obj({checkIn:CheckInSchema}));
 endpoint('GET /review-queue',pagination.extend({kind:z.enum(['identity','enrollment','check_in']).optional()}),pageSchema(QueueItemSchema));
-endpoint('GET /patients/:patientId/chart',pagination,ChartSchema);
+endpoint('GET /patients/:patientId/chart',pagination,z.discriminatedUnion('careModel',[ChartSchema,obj({careModel:z.literal('legacy')})]));
 const signed=obj({url:z.string().url(),expiresAt:InstantSchema});
 endpoint('GET /patients/:patientId/identity/:identityId/images',empty,obj({idPhoto:signed,selfie:signed}));
 endpoint('PUT /patients/:patientId/reviews/:reviewId',obj({targetType:ReviewSchema.shape.targetType,targetId:UUIDSchema,expectedRevision:rev,outcome:ReviewSchema.shape.outcome,patientMessage:nt}),obj({review:ReviewSchema,enrollment:EnrollmentResponseSchema,checkIn:CheckInSchema.nullable()}));
@@ -186,7 +187,7 @@ fixture('POST /enrollment/:caseId/submit',{expectedRevision:0,photoSetId:id},enr
 fixture('GET /check-ins',{},page);
 fixture('PUT /check-ins/:checkInId/submissions/:responseId',{formId:id,photoSetId:id,answers:{tolerability:'good',sideEffects:{none:true,details:null},pregnancyStatus:'neither',newMedicines:{none:true,details:null},physicallyInNC:true}},{checkIn});
 fixture('GET /review-queue',{},page);
-fixture('GET /patients/:patientId/chart',{}, {enrollment,checkIns:page,reviews:page,prescriptions:page});
+fixture('GET /patients/:patientId/chart',{}, {careModel:'launch',enrollment,checkIns:page,reviews:page,prescriptions:page});
 fixture('GET /patients/:patientId/identity/:identityId/images',{}, {idPhoto:{url:'https://example.invalid/private-id',expiresAt:at},selfie:{url:'https://example.invalid/private-selfie',expiresAt:at}});
 fixture('PUT /patients/:patientId/reviews/:reviewId',{targetType:'case',targetId:id,expectedRevision:0,outcome:'approve',patientMessage:null},{review,enrollment,checkIn:null});
 fixture('PUT /patients/:patientId/prescriptions-sent/:recordId',{drug:prescription.drug,strength:prescription.strength,sig:prescription.sig,pharmacy,sentAt:at},{prescription});
