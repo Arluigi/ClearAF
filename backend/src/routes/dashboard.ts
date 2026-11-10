@@ -51,10 +51,15 @@ router.get('/stats', async (req, res) => {
       }
     });
 
-    // Calculate average improvement (mock calculation based on skin scores)
+    // Legacy numeric keys remain for installed clients. Launch records never
+    // participate in legacy score-derived displays or change stored chart data.
+    const launchPatients=await prisma.launchCase.findMany({where:{patientId:{in:assignedPatients.map(patient=>patient.id)}},select:{patientId:true}});
+    const launchPatientIds=launchPatients.map(patient=>patient.patientId);
+    // Historical legacy calculation only.
     const patientsWithScores = await prisma.user.findMany({
       where: {
         dermatologistId: user.id,
+        id: {notIn:launchPatientIds},
         currentSkinScore: {
           gt: 0
         }
@@ -124,7 +129,7 @@ router.get('/stats', async (req, res) => {
       appointmentsToday,
       unreadMessages,
       avgImprovement,
-      recentPatients,
+      recentPatients:recentPatients.map(patient=>launchPatientIds.includes(patient.id)?{...patient,currentSkinScore:0,streakCount:0}:patient),
       upcomingAppointments
     };
 

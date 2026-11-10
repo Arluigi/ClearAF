@@ -42,3 +42,13 @@ export async function assertLaunchPrescriptionAccess(tx:any,patientId:string,now
  const destination=DestinationSchema.safeParse(row.destination);
  if(membership.destinationRequired||!destination.success||destination.data.planId!==membership.planId)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');return row;
 }
+
+// Legacy paid-care mutations use current location evidence. Factual launch check-ins
+// deliberately keep their own scope so a patient can submit a fresh NC attestation.
+export async function requireLegacyClinicalWrite(db:any,patientId:string,now=new Date()){
+ const result=await requirePatientCareScope(db,patientId,'clinical_write',now);
+ if(result.caseRow){const identity=result.caseRow.identityId?await db.identityVerification.findUnique({where:{id:result.caseRow.identityId}}):null;
+  if(!await currentNCEvidence(db,patientId,identity))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+ }
+ return result;
+}

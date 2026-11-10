@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma } from '@prisma/client';
+import { requireLegacyClinicalWrite } from './careAccess';
 import { prisma } from '../config/database';
 
 export const uuid = z.string().uuid().transform(value => value.toLowerCase());
@@ -53,6 +54,7 @@ export async function saveRevision(patientId: string, clinicianId: string, timeO
   const save = () => prisma.$transaction(async tx => {
     await lock(tx, patientId);
     await authorize(tx, patientId, clinicianId);
+    await requireLegacyClinicalWrite(tx,patientId);
     const existing = await tx.careRoutineRevision.findUnique({where:{id}});
     if (existing) {
       const prior = existing.version > 1 ? await tx.careRoutineRevision.findFirst({where:{userId:patientId,timeOfDay,version:existing.version - 1}}) : null;
@@ -73,32 +75,31 @@ export async function saveRevision(patientId: string, clinicianId: string, timeO
   }
 }
 export async function saveCompletion(userId: string, id: string, input: z.infer<typeof completionInput>) {
-  const routine = await prisma.careRoutineRevision.findUnique({where:{id:input.revisionId}});
-  if (!routine || routine.userId !== userId) throw careError(404, 'Routine not found');
-  if (!routine.isActive) throw careError(400, 'Inactive revisions cannot be completed');
-  const completedAt = new Date(input.completedAt);
-  const existingResult = async () => {
-    const existing = await prisma.careRoutineCompletion.findUnique({where:{id}});
-    if (existing) {
-      if (existing.userId !== userId) throw careError(404, 'Completion not found');
-      if (existing.revisionId !== input.revisionId || existing.localDate !== input.localDate
-        || existing.timeZone !== input.timeZone || existing.completedAt.getTime() !== completedAt.getTime()) throw careError(409, 'Completion identity conflicts with saved content');
-      return existing;
-    }
-    return prisma.careRoutineCompletion.findUnique({where:{userId_revisionId_localDate:{userId,revisionId:input.revisionId,localDate:input.localDate}}});
-  };
-  const existing = await existingResult();
-  if (existing) return {completion:existing,created:false};
-  try {
-    const completion = await prisma.careRoutineCompletion.create({data:{id,userId,revisionId:input.revisionId,completedAt,localDate:input.localDate,timeZone:input.timeZone}});
+  const save=()=>prisma.$transaction(async tx=>{
+    await lock(tx,userId);
+    await requireLegacyClinicalWrite(tx,userId);
+    const routine = await tx.careRoutineRevision.findUnique({where:{id:input.revisionId}});
+    if (!routine || routine.userId !== userId) throw careError(404, 'Routine not found');
+    if (!routine.isActive) throw careError(400, 'Inactive revisions cannot be completed');
+    const completedAt = new Date(input.completedAt);
+    const existingResult = async () => {
+      const existing = await tx.careRoutineCompletion.findUnique({where:{id}});
+      if (existing) {
+        if (existing.userId !== userId) throw careError(404, 'Completion not found');
+        if (existing.revisionId !== input.revisionId || existing.localDate !== input.localDate
+          || existing.timeZone !== input.timeZone || existing.completedAt.getTime() !== completedAt.getTime()) throw careError(409, 'Completion identity conflicts with saved content');
+        return existing;
+      }
+      return tx.careRoutineCompletion.findUnique({where:{userId_revisionId_localDate:{userId,revisionId:input.revisionId,localDate:input.localDate}}});
+    };
+    const existing = await existingResult();
+    if (existing) return {completion:existing,created:false};
+    const completion = await tx.careRoutineCompletion.create({data:{id,userId,revisionId:input.revisionId,completedAt,localDate:input.localDate,timeZone:input.timeZone}});
     return {completion,created:true};
-  } catch (error) {
-    if ((error as {code?:string}).code !== 'P2002') throw error;
-    const winner = await existingResult();
-    if (!winner) throw error;
-    return {completion:winner,created:false};
-  }
+  });
+  try{return await save()}catch(error){if((error as {code?:string}).code!=='P2002')throw error;return save()}
 }
+
 export async function snapshot(userId: string, date: string, clinicianId?: string) {
   return prisma.$transaction(async tx => {
     if (clinicianId) { await lock(tx,userId); await authorize(tx,userId,clinicianId); }

@@ -2,7 +2,8 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { parsePagination, parsePatientSearch } from '../services/pagination';
-import { requireEnrolledPatient } from '../middleware/enrollmentGate';
+import { enrollmentEnforced } from '../middleware/enrollmentGate';
+import { enrollmentError, isEnrolled } from '../services/enrollment';
 
 const router = express.Router();
 
@@ -152,7 +153,7 @@ router.patch('/profile', async (req, res, next) => {
 });
 
 // Update skin score (patients only)
-router.post('/skin-score', requireEnrolledPatient, async (req, res, next) => {
+router.post('/skin-score', async (req, res, next) => {
   try {
     if (req.user!.userType !== 'patient') {
       return res.status(403).json({
@@ -164,34 +165,41 @@ router.post('/skin-score', requireEnrolledPatient, async (req, res, next) => {
     const validatedData = updateSkinScoreSchema.parse(req.body);
     const { skinScore, photoId } = validatedData;
 
-    // Update user's current skin score
-    const updatedUser = await prisma.user.update({
-      where: { id: req.user!.id },
-      data: {
-        currentSkinScore: skinScore,
-        streakCount: {
-          increment: 1
-        }
-      },
-      select: {
-        id: true,
-        currentSkinScore: true,
-        streakCount: true
-      }
-    });
-
-    // If photo ID provided, update the photo's skin score
-    if (photoId) {
-      await prisma.skinPhoto.update({
-        where: {
-          id: photoId,
-          userId: req.user!.id  // Ensure user owns the photo
-        },
+    const updatedUser = await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id=${req.user!.id}::uuid FOR UPDATE`;
+      if(await tx.launchCase.findUnique({where:{patientId:req.user!.id}}))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+      if(enrollmentEnforced()&&!await isEnrolled(req.user!.id))throw enrollmentError(403,'ENROLLMENT_REQUIRED');
+      // Update user's current skin score
+      const updatedUser = await tx.user.update({
+        where: { id: req.user!.id },
         data: {
-          skinScore
+          currentSkinScore: skinScore,
+          streakCount: {
+            increment: 1
+          }
+        },
+        select: {
+          id: true,
+          currentSkinScore: true,
+          streakCount: true
         }
       });
-    }
+
+      // If photo ID provided, update the photo's skin score
+      if (photoId) {
+        await tx.skinPhoto.update({
+          where: {
+            id: photoId,
+            userId: req.user!.id  // Ensure user owns the photo
+          },
+          data: {
+            skinScore
+          }
+        });
+      }
+
+      return updatedUser;
+    });
 
     res.json({
       message: 'Skin score updated successfully',

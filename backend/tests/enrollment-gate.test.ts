@@ -24,7 +24,7 @@ const db:any={
  careRoutineRevision:proxyModel(),careRoutineCompletion:proxyModel(),
  careFormRevision:proxyModel(),careFormResponse:proxyModel(),
  assignedMessage:proxyModel(),dermatologist:proxyModel(),
- $queryRaw:async()=>{writes++;return[]},
+ $queryRaw:async()=>[],
  $transaction:async(fn:any)=>fn(db)
 };
 const original=(Module as any)._load;(Module as any)._load=function(name:string,...args:any[]){if(name==='@prisma/client')return {PrismaClient:class{constructor(){return db}},Prisma:{}};return original.call(this,name,...args)};

@@ -3,7 +3,9 @@ import { privatePhotos } from '../services/photoAccess';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requirePatient, requireDermatologist } from '../middleware/auth';
-import { requireEnrolledPatient } from '../middleware/enrollmentGate';
+import { requireEnrolledPatient, enrollmentEnforced } from '../middleware/enrollmentGate';
+import { requireLegacyClinicalWrite, requirePatientCareScope } from '../services/careAccess';
+import { isEnrolled, enrollmentError } from '../services/enrollment';
 
 const router = express.Router();
 
@@ -30,105 +32,111 @@ router.post('/', requirePatient, requireEnrolledPatient, async (req, res, next) 
     const validatedData = createAppointmentSchema.parse(req.body);
     const { scheduledDate, type, concern, duration, dermatologistId } = validatedData;
 
-    // Get user's assigned dermatologist or use provided ID
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.id },
-      include: {
-        assignedDermatologist: {
-          select: { id: true, name: true, title: true }
-        }
-      }
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        error: 'User not found',
-        code: 'USER_NOT_FOUND'
-      });
-    }
-
-    if (dermatologistId && dermatologistId !== user.dermatologistId) {
-      return res.status(403).json({ error: 'Only your assigned clinician can be booked', code: 'ACCESS_DENIED' });
-    }
-    const targetDermatologistId = user.dermatologistId;
-
-    if (!targetDermatologistId) {
-      return res.status(400).json({
-        error: 'No dermatologist assigned. Please contact support.',
-        code: 'NO_DERMATOLOGIST'
-      });
-    }
-
-    // Verify dermatologist exists and is available
-    const dermatologist = await prisma.dermatologist.findUnique({
-      where: { id: targetDermatologistId },
-      select: { id: true, name: true, title: true, isAvailable: true }
-    });
-
-    if (!dermatologist || !dermatologist.isAvailable) {
-      return res.status(400).json({
-        error: 'Dermatologist is not available',
-        code: 'DERMATOLOGIST_UNAVAILABLE'
-      });
-    }
-
-    // Check for scheduling conflicts
-    const appointmentDate = new Date(scheduledDate);
-    const conflictingAppointment = await prisma.appointment.findFirst({
-      where: {
-        dermatologistId: targetDermatologistId,
-        scheduledDate: {
-          gte: new Date(appointmentDate.getTime() - 30 * 60 * 1000), // 30 minutes before
-          lte: new Date(appointmentDate.getTime() + 30 * 60 * 1000)  // 30 minutes after
-        },
-        status: {
-          in: ['scheduled', 'confirmed', 'in-progress']
-        }
-      }
-    });
-
-    if (conflictingAppointment) {
-      return res.status(409).json({
-        error: 'Time slot not available. Please choose a different time.',
-        code: 'TIME_CONFLICT'
-      });
-    }
-
-    // Create appointment
-    const appointment = await prisma.appointment.create({
-      data: {
-        scheduledDate: appointmentDate,
-        type,
-        concern,
-        duration,
-        status: 'scheduled',
-        patientId: req.user!.id,
-        dermatologistId: targetDermatologistId
-      },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            name: true,
-            skinType: true,
-            currentSkinScore: true
-          }
-        },
-        dermatologist: {
-          select: {
-            id: true,
-            name: true,
-            title: true,
-            specialization: true
+    const result=await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id=${req.user!.id}::uuid FOR UPDATE`;
+      await requireLegacyClinicalWrite(tx,req.user!.id);
+      // Get user's assigned dermatologist or use provided ID
+      const user = await tx.user.findUnique({
+        where: { id: req.user!.id },
+        include: {
+          assignedDermatologist: {
+            select: { id: true, name: true, title: true }
           }
         }
-      }
-    });
+      });
 
-    res.status(201).json({
-      message: 'Appointment booked successfully',
-      appointment
+      if (!user) {
+        return {status:404,body:{
+          error: 'User not found',
+          code: 'USER_NOT_FOUND'
+        }};
+      }
+
+      if (dermatologistId && dermatologistId !== user.dermatologistId) {
+        return {status:403,body:{ error: 'Only your assigned clinician can be booked', code: 'ACCESS_DENIED' }};
+      }
+      const targetDermatologistId = user.dermatologistId;
+
+      if (!targetDermatologistId) {
+        return {status:400,body:{
+          error: 'No dermatologist assigned. Please contact support.',
+          code: 'NO_DERMATOLOGIST'
+        }};
+      }
+
+      // Verify dermatologist exists and is available
+      const dermatologist = await tx.dermatologist.findUnique({
+        where: { id: targetDermatologistId },
+        select: { id: true, name: true, title: true, isAvailable: true }
+      });
+
+      if (!dermatologist || !dermatologist.isAvailable) {
+        return {status:400,body:{
+          error: 'Dermatologist is not available',
+          code: 'DERMATOLOGIST_UNAVAILABLE'
+        }};
+      }
+
+      // Check for scheduling conflicts
+      const appointmentDate = new Date(scheduledDate);
+      const conflictingAppointment = await tx.appointment.findFirst({
+        where: {
+          dermatologistId: targetDermatologistId,
+          scheduledDate: {
+            gte: new Date(appointmentDate.getTime() - 30 * 60 * 1000), // 30 minutes before
+            lte: new Date(appointmentDate.getTime() + 30 * 60 * 1000)  // 30 minutes after
+          },
+          status: {
+            in: ['scheduled', 'confirmed', 'in-progress']
+          }
+        }
+      });
+
+      if (conflictingAppointment) {
+        return {status:409,body:{
+          error: 'Time slot not available. Please choose a different time.',
+          code: 'TIME_CONFLICT'
+        }};
+      }
+
+      // Create appointment
+      const appointment = await tx.appointment.create({
+        data: {
+          scheduledDate: appointmentDate,
+          type,
+          concern,
+          duration,
+          status: 'scheduled',
+          patientId: req.user!.id,
+          dermatologistId: targetDermatologistId
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              skinType: true,
+              currentSkinScore: true
+            }
+          },
+          dermatologist: {
+            select: {
+              id: true,
+              name: true,
+              title: true,
+              specialization: true
+            }
+          }
+        }
+      });
+
+      return {status:201,body:{
+        message: 'Appointment booked successfully',
+        appointment
+      }};
+
     });
+    res.status(result.status).json(result.body);
 
   } catch (error) {
     next(error);
@@ -281,7 +289,10 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // Update appointment
-router.patch('/:id', requireEnrolledPatient, async (req, res, next) => {
+router.patch('/:id', (req,res,next)=>{
+  if(req.body?.status==='cancelled'&&Object.keys(req.body).length===1)return next();
+  return requireEnrolledPatient(req,res,next);
+}, async (req, res, next) => {
   try {
     const { id } = req.params;
     const validatedData = updateAppointmentSchema.parse(req.body);
@@ -304,68 +315,83 @@ router.patch('/:id', requireEnrolledPatient, async (req, res, next) => {
       });
     }
 
-    // Check permissions
-    const hasAccess = (
-      (req.user!.userType === 'patient' && existingAppointment.patientId === req.user!.id) ||
-      (req.user!.userType === 'dermatologist' && existingAppointment.dermatologistId === req.user!.id && !!await prisma.user.findUnique({ where: { id: existingAppointment.patientId, dermatologistId: req.user!.id } }))
-    );
+    const result=await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id=${existingAppointment.patientId}::uuid FOR UPDATE`;
+      const currentAppointment=await tx.appointment.findUnique({where:{id}});
+      if(!currentAppointment)return {status:404,body:{error:'Appointment not found',code:'APPOINTMENT_NOT_FOUND'}};
+      // Check permissions
+      const hasAccess = (
+        (req.user!.userType === 'patient' && currentAppointment.patientId === req.user!.id) ||
+        (req.user!.userType === 'dermatologist' && currentAppointment.dermatologistId === req.user!.id && !!await tx.user.findUnique({ where: { id: currentAppointment.patientId, dermatologistId: req.user!.id } }))
+      );
 
-    if (!hasAccess) {
-      return res.status(403).json({
-        error: 'Access denied',
-        code: 'ACCESS_DENIED'
-      });
-    }
+      if (!hasAccess) {
+        return {status:403,body:{
+          error: 'Access denied',
+          code: 'ACCESS_DENIED'
+        }};
+      }
 
-    // Patients can only reschedule, dermatologists can update status and notes
-    let updateData: any = {};
+      const cancellation=validatedData.status==='cancelled'&&Object.keys(validatedData).length===1;
+      if(cancellation&&currentAppointment.status==='completed')return {status:400,body:{error:'Cannot cancel completed appointment',code:'CANNOT_CANCEL_COMPLETED'}};
+      if(cancellation)await requirePatientCareScope(tx,currentAppointment.patientId,'cancellation');
+      else {
+        const access=await requireLegacyClinicalWrite(tx,currentAppointment.patientId);
+        if(req.user!.userType==='patient'&&!access.caseRow&&enrollmentEnforced()&&!await isEnrolled(req.user!.id))throw enrollmentError(403,'ENROLLMENT_REQUIRED');
+      }
+      // Patients can only reschedule, dermatologists can update status and notes
+      let updateData: any = {};
 
-    if (req.user!.userType === 'patient') {
-      if (validatedData.scheduledDate) {
-        updateData.scheduledDate = new Date(validatedData.scheduledDate);
-      }
-    } else {
-      // Dermatologist can update all fields
-      if (validatedData.scheduledDate) {
-        updateData.scheduledDate = new Date(validatedData.scheduledDate);
-      }
-      if (validatedData.status) {
-        updateData.status = validatedData.status;
-      }
-      if (validatedData.visitNotes) {
-        updateData.visitNotes = validatedData.visitNotes;
-      }
-      if (validatedData.videoCallURL) {
-        updateData.videoCallURL = validatedData.videoCallURL;
-      }
-    }
-
-    const updatedAppointment = await prisma.appointment.update({
-      where: { id },
-      data: updateData,
-      include: {
-        patient: {
-          select: {
-            id: true,
-            name: true,
-            skinType: true
-          }
-        },
-        dermatologist: {
-          select: {
-            id: true,
-            name: true,
-            title: true,
-            specialization: true
-          }
+      if (req.user!.userType === 'patient') {
+        if(cancellation)updateData.status='cancelled';
+        if (validatedData.scheduledDate) {
+          updateData.scheduledDate = new Date(validatedData.scheduledDate);
+        }
+      } else {
+        // Dermatologist can update all fields
+        if (validatedData.scheduledDate) {
+          updateData.scheduledDate = new Date(validatedData.scheduledDate);
+        }
+        if (validatedData.status) {
+          updateData.status = validatedData.status;
+        }
+        if (validatedData.visitNotes) {
+          updateData.visitNotes = validatedData.visitNotes;
+        }
+        if (validatedData.videoCallURL) {
+          updateData.videoCallURL = validatedData.videoCallURL;
         }
       }
-    });
 
-    res.json({
-      message: 'Appointment updated successfully',
-      appointment: updatedAppointment
+      const updatedAppointment = await tx.appointment.update({
+        where: { id },
+        data: updateData,
+        include: {
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              skinType: true
+            }
+          },
+          dermatologist: {
+            select: {
+              id: true,
+              name: true,
+              title: true,
+              specialization: true
+            }
+          }
+        }
+      });
+
+      return {status:200,body:{
+        message: 'Appointment updated successfully',
+        appointment: updatedAppointment
+      }};
+
     });
+    res.status(result.status).json(result.body);
 
   } catch (error) {
     next(error);
@@ -395,36 +421,44 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // Check permissions
-    const hasAccess = (
-      (req.user!.userType === 'patient' && appointment.patientId === req.user!.id) ||
-      (req.user!.userType === 'dermatologist' && appointment.dermatologistId === req.user!.id && !!await prisma.user.findUnique({ where: { id: appointment.patientId, dermatologistId: req.user!.id } }))
-    );
+    const result=await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id=${appointment.patientId}::uuid FOR UPDATE`;
+      const currentAppointment=await tx.appointment.findUnique({where:{id}});
+      if(!currentAppointment)return {status:404,body:{error:'Appointment not found',code:'APPOINTMENT_NOT_FOUND'}};
+      // Check permissions
+      const hasAccess = (
+        (req.user!.userType === 'patient' && currentAppointment.patientId === req.user!.id) ||
+        (req.user!.userType === 'dermatologist' && currentAppointment.dermatologistId === req.user!.id && !!await tx.user.findUnique({ where: { id: currentAppointment.patientId, dermatologistId: req.user!.id } }))
+      );
 
-    if (!hasAccess) {
-      return res.status(403).json({
-        error: 'Access denied',
-        code: 'ACCESS_DENIED'
+      if (!hasAccess) {
+        return {status:403,body:{
+          error: 'Access denied',
+          code: 'ACCESS_DENIED'
+        }};
+      }
+
+      await requirePatientCareScope(tx,currentAppointment.patientId,'cancellation');
+      // Check if appointment can be cancelled (not already completed)
+      if (currentAppointment.status === 'completed') {
+        return {status:400,body:{
+          error: 'Cannot cancel completed appointment',
+          code: 'CANNOT_CANCEL_COMPLETED'
+        }};
+      }
+
+      // Update status to cancelled instead of deleting
+      await tx.appointment.update({
+        where: { id },
+        data: { status: 'cancelled' }
       });
-    }
 
-    // Check if appointment can be cancelled (not already completed)
-    if (appointment.status === 'completed') {
-      return res.status(400).json({
-        error: 'Cannot cancel completed appointment',
-        code: 'CANNOT_CANCEL_COMPLETED'
-      });
-    }
+      return {status:200,body:{
+        message: 'Appointment cancelled successfully'
+      }};
 
-    // Update status to cancelled instead of deleting
-    await prisma.appointment.update({
-      where: { id },
-      data: { status: 'cancelled' }
     });
-
-    res.json({
-      message: 'Appointment cancelled successfully'
-    });
+    res.status(result.status).json(result.body);
 
   } catch (error) {
     next(error);
