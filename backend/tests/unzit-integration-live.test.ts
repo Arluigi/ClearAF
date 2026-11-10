@@ -16,3 +16,9 @@ test('loopback transport rejects hosted targets and prevents redirect following'
  await loopbackFetch('http://127.0.0.1:3001/ready',{},transport);assert.equal(calls,1);
  await assert.rejects(loopbackFetch('https://hosted.example.invalid',{},transport));assert.equal(calls,1);
 });
+test('portal preflight checks the clinician sign-in surface independent of product branding',()=>{
+ const {validatePortalLogin}=require('../scripts/unzit-integration-live.cjs');
+ assert.equal(typeof validatePortalLogin,'function');
+ assert.doesNotThrow(()=>validatePortalLogin(200,'<main>ClearAF Clinician portal Sign in Work email</main>'));
+ for(const [status,body]of [[500,'Clinician portal Sign in Work email'],[200,'UNZIT'],[200,'Clinician portal Sign in']])assert.throws(()=>validatePortalLogin(status,body));
+});

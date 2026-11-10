@@ -1,6 +1,6 @@
 import {QuestionSchema} from '../contracts/unzitLaunch';
 // Prompts and labels come from an immutable operator publication of sources.md.
-// The absent source is not replaced with invented clinical/legal wording.
+// Stable machine identities are preserved when source wording is replaced.
 export function validateLaunchIntakeCatalog(input:unknown){
  const questions=QuestionSchema.array().length(23).parse(input);
  const expected=[...Array.from({length:22},(_,i)=>'M'+(i+1)),'medicationPreference'];

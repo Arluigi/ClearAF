@@ -28,3 +28,44 @@ test('replacement pending-review publication stays draft with new immutable docu
  assert.equal(value.content.publication.status,'draft');assert.equal(value.versionLabel,'1.0-pending-review');assert(value.templates.every((t:any)=>t.isActive===false));
  for(const mutate of [(s:any)=>s.consents[0].versionLabel='1.0',(s:any)=>s.checkInForm.versionLabel='1.0',(s:any)=>{s.status='approved';s.approvalReference='synthetic-approval';}]){const bad=structuredClone(input);mutate(bad);assert.throws(()=>validateLaunchContent(bad,validators));}
 });
+
+test('client pending-review catalog preserves identities, branching, guidance and draft revisions',()=>{
+ const catalog=require('../src/content/catalogs/1.0-pending-review.json');
+ const value=validateLaunchContent({...catalog,clinicianId},validators);
+ assert.equal(value.versionLabel,'1.0-pending-review');
+ assert.equal(value.content.publication.status,'draft');
+ assert.equal(value.content.eligibilityQuestions.length,4);
+ const questions=value.content.medicalQuestions;
+ assert.equal(questions.length,23);
+ assert.deepEqual(new Set(questions.map((q:any)=>q.id)),new Set([...Array.from({length:22},(_,i)=>'M'+(i+1)),'medicationPreference']));
+ assert.equal(questions.findIndex((q:any)=>q.id==='medicationPreference'),questions.findIndex((q:any)=>q.id==='M11')+1);
+ assert.deepEqual(questions.find((q:any)=>q.id==='medicationPreference').options.map((o:any)=>o.id),['topical','oral','no_preference']);
+ assert.equal(questions.find((q:any)=>q.id==='M22').required,true);
+ assert.equal(questions.find((q:any)=>q.id==='M20').required,false);
+ assert.equal(questions.find((q:any)=>q.id==='M21').required,false);
+ assert.equal(questions.find((q:any)=>q.id==='M2').showWhen[0].questionId,'M1');
+ for(const id of ['M3','M4'])assert.equal(questions.find((q:any)=>q.id===id).showWhen[0].questionId,'M2');
+ assert.equal(questions.find((q:any)=>q.id==='M8').showWhen[0].questionId,'M1');
+ assert.deepEqual(value.content.consents.map((d:any)=>d.key),['telehealth','medication','privacy_notice','subscription_terms']);
+ assert(value.content.consents.every((d:any)=>d.version===2&&d.versionLabel===value.versionLabel&&d.acceptedAt===null));
+ assert.deepEqual(value.content.photoGuidance.slots.filter((s:any)=>s.required).map((s:any)=>s.id),['front','left','right']);
+ for(const id of ['chest','back'])assert.deepEqual(value.content.photoGuidance.slots.find((s:any)=>s.id===id).requiredWhen,{questionId:'M6',value:id});
+ assert.equal(value.content.identityGuidance.items.length,3);
+ assert.deepEqual(new Set(value.content.checkInForm.questions.map((q:any)=>q.id)),new Set(Object.values(launchQuestionIds)));
+ assert.equal(value.content.checkInForm.questions.filter((q:any)=>q.required).length,5);
+ assert.equal(value.templates.length,6);
+ assert(value.templates.every((t:any)=>!t.isActive));
+ assert.equal(catalog.clinicianId,undefined);
+});
+
+test('guidance rejects missing, duplicated and incorrectly required capture identities',()=>{
+ const catalog=require('../src/content/catalogs/1.0-pending-review.json');
+ for(const mutate of [
+  (s:any)=>s.photoGuidance.slots.pop(),
+  (s:any)=>s.photoGuidance.slots[0].required=false,
+  (s:any)=>s.photoGuidance.slots[3].requiredWhen.value='back',
+  (s:any)=>s.photoGuidance.slots[5].id='front',
+  (s:any)=>s.identityGuidance.items[0].required=false,
+  (s:any)=>s.identityGuidance.items[1].id='government_id',
+ ]){const input=structuredClone(catalog);mutate(input);assert.throws(()=>validateLaunchContent({...input,clinicianId},validators))}
+});

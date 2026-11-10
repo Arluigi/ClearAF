@@ -19,6 +19,10 @@ async function loopbackFetch(input,options={},transport=fetch){
  assert(url.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(url.hostname)&&!url.username&&!url.password,'Loopback HTTP only');
  return transport(input,{...options,redirect:'error'});
 }
+function validatePortalLogin(status,html){
+ assert.equal(status,200,'Local portal login unavailable');
+ for(const marker of ['Clinician portal','Sign in','Work email'])assert(html.includes(marker),'Local clinician sign-in surface required');
+}
 async function run(){
  assert(process.argv.slice(2).every(a=>a==='--synthetic-catalog'),'Unexpected argument');
  const cliEnv={...process.env};const socket=path.join(require('node:os').homedir(),'.colima/clearaf/docker.sock');
@@ -47,7 +51,7 @@ async function run(){
  }
  try{
   assert.equal((await loopbackFetch('http://127.0.0.1:3001/ready')).status,200);
-  const portal=await loopbackFetch('http://127.0.0.1:3000/login');assert.equal(portal.status,200);assert.match(await portal.text(),/UNZIT/i);ok('local API readiness and portal login');
+  const portal=await loopbackFetch('http://127.0.0.1:3000/login');validatePortalLogin(portal.status,await portal.text());ok('local API readiness and portal login');
   previousSettings=(await db.query('SELECT * FROM public.launch_settings WHERE active')).rows[0];assert(previousSettings,'Active settings required');
   // Never replace a real publication with a synthetic catalog, even temporarily.
   if(process.argv.includes('--synthetic-catalog'))assert.equal(Object.keys(previousSettings.content).length,0,'Synthetic catalog requires an unpublished local seed');
@@ -118,5 +122,5 @@ async function run(){
   if(prisma)await prisma.$disconnect();await require('../dist/config/database').prisma.$disconnect();await db.end();
  }
 }
-module.exports={integrationRuntime,validateManifest,loopbackFetch};
+module.exports={integrationRuntime,validateManifest,loopbackFetch,validatePortalLogin};
 if(require.main===module)run().catch(()=>{console.error('Local integration preflight failed; no credentials or content logged.');process.exitCode=1;});

@@ -8,7 +8,12 @@ function builtValidators(){return {contract:require('../dist/contracts/unzitLaun
 function enumValues(schema){const d=schema._def;if(d.schema)return enumValues(d.schema);if(d.innerType)return enumValues(d.innerType);if(d.typeName==='ZodEnum')return {values:d.values,multi:false};if(d.typeName==='ZodArray'){const v=enumValues(d.type);return v&&{...v,multi:true}}return null}
 function fixedChoices(questions,shape){for(const [id,schema]of Object.entries(shape)){const expected=enumValues(schema);if(!expected)continue;const q=questions.find(q=>q.id===id);if(!q||q.kind!==(expected.multi?'multi_choice':'choice')||q.options.length!==expected.values.length||expected.values.some(id=>!q.options.some(o=>o.id===id)))throw Error('Invalid source machine choices')}}
 function validateLaunchContent(input,validators=builtValidators()){
- const envelope=z.object({status:z.enum(['draft','approved']),versionLabel:z.string().min(1).max(80),approvalReference:z.string().min(1).max(160).nullable(),clinicianId:z.string().uuid(),consents:z.array(z.unknown()),eligibilityQuestions:z.array(z.unknown()),medicalQuestions:z.array(z.unknown()),checkInForm:z.unknown(),templates:z.array(z.object({key:z.string().regex(/^[a-z][a-z0-9_]{0,59}$/),name:z.string().min(1).max(120),steps:z.array(z.unknown()).min(1).max(20)}).strict()).length(6)}).strict().parse(input);
+ const copy=z.string().trim().min(1).max(2000);
+ const photoGuidance=z.object({title:copy,instructions:z.array(copy).min(1),slots:z.array(z.object({id:z.enum(['front','left','right','chest','back','close_up']),label:copy,required:z.boolean(),requiredWhen:z.object({questionId:z.literal('M6'),value:z.enum(['chest','back'])}).strict().nullable()}).strict()).length(6)}).strict().superRefine((v,ctx)=>{
+  if(new Set(v.slots.map(s=>s.id)).size!==6||v.slots.some(s=>s.required!==['front','left','right'].includes(s.id)||(['chest','back'].includes(s.id)?s.requiredWhen?.value!==s.id:s.requiredWhen!==null)))ctx.addIssue({code:'custom',message:'Invalid required photo slots'});
+ });
+ const identityGuidance=z.object({title:copy,items:z.array(z.object({id:z.enum(['government_id','selfie','nc_attestation']),required:z.literal(true),instructions:copy}).strict()).length(3)}).strict().refine(v=>new Set(v.items.map(i=>i.id)).size===3,'Invalid identity guidance');
+ const envelope=z.object({status:z.enum(['draft','approved']),versionLabel:z.string().min(1).max(80),approvalReference:z.string().min(1).max(160).nullable(),clinicianId:z.string().uuid(),consents:z.array(z.unknown()),eligibilityQuestions:z.array(z.unknown()),medicalQuestions:z.array(z.unknown()),checkInForm:z.unknown(),photoGuidance:photoGuidance.optional(),identityGuidance:identityGuidance.optional(),templates:z.array(z.object({key:z.string().regex(/^[a-z][a-z0-9_]{0,59}$/),name:z.string().min(1).max(120),steps:z.array(z.unknown()).min(1).max(20)}).strict()).length(6)}).strict().parse(input);
  const pending=label=>label==='0.9-draft'||/^\d+\.\d+-pending-review$/.test(label);
  if(envelope.status==='draft'&&!pending(envelope.versionLabel)||envelope.status==='approved'&&(!envelope.approvalReference||pending(envelope.versionLabel)))throw Error('Clinical publication approval reference required');
  const docs=validators.validateLaunchDocuments(envelope.consents);
@@ -23,6 +28,8 @@ function validateLaunchContent(input,validators=builtValidators()){
  // Seed starting points as drafts only. Existing clinician-owned version tooling handles later approval.
  const templates=envelope.templates.map(t=>({key:t.key,...validators.revisionInput.parse({expectedRevisionId:null,name:t.name.startsWith('DRAFT: ')?t.name:'DRAFT: '+t.name,isActive:false,steps:t.steps})}));
  const content={consents:docs,eligibilityQuestions:eligibility,medicalQuestions:medical,checkInForm,publication:{status:envelope.status,versionLabel:envelope.versionLabel,approvalReference:envelope.approvalReference}};
+ if(envelope.photoGuidance)content.photoGuidance=envelope.photoGuidance;
+ if(envelope.identityGuidance)content.identityGuidance=envelope.identityGuidance;
  content.publication.sha256=createHash('sha256').update(canonical({content,templates})).digest('hex');
  if(Buffer.byteLength(JSON.stringify(content))>190000)throw Error('Content publication too large');
  return {clinicianId:envelope.clinicianId,versionLabel:envelope.versionLabel,content,templates};

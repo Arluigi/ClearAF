@@ -1,0 +1,1285 @@
+{
+  "status": "draft",
+  "versionLabel": "1.0-pending-review",
+  "approvalReference": null,
+  "consents": [
+    {
+      "key": "telehealth",
+      "version": 2,
+      "versionLabel": "1.0-pending-review",
+      "title": "Telehealth Informed Consent",
+      "body": "DRAFT — pending Dr. Om and counsel review. UNZIT provides store-and-forward telehealth by Dr. Om. Online care has limits and risks and may require an in-person referral. Not for emergencies; call 911 in an emergency. Review within 1 to 2 business days.\n\nI acknowledge that I must be physically in North Carolina for care, verify my identity with a government photo ID and live selfie, and provide complete intake answers and adequate photos. Care lets me use any US pharmacy and pay it directly. All-In includes partner-pharmacy prescriptions through Vida. Prescriptions are provided only when appropriate. Prescriptions are sent outside this app through TreatRx; the app records that they were sent.\n\nIf I notice any side effect, even a small one, I will stop that medication and message UNZIT. I will not restart it until Dr. Om replies. I am responsible for obtaining recommended in-person care. I may withdraw consent to telehealth. I consent to care records and sharing for my care; marketing use requires separate permission. UNZIT does not bill insurance.\n\nI ACCEPT.",
+      "sha256": "c71ae833deea83a464cbce84e19d366deacd69454bb1d78bde4d4fbd62c90ad7",
+      "effectiveAt": "2026-11-09T00:00:00.000Z",
+      "acceptedAt": null
+    },
+    {
+      "key": "medication",
+      "version": 2,
+      "versionLabel": "1.0-pending-review",
+      "title": "Medication Consent",
+      "body": "DRAFT — pending Dr. Om and counsel review. Treatment may include tretinoin, hydroquinone, doxycycline, spironolactone, benzoyl peroxide, clindamycin, azelaic acid, tazarotene or dapsone. These medicines have benefits, risks and pregnancy warnings. Compounded medicines are not FDA approved. Spironolactone for acne and doxycycline 40 mg modified release for acne are off-label uses. Alternatives include in-person care.\n\nTell Dr. Om about pregnancy, breastfeeding, plans for pregnancy, allergies, medical conditions and all medicines and supplements. Pregnant, breastfeeding, trying, or not sure: no tretinoin, tazarotene, hydroquinone, doxycycline or spironolactone.\n\nIf I notice any side effect, even a small one, I will stop that medication and message UNZIT. I will not restart it until Dr. Om replies. Facial or throat swelling, hives, trouble breathing, severe headache with vision change, fainting, irregular heartbeat or a blistering rash: stop medication and call 911 or go to an emergency department now.\n\nI ACCEPT.",
+      "sha256": "b94d76e234546dc36f087cc05ea35cbf8a9adb5b0050a451cdab3a38e3e7661d",
+      "effectiveAt": "2026-11-09T00:00:00.000Z",
+      "acceptedAt": null
+    },
+    {
+      "key": "privacy_notice",
+      "version": 2,
+      "versionLabel": "1.0-pending-review",
+      "title": "Privacy Notice",
+      "body": "DRAFT — pending Dr. Om and counsel review. UNZIT is operated by The Derm Guy LLC dba UNZIT. This draft describes protection under HIPAA and North Carolina law; applicable legal status remains subject to counsel review.\n\nWe collect identity, health, payment information through Stripe, and device and usage information. Care information may be shared with pharmacies, other treating clinicians and service providers covered by business associate agreements. There are no advertising pixels in the logged-in app or intake. Photos are private and location metadata is removed from uploaded images.\n\nYou may request access to your records (usually within 30 days), amendment, an accounting of disclosures for six years, restrictions and confidential communications. You may complain to HHS Office for Civil Rights. Proposed record retention is 11 years after your last visit, pending counsel confirmation. The privacy mailing address and effective date remain pending review.\n\nWebsite and waitlist email, state and answers are kept for launch notices. Do not send health information through the website form.\n\nI ACKNOWLEDGE.",
+      "sha256": "a75e1334686aad7943896ae19273317e8a1cc45bd4a0776942f0cf493e2a1fe5",
+      "effectiveAt": "2026-11-09T00:00:00.000Z",
+      "acceptedAt": null
+    },
+    {
+      "key": "subscription_terms",
+      "version": 2,
+      "versionLabel": "1.0-pending-review",
+      "title": "Subscription and Refund Terms",
+      "body": "DRAFT — pending Dr. Om and counsel review. Your selected UNZIT membership renews automatically each month until cancelled. Your monthly price is the price shown for your selected plan at Checkout, supplied by UNZIT’s current server settings. Payment uses Stripe Checkout. The billing period starts at payment. Manage cancellation and plan changes in the Stripe Customer Portal. Cancellation takes effect at the end of the paid period. Plan changes are prorated immediately through Stripe; a credit is not a promise of a cash refund. Price changes are notified by email.\n\nCare includes dermatologist review, a treatment plan, messaging and monthly photo check-ins from clinical approval; prescriptions at your chosen US pharmacy are paid directly by you. All-In includes partner prescriptions filled by Vida and shipped to your North Carolina address, with weekly check-ins for the first eight weeks from approval, then monthly. Prescriptions only if appropriate. OTC products, in-person care and labs are not included.\n\nYou are not charged if found ineligible before payment. If your case is rejected at clinical review, the latest paid invoice is refunded in full and the subscription is cancelled immediately. No refund after a plan is issued. Medicines already shipped cannot be returned. Review within 1 to 2 business days.\n\nI AGREE.",
+      "sha256": "67db48df9437865ad255f74f830a12fff2797129a3f501fe79ff60525ff912ef",
+      "effectiveAt": "2026-11-09T00:00:00.000Z",
+      "acceptedAt": null
+    }
+  ],
+  "eligibilityQuestions": [
+    {
+      "id": "E1",
+      "prompt": "What do you want help with?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "acne",
+          "label": "Acne"
+        },
+        {
+          "id": "dark_marks",
+          "label": "Dark marks from acne"
+        },
+        {
+          "id": "something_else",
+          "label": "Something else"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E2",
+      "prompt": "Do you have any of these right now: fever or feeling sick with your acne; joint pain; open, bleeding or crusted sores; or acne that suddenly got much worse in the last 2 weeks?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E3",
+      "prompt": "Are you pregnant or breastfeeding?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "pregnant",
+          "label": "Pregnant"
+        },
+        {
+          "id": "breastfeeding",
+          "label": "Breastfeeding"
+        },
+        {
+          "id": "neither",
+          "label": "Neither"
+        },
+        {
+          "id": "not_applicable",
+          "label": "Not applicable"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E4",
+      "prompt": "Are you currently being treated for acne by another doctor?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    }
+  ],
+  "medicalQuestions": [
+    {
+      "id": "M1",
+      "prompt": "Sex assigned at birth",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "female",
+          "label": "Female"
+        },
+        {
+          "id": "male",
+          "label": "Male"
+        },
+        {
+          "id": "intersex",
+          "label": "Intersex"
+        },
+        {
+          "id": "prefer_not_to_say",
+          "label": "Prefer not to say"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M2",
+      "prompt": "Could you become pregnant?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No (for example, menopause, hysterectomy, tubal ligation)"
+        },
+        {
+          "id": "not_sure",
+          "label": "Not sure"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "M1",
+          "operator": "not_in",
+          "values": [
+            "male"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "prompt": "Are you trying to get pregnant, or might you in the next 6 months?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        },
+        {
+          "id": "not_sure",
+          "label": "Not sure"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "M2",
+          "operator": "in",
+          "values": [
+            "yes",
+            "not_sure"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "prompt": "What birth control do you use?",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [
+        {
+          "id": "method",
+          "prompt": "What birth control do you use?",
+          "kind": "choice",
+          "required": true,
+          "options": [
+            {
+              "id": "pill_patch_ring",
+              "label": "Pill, patch or ring"
+            },
+            {
+              "id": "iud",
+              "label": "IUD"
+            },
+            {
+              "id": "implant",
+              "label": "Implant"
+            },
+            {
+              "id": "shot",
+              "label": "Shot"
+            },
+            {
+              "id": "condoms",
+              "label": "Condoms"
+            },
+            {
+              "id": "none",
+              "label": "None"
+            },
+            {
+              "id": "other",
+              "label": "Other"
+            }
+          ],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "details",
+          "prompt": "Other birth control (please describe)",
+          "kind": "text",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        }
+      ],
+      "showWhen": [
+        {
+          "questionId": "M2",
+          "operator": "in",
+          "values": [
+            "yes",
+            "not_sure"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "prompt": "How long have you had acne?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "under_6_months",
+          "label": "Under 6 months"
+        },
+        {
+          "id": "6_to_12_months",
+          "label": "6 to 12 months"
+        },
+        {
+          "id": "1_to_5_years",
+          "label": "1 to 5 years"
+        },
+        {
+          "id": "over_5_years",
+          "label": "Over 5 years"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M6",
+      "prompt": "Where is your acne? (select all)",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "forehead",
+          "label": "Forehead"
+        },
+        {
+          "id": "cheeks",
+          "label": "Cheeks"
+        },
+        {
+          "id": "nose",
+          "label": "Nose"
+        },
+        {
+          "id": "jaw_chin",
+          "label": "Jaw and chin"
+        },
+        {
+          "id": "neck",
+          "label": "Neck"
+        },
+        {
+          "id": "chest",
+          "label": "Chest"
+        },
+        {
+          "id": "back",
+          "label": "Back"
+        },
+        {
+          "id": "other",
+          "label": "Other"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M7",
+      "prompt": "What do your breakouts look like? (select all)",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "comedones",
+          "label": "Blackheads or whiteheads"
+        },
+        {
+          "id": "red_bumps",
+          "label": "Red bumps"
+        },
+        {
+          "id": "pus_bumps",
+          "label": "Pus bumps"
+        },
+        {
+          "id": "deep_painful_lumps",
+          "label": "Deep painful lumps"
+        },
+        {
+          "id": "dark_marks",
+          "label": "Dark marks"
+        },
+        {
+          "id": "scars",
+          "label": "Pitted or raised scars"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M8",
+      "prompt": "Does your acne flare before your period?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        },
+        {
+          "id": "not_sure",
+          "label": "Not sure"
+        },
+        {
+          "id": "not_applicable",
+          "label": "Not applicable"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "M1",
+          "operator": "in",
+          "values": [
+            "female",
+            "intersex"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M9",
+      "prompt": "Do you have irregular or missed periods, new hair growth on the face or body, scalp hair thinning, or a deepening voice?",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [
+        {
+          "id": "signs",
+          "prompt": "Select which signs you have noticed",
+          "kind": "multi_choice",
+          "required": true,
+          "options": [
+            {
+              "id": "irregular_periods",
+              "label": "Irregular or missed periods"
+            },
+            {
+              "id": "new_hair_growth",
+              "label": "New hair growth on the face or body"
+            },
+            {
+              "id": "scalp_thinning",
+              "label": "Scalp hair thinning"
+            },
+            {
+              "id": "voice_change",
+              "label": "Deepening voice"
+            }
+          ],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "none",
+          "prompt": "None",
+          "kind": "attestation",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "details",
+          "prompt": "Tell us more about these signs",
+          "kind": "text",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        }
+      ],
+      "showWhen": []
+    },
+    {
+      "id": "M10",
+      "prompt": "Which skin type is most like yours?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "burns_rarely_tans",
+          "label": "Burns easily, rarely tans"
+        },
+        {
+          "id": "burns_then_tans",
+          "label": "Burns, then tans"
+        },
+        {
+          "id": "rarely_burns_tans_easily",
+          "label": "Rarely burns, tans easily"
+        },
+        {
+          "id": "very_rarely_burns_deeply_pigmented",
+          "label": "Very rarely burns, deeply pigmented skin"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M11",
+      "prompt": "What acne treatments have you tried? For each: name, how long, did it help, side effects.",
+      "kind": "repeat",
+      "required": true,
+      "options": [],
+      "fields": [
+        {
+          "id": "none",
+          "prompt": "I have not tried acne treatments",
+          "kind": "attestation",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "name",
+          "prompt": "Treatment name",
+          "kind": "text",
+          "required": true,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "duration",
+          "prompt": "How long did you use it?",
+          "kind": "text",
+          "required": true,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "helped",
+          "prompt": "Did it help?",
+          "kind": "text",
+          "required": true,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "sideEffects",
+          "prompt": "Side effects",
+          "kind": "text",
+          "required": true,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        }
+      ],
+      "showWhen": []
+    },
+    {
+      "id": "medicationPreference",
+      "prompt": "Do you prefer topical or oral medications?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "topical",
+          "label": "Topical"
+        },
+        {
+          "id": "oral",
+          "label": "Oral"
+        },
+        {
+          "id": "no_preference",
+          "label": "No preference / either"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M12",
+      "prompt": "Have you ever taken isotretinoin (Accutane, Absorica, Claravis) or are you taking it now?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "never",
+          "label": "Never"
+        },
+        {
+          "id": "past",
+          "label": "In the past"
+        },
+        {
+          "id": "now",
+          "label": "Now"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M13",
+      "prompt": "Do you take any of these? (select all)",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "ace_arb",
+          "label": "Blood pressure pills (ACE inhibitor or ARB, such as lisinopril or losartan)"
+        },
+        {
+          "id": "water_pills",
+          "label": "Water pills"
+        },
+        {
+          "id": "potassium",
+          "label": "Potassium supplements or salt substitute"
+        },
+        {
+          "id": "trimethoprim",
+          "label": "Trimethoprim (Bactrim)"
+        },
+        {
+          "id": "lithium",
+          "label": "Lithium"
+        },
+        {
+          "id": "digoxin",
+          "label": "Digoxin"
+        },
+        {
+          "id": "warfarin",
+          "label": "Blood thinner (warfarin)"
+        },
+        {
+          "id": "minerals_antacids",
+          "label": "Antacids, iron, calcium, zinc or magnesium"
+        },
+        {
+          "id": "seizure_medicine",
+          "label": "Seizure medicine"
+        },
+        {
+          "id": "none",
+          "label": "None"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M14",
+      "prompt": "List every other medication, vitamin and supplement you take.",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [
+        {
+          "id": "none",
+          "prompt": "None",
+          "kind": "attestation",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "details",
+          "prompt": "Every other medication, vitamin and supplement you take",
+          "kind": "text",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        }
+      ],
+      "showWhen": []
+    },
+    {
+      "id": "M15",
+      "prompt": "Are you allergic to any medication or ingredient? What happened?",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [
+        {
+          "id": "picks",
+          "prompt": "Medication or ingredient allergies",
+          "kind": "multi_choice",
+          "required": true,
+          "options": [
+            {
+              "id": "tetracyclines",
+              "label": "Tetracyclines (doxycycline, minocycline)"
+            },
+            {
+              "id": "sulfites",
+              "label": "Sulfites"
+            },
+            {
+              "id": "clindamycin",
+              "label": "Clindamycin"
+            },
+            {
+              "id": "benzoyl_peroxide",
+              "label": "Benzoyl peroxide"
+            },
+            {
+              "id": "other",
+              "label": "Other"
+            },
+            {
+              "id": "none",
+              "label": "None"
+            }
+          ],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "reaction",
+          "prompt": "What happened?",
+          "kind": "text",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        }
+      ],
+      "showWhen": []
+    },
+    {
+      "id": "M16",
+      "prompt": "Do you have or have you had any of these? (select all)",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "kidney",
+          "label": "Kidney disease"
+        },
+        {
+          "id": "liver",
+          "label": "Liver disease"
+        },
+        {
+          "id": "high_potassium",
+          "label": "High potassium"
+        },
+        {
+          "id": "heart",
+          "label": "Heart disease or irregular heartbeat"
+        },
+        {
+          "id": "fainting_low_bp",
+          "label": "Fainting or very low blood pressure"
+        },
+        {
+          "id": "adrenal",
+          "label": "Adrenal disease (Addison disease)"
+        },
+        {
+          "id": "lupus_sun_sensitivity",
+          "label": "Lupus or a sun-sensitivity condition"
+        },
+        {
+          "id": "raised_brain_pressure",
+          "label": "Raised brain pressure (pseudotumor cerebri)"
+        },
+        {
+          "id": "swallowing_esophagus",
+          "label": "Trouble swallowing or esophagus problems"
+        },
+        {
+          "id": "breast_cancer",
+          "label": "Breast cancer"
+        },
+        {
+          "id": "ibd",
+          "label": "Inflammatory bowel disease"
+        },
+        {
+          "id": "none",
+          "label": "None"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M17",
+      "prompt": "How sensitive is your skin?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "not_sensitive",
+          "label": "Not sensitive"
+        },
+        {
+          "id": "somewhat",
+          "label": "Somewhat"
+        },
+        {
+          "id": "very",
+          "label": "Very"
+        },
+        {
+          "id": "eczema_rosacea",
+          "label": "I have eczema or rosacea"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M18",
+      "prompt": "What do you use on your face now, morning and night?",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M19",
+      "prompt": "Do you wear sunscreen every day?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "sometimes",
+          "label": "Sometimes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M20",
+      "prompt": "Do you have a primary care doctor? May we send them a summary of your plan?",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [
+        {
+          "id": "pcpName",
+          "prompt": "Primary care doctor name (optional)",
+          "kind": "text",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "pcpPhone",
+          "prompt": "Primary care doctor phone (optional)",
+          "kind": "text",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "shareSummary",
+          "prompt": "May we send them a summary of your plan?",
+          "kind": "choice",
+          "required": true,
+          "options": [
+            {
+              "id": "true",
+              "label": "Yes"
+            },
+            {
+              "id": "false",
+              "label": "No"
+            }
+          ],
+          "fields": [],
+          "showWhen": []
+        }
+      ],
+      "showWhen": []
+    },
+    {
+      "id": "M21",
+      "prompt": "Anything else you want Dr. Om to know?",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "M22",
+      "prompt": "My answers are true and complete. I will tell UNZIT if anything changes, including pregnancy or new medicines.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    }
+  ],
+  "photoGuidance": {
+    "title": "DRAFT: Treatment photos",
+    "instructions": [
+      "Take photos in daylight, with no makeup or filters and hair pulled back.",
+      "Zoom in and check that each photo is sharp. All required photos must be uploaded before submission.",
+      "Dr. Om may ask for new photos if these are inadequate. Your case pauses until adequate photos arrive.",
+      "Never send photos of the genital area or breasts. Chest photos must be above the breasts. You may cover or crop anything you choose."
+    ],
+    "slots": [
+      {
+        "id": "front",
+        "label": "Front of face",
+        "required": true,
+        "requiredWhen": null
+      },
+      {
+        "id": "left",
+        "label": "Left side of face",
+        "required": true,
+        "requiredWhen": null
+      },
+      {
+        "id": "right",
+        "label": "Right side of face",
+        "required": true,
+        "requiredWhen": null
+      },
+      {
+        "id": "chest",
+        "label": "Chest above the breasts",
+        "required": false,
+        "requiredWhen": {
+          "questionId": "M6",
+          "value": "chest"
+        }
+      },
+      {
+        "id": "back",
+        "label": "Back",
+        "required": false,
+        "requiredWhen": {
+          "questionId": "M6",
+          "value": "back"
+        }
+      },
+      {
+        "id": "close_up",
+        "label": "Close-up of dark marks or a worrying spot (optional)",
+        "required": false,
+        "requiredWhen": null
+      }
+    ]
+  },
+  "identityGuidance": {
+    "title": "DRAFT: Verify your identity",
+    "items": [
+      {
+        "id": "government_id",
+        "required": true,
+        "instructions": "Upload a government photo ID: driver license, state ID or passport. Your name and date of birth must match your account. You must be 18 or older."
+      },
+      {
+        "id": "selfie",
+        "required": true,
+        "instructions": "Take a live selfie. Your selfie must match the photo on your ID. Dr. Om reviews your identity before care."
+      },
+      {
+        "id": "nc_attestation",
+        "required": true,
+        "instructions": "I am physically in North Carolina right now."
+      }
+    ]
+  },
+  "checkInForm": {
+    "versionLabel": "1.0-pending-review",
+    "title": "DRAFT: Follow-up check-in",
+    "questions": [
+      {
+        "id": "9164bc9b-4c44-52d2-98ef-23b184a23b2e",
+        "prompt": "How well are you tolerating your treatment?",
+        "type": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "04cd6e72-995d-5966-b380-218382e31177",
+            "label": "Good"
+          },
+          {
+            "id": "d6615b10-82a6-53ee-bdc3-e206243c073b",
+            "label": "Some irritation"
+          },
+          {
+            "id": "21ff820e-a4a2-56a9-ac3f-626ddf85243f",
+            "label": "Not tolerating"
+          }
+        ]
+      },
+      {
+        "id": "74ecfc05-b97d-54cf-9fb2-f57e52d5c43d",
+        "prompt": "Have you had any side effects?",
+        "type": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "b722fe03-1d70-5510-9b63-d9ccccf152fb",
+            "label": "None"
+          },
+          {
+            "id": "05ca2f4f-cddd-5cd5-a169-668acba76daf",
+            "label": "Yes"
+          }
+        ]
+      },
+      {
+        "id": "8fa56a17-276f-52ca-b1e5-aec00801ec65",
+        "prompt": "Please describe your side effects.",
+        "type": "text",
+        "required": false,
+        "options": []
+      },
+      {
+        "id": "4604b88c-cbb4-5d31-8df7-7d75ce7df91d",
+        "prompt": "Are you pregnant, breastfeeding, trying to become pregnant, or not sure?",
+        "type": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "2a62a5ac-7344-512d-9ff4-4db362d01a9b",
+            "label": "Pregnant"
+          },
+          {
+            "id": "95758fe4-23bb-5404-9de2-5c108d1b8d08",
+            "label": "Breastfeeding"
+          },
+          {
+            "id": "187f9ab4-b82f-5858-816e-34c8619a2e6a",
+            "label": "Trying"
+          },
+          {
+            "id": "40de811b-bc58-5df6-a320-e5ead33fb6ab",
+            "label": "Not sure"
+          },
+          {
+            "id": "f81c020e-e42e-51da-9966-f8bc1b2080d4",
+            "label": "Neither"
+          },
+          {
+            "id": "22005780-1a78-50ec-b6b3-70d71a4c55fe",
+            "label": "Not applicable"
+          }
+        ]
+      },
+      {
+        "id": "6ba17657-8167-5582-803d-8bfeb1b465dc",
+        "prompt": "Have you started any new medicines?",
+        "type": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "a5cbb7e8-5a05-5808-8b7c-0f5de22e8c79",
+            "label": "None"
+          },
+          {
+            "id": "f27f77e5-af1d-558f-8510-75c528af17b7",
+            "label": "Yes"
+          }
+        ]
+      },
+      {
+        "id": "c370333e-4ce7-5a64-a95f-9f8254cdba14",
+        "prompt": "Please list your new medicines.",
+        "type": "text",
+        "required": false,
+        "options": []
+      },
+      {
+        "id": "24ac27d3-49e0-5114-96e2-a1ed05414c27",
+        "prompt": "Are you physically in North Carolina right now?",
+        "type": "choice",
+        "required": true,
+        "options": [
+          {
+            "id": "bf9e39ef-b578-5bb4-b6ec-26e77cc32ab0",
+            "label": "Yes"
+          },
+          {
+            "id": "96c0e77e-c1cd-5349-9071-b9b9251df0a2",
+            "label": "No"
+          }
+        ]
+      }
+    ]
+  },
+  "templates": [
+    {
+      "key": "comedonal",
+      "name": "Clogged pores",
+      "steps": [
+        {
+          "title": "Best for",
+          "instructions": "mostly blackheads and whiteheads."
+        },
+        {
+          "title": "Morning",
+          "instructions": "gentle cleanser; moisturizer; SPF 30+."
+        },
+        {
+          "title": "Evening",
+          "instructions": "Tretinoin 0.025% (0.018% if very sensitive or deeper skin tone), pea-sized, every other night for 2 weeks, then nightly; moisturizer."
+        },
+        {
+          "title": "Prescription directions",
+          "instructions": "tretinoin 0.025% (or 0.018%), sig \"pea-sized, every other night x 2 weeks, then nightly.\""
+        },
+        {
+          "title": "Treatment rules",
+          "instructions": "Clindamycin never without BPO. Doxycycline never alone: use with BPO and a topical retinoid, which continue after doxycycline stops. Do not start tretinoin and hydroquinone in the same week; add the other after 2 weeks. Use one retinoid at a time; remove OTC retinol and adapalene."
+        },
+        {
+          "title": "Side effects and contact",
+          "instructions": "If you notice any side effect, even a small one, stop that medication and message us. Do not restart it until Dr. Om replies. Review within 1 to 2 business days. Not for emergencies. If you have trouble breathing, swelling of your face or throat, chest pain, or another emergency, call 911."
+        }
+      ]
+    },
+    {
+      "key": "mild_red_bumps",
+      "name": "Mild red bumps",
+      "steps": [
+        {
+          "title": "Best for",
+          "instructions": "some red or pus bumps plus clogged pores."
+        },
+        {
+          "title": "Morning",
+          "instructions": "BPO 4 to 5% wash; moisturizer; SPF 30+."
+        },
+        {
+          "title": "Evening",
+          "instructions": "Clindamycin 1% thin layer; tretinoin 0.025% pea-sized (every other night for 2 weeks); moisturizer."
+        },
+        {
+          "title": "Prescription directions",
+          "instructions": "clindamycin 1% gel or lotion, sig \"thin layer\" (once or twice daily, always with BPO); tretinoin 0.025%; BPO 4 to 5% wash."
+        },
+        {
+          "title": "Treatment rules",
+          "instructions": "Clindamycin never without BPO. Doxycycline never alone: use with BPO and a topical retinoid, which continue after doxycycline stops. Do not start tretinoin and hydroquinone in the same week; add the other after 2 weeks. Use one retinoid at a time; remove OTC retinol and adapalene."
+        },
+        {
+          "title": "Side effects and contact",
+          "instructions": "If you notice any side effect, even a small one, stop that medication and message us. Do not restart it until Dr. Om replies. Review within 1 to 2 business days. Not for emergencies. If you have trouble breathing, swelling of your face or throat, chest pain, or another emergency, call 911."
+        }
+      ]
+    },
+    {
+      "key": "moderate_inflammatory",
+      "name": "Moderate inflammatory",
+      "steps": [
+        {
+          "title": "Best for",
+          "instructions": "many red bumps, some tender, or failed template 2 after 12 weeks."
+        },
+        {
+          "title": "Morning",
+          "instructions": "Template 2 morning + doxycycline 100 mg with breakfast (or 40 mg MR on an empty stomach)."
+        },
+        {
+          "title": "Evening",
+          "instructions": "Template 2 night. Doxycycline reassessed at 12 weeks; stop by 16 weeks."
+        },
+        {
+          "title": "Prescription directions",
+          "instructions": "doxycycline 100 mg, sig \"once daily with breakfast and a full glass of water\" (default); alt doxycycline 40 mg MR, sig \"once daily in the morning on an empty stomach (1 hour before or 2 hours after food).\""
+        },
+        {
+          "title": "Treatment rules",
+          "instructions": "Clindamycin never without BPO. Doxycycline never alone: use with BPO and a topical retinoid, which continue after doxycycline stops. Do not start tretinoin and hydroquinone in the same week; add the other after 2 weeks. Use one retinoid at a time; remove OTC retinol and adapalene."
+        },
+        {
+          "title": "Side effects and contact",
+          "instructions": "If you notice any side effect, even a small one, stop that medication and message us. Do not restart it until Dr. Om replies. Review within 1 to 2 business days. Not for emergencies. If you have trouble breathing, swelling of your face or throat, chest pain, or another emergency, call 911."
+        }
+      ]
+    },
+    {
+      "key": "hormonal",
+      "name": "Hormonal",
+      "steps": [
+        {
+          "title": "Best for",
+          "instructions": "female; jawline and chin; premenstrual flares; or adult acne not controlled by topicals."
+        },
+        {
+          "title": "Morning",
+          "instructions": "BPO wash or azelaic acid; moisturizer; SPF 30+."
+        },
+        {
+          "title": "Evening",
+          "instructions": "tretinoin; moisturizer. Spironolactone 50 mg with dinner (25 mg if smaller, older or sensitive to dizziness)."
+        },
+        {
+          "title": "Prescription directions",
+          "instructions": "spironolactone 50 mg (or 25 mg), sig \"start 50 mg with dinner; increase by 25 to 50 mg after 6 to 8 weeks if tolerated and not clear; max 100 mg daily\"; tretinoin; BPO wash or azelaic acid."
+        },
+        {
+          "title": "Treatment rules",
+          "instructions": "Clindamycin never without BPO. Doxycycline never alone: use with BPO and a topical retinoid, which continue after doxycycline stops. Do not start tretinoin and hydroquinone in the same week; add the other after 2 weeks. Use one retinoid at a time; remove OTC retinol and adapalene."
+        },
+        {
+          "title": "Side effects and contact",
+          "instructions": "If you notice any side effect, even a small one, stop that medication and message us. Do not restart it until Dr. Om replies. Review within 1 to 2 business days. Not for emergencies. If you have trouble breathing, swelling of your face or throat, chest pain, or another emergency, call 911."
+        }
+      ]
+    },
+    {
+      "key": "dark_marks",
+      "name": "Dark marks",
+      "steps": [
+        {
+          "title": "Best for",
+          "instructions": "brown or purple marks after acne."
+        },
+        {
+          "title": "Morning",
+          "instructions": "Azelaic acid 15 to 20%; moisturizer; SPF 30+ every day, reapply outdoors."
+        },
+        {
+          "title": "Evening",
+          "instructions": "Hydroquinone 4% on marks only. Add or keep an acne template while still breaking out."
+        },
+        {
+          "title": "Prescription directions",
+          "instructions": "hydroquinone 4% (fingertip spot on marks, once nightly, after sunscreen habit confirmed); azelaic acid 15% gel or 20% cream."
+        },
+        {
+          "title": "Treatment rules",
+          "instructions": "Clindamycin never without BPO. Doxycycline never alone: use with BPO and a topical retinoid, which continue after doxycycline stops. Do not start tretinoin and hydroquinone in the same week; add the other after 2 weeks. Use one retinoid at a time; remove OTC retinol and adapalene."
+        },
+        {
+          "title": "Side effects and contact",
+          "instructions": "If you notice any side effect, even a small one, stop that medication and message us. Do not restart it until Dr. Om replies. Review within 1 to 2 business days. Not for emergencies. If you have trouble breathing, swelling of your face or throat, chest pain, or another emergency, call 911."
+        }
+      ]
+    },
+    {
+      "key": "pregnancy_safe",
+      "name": "Pregnancy-safe",
+      "steps": [
+        {
+          "title": "Best for",
+          "instructions": "pregnant, breastfeeding, trying, or \"not sure\"."
+        },
+        {
+          "title": "Morning",
+          "instructions": "Azelaic acid 15 to 20%; moisturizer; mineral SPF."
+        },
+        {
+          "title": "Evening",
+          "instructions": "Clindamycin 1% plus BPO 2.5 to 5% wash; moisturizer. No tretinoin, tazarotene, hydroquinone, doxycycline or spironolactone."
+        },
+        {
+          "title": "Treatment rules",
+          "instructions": "Clindamycin never without BPO. Doxycycline never alone: use with BPO and a topical retinoid, which continue after doxycycline stops. Do not start tretinoin and hydroquinone in the same week; add the other after 2 weeks. Use one retinoid at a time; remove OTC retinol and adapalene."
+        },
+        {
+          "title": "Side effects and contact",
+          "instructions": "If you notice any side effect, even a small one, stop that medication and message us. Do not restart it until Dr. Om replies. Review within 1 to 2 business days. Not for emergencies. If you have trouble breathing, swelling of your face or throat, chest pain, or another emergency, call 911."
+        }
+      ]
+    }
+  ]
+}
