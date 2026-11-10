@@ -14,7 +14,7 @@ Install/authenticate the Google Cloud CLI and select an operator with permission
    pbpaste | gcloud secrets versions add database-url --project=unzit-prod-514222 --data-file=-
    ```
 
-   Set every manifest name, including CORS/enrollment configuration. Use the full dashboard signing secret (`v1,whsec_...`) for `SEND_EMAIL_HOOK_SECRET`. `PAUBOX_FROM` must use a sender/domain authorized by Paubox, such as `UNZIT <hello@tryunzit.com>`. The current shared Paubox endpoint authenticates with `PAUBOX_API_KEY`; `PAUBOX_API_USERNAME` is retained as an account reference for compatibility, rather than inserted into the endpoint URL. Clear the clipboard after entering values. No secret value belongs in shell arguments, source files or logs.
+   Set every manifest name, including CORS/enrollment configuration. Use the full dashboard signing secret (`v1,whsec_...`) for `SEND_EMAIL_HOOK_SECRET`. `PAUBOX_FROM` must use a sender/domain authorized by Paubox, such as `UNZIT <hello@tryunzit.com>`. The Paubox endpoint authenticates with `PAUBOX_API_KEY` alone; no username is needed. Clear the clipboard after entering values. No secret value belongs in shell arguments, source files or logs.
 3. Record the current revision before replacing an existing service:
 
    ```sh
