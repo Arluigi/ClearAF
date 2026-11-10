@@ -3,8 +3,9 @@ import { isDeepStrictEqual } from 'node:util';
 import { Prisma } from '@prisma/client';
 import { requireLegacyClinicalWrite } from './careAccess';
 import { prisma } from '../config/database';
+import {uuid, revisionInput} from './routineCareValidation';
+export {uuid, revisionInput} from './routineCareValidation';
 
-export const uuid = z.string().uuid().transform(value => value.toLowerCase());
 export const slot = z.enum(['morning', 'evening']);
 function validDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -12,12 +13,6 @@ function validDate(value: string): boolean {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 export const localDate = z.string().refine(validDate, 'Invalid local date');
-export const revisionInput = z.object({
-  expectedRevisionId: uuid.nullable(),
-  name: z.string().trim().min(1).max(120),
-  isActive: z.boolean(),
-  steps: z.array(z.object({ title: z.string().trim().min(1).max(120), instructions: z.string().max(2000) }).strict()).max(20)
-}).strict().refine(value => !value.isActive || value.steps.length > 0, 'Active routine requires steps');
 const timestamp = z.string().max(40).datetime({ offset: true }).refine(value => {
   const offset = value.match(/[+-](\d{2}):(\d{2})$/);
   return validDate(value.slice(0, 10)) && Number.isFinite(Date.parse(value))

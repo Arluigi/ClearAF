@@ -72,3 +72,36 @@ Shell syntax and the upload allowlist were checked locally. No deployment/secret
 ## Public access
 
 The Workspace org enforces domain-restricted sharing, so an `allUsers` invoker binding is rejected. The service is made public with `--no-invoker-iam-check` instead; the API still authenticates every patient/clinician request itself. The image trusts the public Supabase Root 2021 CA (`backend/certs/`) via `NODE_EXTRA_CA_CERTS`, so pg verifies the pooler certificate. Cloud Build runs as the default compute service account with `roles/cloudbuild.builds.builder`.
+
+## Hosted bootstrap
+
+`backend/scripts/hosted-bootstrap.cjs` is the separate operator path for the migrated hosted database. The existing content, settings and waitlist scripts remain local-only. Run from the repository root after `cd backend && npm run build`. These commands do not apply migrations or deploy anything. All 12 active migrations must already be applied; the launch migration supplies the initial active settings row.
+
+Populate credentials only from the environment, for example through Secret Manager in an authenticated operator shell. Disable shell tracing before accessing secrets; do not print the environment or store it in a dotenv file. Use the **session pooler on port 5432**, with database user `postgres.lhaqeeitxiynzcpqbwpb`; transaction pooling on 6543 is refused because clinician serialization needs session affinity. The script supplies `backend/certs/supabase-prod-ca-2021.crt` explicitly and verifies TLS. The Supabase HTTPS host and database username must both match the 20 lowercase letter `--project-ref`. Only Supabase database/session-pooler hosts are accepted; local targets must use the local scripts.
+
+```sh
+set +x
+export DATABASE_URL="$(gcloud secrets versions access latest --secret database-url --project unzit-prod-514222)"
+export SUPABASE_URL="$(gcloud secrets versions access latest --secret supabase-url --project unzit-prod-514222)"
+export SUPABASE_SERVICE_ROLE_KEY="$(gcloud secrets versions access latest --secret supabase-service-role-key --project unzit-prod-514222)"
+export STRIPE_SECRET_KEY="$(gcloud secrets versions access latest --secret stripe-secret-key --project unzit-prod-514222)"
+node backend/scripts/hosted-bootstrap.cjs status --project-ref lhaqeeitxiynzcpqbwpb
+```
+
+`STRIPE_SECRET_KEY` is required for settings and must start with `sk_test_`; any supplied live key is refused. Status prints only the active content/settings versions, Stripe price IDs (no amounts or other price details), clinician/allowlist totals and migration count. It never prints addresses, content or credentials. Failures print a generic message with a controlled code; do not add raw provider error logging when investigating.
+
+Set operator variables `CLINICIAN_EMAIL`, `PORTAL_RESET_URL`, `CARE_PRICE_ID`, `ALL_IN_PRICE_ID` and `WAITLIST_CSV` in that shell. `PORTAL_RESET_URL` must be the portal's HTTPS `/reset-password` URL, without credentials, query or fragment, and must be allowed in Supabase Auth Redirect URLs. Configure the Auth email hook before inviting; `--apply` sends an actual invitation. Use distinct active Stripe **test** USD monthly licensed per-unit prices of 3900 and 8900 cents; the script retrieves and validates both through Stripe's API, including during preview.
+
+On an otherwise empty migrated database, run clinician, content, settings, then waitlist. First preview each write command by omitting `--apply`; previews read hosted state but do not invite or write. After the clinician command, set `CLINICIAN_ID` to its printed UUID for the settings command. Content discovers the sole clinician automatically and validates/publishes the committed `backend/src/content/catalogs/1.0-pending-review.json` through the shared publisher. This preserves its **draft/pending-review** state and six inactive draft templates; publication does not constitute clinical approval.
+
+```sh
+node backend/scripts/hosted-bootstrap.cjs clinician --project-ref lhaqeeitxiynzcpqbwpb --email "$CLINICIAN_EMAIL" --redirect "$PORTAL_RESET_URL" --apply
+node backend/scripts/hosted-bootstrap.cjs content --project-ref lhaqeeitxiynzcpqbwpb --apply
+node backend/scripts/hosted-bootstrap.cjs settings --project-ref lhaqeeitxiynzcpqbwpb --care-price "$CARE_PRICE_ID" --all-in-price "$ALL_IN_PRICE_ID" --care-cents 3900 --all-in-cents 8900 --clinician-id "$CLINICIAN_ID" --content-version 1.0-pending-review --apply
+node backend/scripts/hosted-bootstrap.cjs waitlist "$WAITLIST_CSV" --project-ref lhaqeeitxiynzcpqbwpb --apply
+node backend/scripts/hosted-bootstrap.cjs status --project-ref lhaqeeitxiynzcpqbwpb
+```
+
+Clinician first enables that address in the allowlist because the Auth trigger requires it, then invites with the supplied redirect and ensures the fixture-compatible dermatologist/profile rows. The Auth trigger also creates a launch case; the bootstrap leaves it intact. It refuses a different existing clinician, multiple clinicians or mismatched Auth/application IDs. Reruns reuse the existing Auth user without sending another invitation, preserve existing profiles, and repair rows after a partial failure. Allowlisting and invitation precede the application-row transaction, so a failed command may leave either in place; retry the same command. Waitlist imports deduplicate/enable addresses and print counts only. Source paths resolving to dotenv or generated xcconfig files are refused.
+
+Local verification (2026-11-09): `cd backend && npm test && npm run build` passed with synthetic environment configuration and credential-file reads blocked: 505 tests, including 18 hosted-bootstrap tests using injected fakes. The compiled shared content validator also passed an offline check that refused Prisma/dotenv imports. The local-only operator guards were preserved. No hosted bootstrap command was executed.

@@ -4,7 +4,7 @@ const {createHash}=require('node:crypto');
 const {v5:uuidv5,v4:uuidv4}=require('uuid');
 function canonical(value){return JSON.stringify(sort(value))}
 function sort(v){return Array.isArray(v)?v.map(sort):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sort(v[k])])):v}
-function builtValidators(){return {contract:require('../dist/contracts/unzitLaunch'),...require('../dist/content/launchConsents'),...require('../dist/content/launchIntake'),...require('../dist/content/launchCheckIn'),revisionInput:require('../dist/services/routineCare').revisionInput}}
+function builtValidators(){return {contract:require('../dist/contracts/unzitLaunch'),...require('../dist/content/launchConsents'),...require('../dist/content/launchIntake'),...require('../dist/content/launchCheckIn'),revisionInput:require('../dist/services/routineCareValidation').revisionInput}}
 function enumValues(schema){const d=schema._def;if(d.schema)return enumValues(d.schema);if(d.innerType)return enumValues(d.innerType);if(d.typeName==='ZodEnum')return {values:d.values,multi:false};if(d.typeName==='ZodArray'){const v=enumValues(d.type);return v&&{...v,multi:true}}return null}
 function fixedChoices(questions,shape){for(const [id,schema]of Object.entries(shape)){const expected=enumValues(schema);if(!expected)continue;const q=questions.find(q=>q.id===id);if(!q||q.kind!==(expected.multi?'multi_choice':'choice')||q.options.length!==expected.values.length||expected.values.some(id=>!q.options.some(o=>o.id===id)))throw Error('Invalid source machine choices')}}
 function validateLaunchContent(input,validators=builtValidators()){
