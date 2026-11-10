@@ -4,7 +4,9 @@ import {randomUUID,createHash} from 'node:crypto';
 import {prisma} from '../config/database';
 import {MembershipSchema,BillingResponseSchema,UUIDSchema,DestinationSchema} from '../contracts/unzitLaunch';
 import {enrollmentError} from './enrollment';
-import {activeLaunchSettings,assertSettingsVersion} from './launchSettings';
+import {isIntakeV2,evaluateIntakeV2,completeIntakeV2} from './intakeV2';
+import {requiredClinicalSlots,validateClinicalPhotoItems} from './clinicalPhotoSets';
+import {activeLaunchSettings,selectedLaunchSettings,assertSettingsVersion} from './launchSettings';
 import {validateLaunchDocuments} from '../content/launchConsents';
 import {checkoutInput,portalInput,fakeResolutionInput,providerEventInput} from './launchBillingValidation';
 import {createBillingProvider,billingConfig,BillingProvider,BillingEvent,ProviderSnapshot,ProviderContext} from './billingProvider';
@@ -104,9 +106,16 @@ export function createLaunchBilling({db,provider,now=()=>new Date(),returnOrigin
     await lock(tx,patientId);const c=await tx.launchCase.findUnique({where:{id:a.caseId}});if(!c||c.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');
     let m=await tx.careMembership.findUnique({where:{patientId}});
     if(m&&m.status!=='awaiting_payment'){if(m.planId!==a.planId)throw enrollmentError(409,'OPERATION_CONFLICT');return {done:await response(tx,m)}}
-    const settings=await activeLaunchSettings(tx);assertSettingsVersion(settings,a.settingsVersion);
+    let settings=c.settingsVersion?await tx.launchSettings.findUnique({where:{version:c.settingsVersion}}):await activeLaunchSettings(tx);if(!settings)throw unavailable();if(!isIntakeV2(settings.contentVersion))settings=await selectedLaunchSettings(tx);assertSettingsVersion(settings,a.settingsVersion);
     if(c.status!=='payment'||!c.eligibility?.eligible||!c.identityId)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
     const identity=await tx.identityVerification.findUnique({where:{id:c.identityId}});if(!identity||identity.patientId!==patientId||identity.caseId!==c.id||!identity.attestedInNC||['rejected','needs_changes'].includes(identity.status))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+    if(isIntakeV2(settings.contentVersion)){
+     const intake=c.intakeId?await tx.intakeRevision.findUnique({where:{id:c.intakeId}}):null;
+     let answers:any;try{if(intake?.questionnaireVersion!==settings.contentVersion)throw Error();answers=completeIntakeV2(intake.answers,now().toISOString().slice(0,10))}catch{throw enrollmentError(403,'LAUNCH_STEP_REQUIRED')}
+     if(answers.planId!==a.planId||new Date(identity.dateOfBirth).toISOString().slice(0,10)!==answers.A1)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+     if(a.planId==='all_in'){const destination=DestinationSchema.safeParse(c.destination);if(!destination.success||destination.data.planId!=='all_in'||destination.data.shippingAddress.state!=='NC'||answers.G2!=='yes')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED')}
+     const set=c.photoSetId?await tx.clinicalPhotoSet.findUnique({where:{id:c.photoSetId}}):null;if(!set||set.patientId!==patientId||set.caseId!==c.id)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');const items=await tx.clinicalPhotoSetItem.findMany({where:{setId:set.id}});await validateClinicalPhotoItems(tx,patientId,set.id,items,requiredClinicalSlots(answers),{purpose:'enrollment',id:c.id});
+    }
     let docs:any[];try{docs=validateLaunchDocuments(settings.content?.consents)}catch{throw unavailable()}
     const receipts=await tx.consentAcceptance.findMany({where:{userId:patientId}});if(docs.some(d=>!receipts.some((r:any)=>r.documentKey===d.key&&r.documentVersion===d.version&&r.documentSha256===d.sha256)))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
     const price=priceId(settings,a.planId),amount=settings[a.planId==='care'?'careAmountCents':'allInAmountCents'];if(!price||!Number.isInteger(amount)||amount<=0)throw unavailable();

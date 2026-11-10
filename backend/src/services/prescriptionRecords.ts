@@ -1,3 +1,4 @@
+import {isIntakeV2,assertIntakeV2Prescription} from './intakeV2';
 import {prisma} from '../config/database';
 import {contracts,UUIDSchema,PrescriptionSentSchema} from '../contracts/unzitLaunch';
 import {enrollmentError} from './enrollment';
@@ -11,6 +12,7 @@ export function createPrescriptionRecords({db,now=()=>new Date()}:{db:any;now?:(
   const old=await tx.prescription.findUnique({where:{id:recordId}});
   if(old){if(old.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');if(old.dermatologistId!==clinicianId||old.source!=='treatrx_external')throw enrollmentError(409,'OPERATION_CONFLICT');const d=prescriptionSentDTO(old);if(launchFingerprint({drug:d.drug,strength:d.strength,sig:d.sig,pharmacy:d.pharmacy,sentAt:d.sentAt})!==launchFingerprint(a))throw enrollmentError(409,'OPERATION_CONFLICT');return {prescription:d,created:false}}
   const row=await assertLaunchPrescriptionAccess(tx,patientId,now());if(!row)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+  const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null;if(isIntakeV2(intake?.questionnaireVersion)){const membership=await tx.careMembership.findUnique({where:{patientId}});assertIntakeV2Prescription(intake.answers,row.eligibility,a.drug,a.strength,membership.planId)}
   const saved=await tx.prescription.create({data:{id:recordId,patientId,dermatologistId:clinicianId,medicationName:a.drug,dosage:a.strength,strength:a.strength,instructions:a.sig,pharmacy:a.pharmacy.name,pharmacySnapshot:a.pharmacy,prescribedDate:new Date(a.sentAt),sentAt:new Date(a.sentAt),recordedAt:now(),source:'treatrx_external',launchCaseId:row.id}});return {prescription:prescriptionSentDTO(saved),created:true};
  })},
  async list(patientId:string,page=1,limit=20){const q=contracts['GET /prescriptions-sent'].request.parse({page,limit});return db.$transaction(async(tx:any)=>{await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id=${patientId}::uuid FOR SHARE`;if(!await tx.user.findUnique({where:{id:patientId}}))throw enrollmentError(404,'NOT_FOUND');return prescriptionPage(tx,patientId,q.page,q.limit)})}

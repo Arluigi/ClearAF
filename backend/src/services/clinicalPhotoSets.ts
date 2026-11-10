@@ -1,7 +1,7 @@
 import {PhotoSlot,MedicalDraft} from '../contracts/unzitLaunch';
 import {captureIdentity} from './photoCapture';
 import {enrollmentError} from './enrollment';
-export function requiredClinicalSlots(answers:MedicalDraft):PhotoSlot[]{return ['front','left','right',...(answers.M6?.includes('chest')?['chest' as const]:[]),...(answers.M6?.includes('back')?['back' as const]:[])]}
+export function requiredClinicalSlots(answers:MedicalDraft & {B8?:string[]}):PhotoSlot[]{return ['front','left','right',...((answers.B8??answers.M6)?.includes('chest')?['chest' as const]:[]),...((answers.B8??answers.M6)?.includes('back')?['back' as const]:[])]}
 export async function validateClinicalPhotoItems(db:any,patientId:string,setId:string,items:{slot:PhotoSlot;photoId:string;captureId:string}[],required:PhotoSlot[],target?:{purpose:string;id:string},complete=true){
  if(complete&&required.some(slot=>!items.some(i=>i.slot===slot))||new Set(items.map(i=>i.slot)).size!==items.length||new Set(items.map(i=>i.photoId)).size!==items.length)throw enrollmentError(409,'INCOMPLETE_PHOTO_SET');
  for(const item of items){

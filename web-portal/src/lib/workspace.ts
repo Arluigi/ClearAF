@@ -79,7 +79,7 @@ export function launchApprovalBlock(enrollment: import('../types/api').LaunchEnr
   if (consentReceipts(enrollment.consents).some(receipt=>!receipt.accepted)) return 'All four consent receipts are required.';
   if (record.status!=='submitted') return 'A complete submitted package is required.';
   if (!record.photoSet || record.photoSet.requiredSlots.some(slot=>!record.photoSet!.items.some(item=>item.slot===slot))) return 'The required photo set is incomplete.';
-  if (!record.destination) return 'A destination is required.';
+  if (!record.destination && !(record.intakeV2 && record.planId==='care')) return 'A destination is required.';
   if (enrollment.membership?.status!=='paid_pending_review') return 'Confirmed payment pending review is required.';
   return null;
 }

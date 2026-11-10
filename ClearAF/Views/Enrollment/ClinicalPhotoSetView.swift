@@ -15,22 +15,24 @@ struct ClinicalPhotoSetView: View {
     let purpose: LaunchPhotoSet.Purpose
     let requiredSlots: [LaunchPhotoSlot]
     var serverSet: LaunchPhotoSet? = nil
+    var guidance: LaunchPhotoGuidance? = nil
     var onContinue: (LaunchPhotoSet) -> Void = { _ in }
     @State private var capturing: LaunchPhotoSlot?
     @State private var review: PhotoReviewDraft?
     @State private var localError: String?
     @State private var preparing = false
     var body: some View {
-        LaunchPage(title: "Your clinical photos") {
-            Text("Use daylight, no filters and no makeup. Move hair away from your face. Take a front view, then each side in the same light.")
-            if repository.requiredSlots.contains(.chest) || repository.requiredSlots.contains(.back) {
+        LaunchPage(title: guidance?.title ?? "Your clinical photos") {
+            if let guidance { ForEach(guidance.instructions, id: \.self) { Text($0) } }
+            else { Text("Use daylight, no filters and no makeup. Move hair away from your face. Take a front view, then each side in the same light.") }
+            if guidance == nil && (repository.requiredSlots.contains(.chest) || repository.requiredSlots.contains(.back)) {
                 Text("Include the affected chest or back. Chest photos should show the area above the breasts. You may cover private areas or crop the photo before choosing it.")
             }
             Text("Zoom in and check it is sharp. These photos are shared with your clinician as a set.").font(Letterpress.ui(13))
             ForEach(LaunchPhotoSlot.allCases.filter { repository.requiredSlots.contains($0) || $0 == .closeUp }) { slot in
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     HStack {
-                        Text(slot.title + (slot == .closeUp ? " · optional" : "" )).font(Letterpress.ui(17, weight: .medium))
+                        Text(guidance?.slots.first(where: { $0.id == slot.rawValue })?.label ?? (slot.title + (slot == .closeUp ? " · optional" : "" ))).font(Letterpress.ui(17, weight: .medium))
                         Spacer()
                         Text(repository.acknowledgedSlots.contains(slot) ? "Shared" : repository.entries.contains(where: { $0.slot == slot }) ? "Waiting to share" : "Not added").font(Letterpress.data(12))
                     }
@@ -102,9 +104,15 @@ struct EnrollmentClinicalPhotosView: View {
     }
     var body: some View {
         if let state = enrollment.state {
-            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: state.case.id, purpose: .enrollment, requiredSlots: LaunchPhotoRules.required(sites: state.case.medicalHistory.M6 ?? []), serverSet: state.case.photoSet) { _ in
+            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: state.case.id, purpose: .enrollment, requiredSlots: state.case.intakeV2?.evaluation.requiredPhotoSlots ?? LaunchPhotoRules.required(sites: state.case.medicalHistory.M6 ?? []), serverSet: correctionSet(state), guidance: enrollment.catalog?.photoGuidance) { _ in
                 Task { _ = await enrollment.refresh(ticket: ticket) }
             }
         }
+    }
+    private func correctionSet(_ state: LaunchEnrollmentResponse) -> LaunchPhotoSet? {
+        guard let set = state.case.photoSet else { return nil }
+        guard state.case.status == .needsChanges, set.status == .submitted || set.status == .reviewed else { return set }
+        // Opening the correction editor creates a new draft and preserves the submitted set.
+        return .init(id: set.id, purpose: set.purpose, status: .needsChanges, requiredSlots: set.requiredSlots, items: set.items)
     }
 }

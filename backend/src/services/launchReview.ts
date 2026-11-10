@@ -8,6 +8,7 @@ import {authorizeAssignedPatient,currentNCEvidence,assertCareAccess} from './car
 import {prescriptionPage} from './prescriptionRecords';
 import {identityObjectPaths} from './identityVerification';
 import {ageOn} from './enrollmentRules';
+import {isIntakeV2,completeIntakeV2,evaluateIntakeV2} from './intakeV2';
 import {completeMedicalHistory} from './launchEnrollmentValidation';
 import {requiredClinicalSlots,validateClinicalPhotoItems} from './clinicalPhotoSets';
 import {validateLaunchDocuments} from '../content/launchConsents';
@@ -23,7 +24,7 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
   assertCareAccess(row,m,'approval',now(),await currentNCEvidence(tx,row.patientId,id));
   if(row.status!=='submitted'||!row.submittedAt||!row.settingsVersion||!row.eligibility?.eligible)throw enrollmentError(409,'INCOMPLETE_CASE');
   const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null,set=row.photoSetId?await tx.clinicalPhotoSet.findUnique({where:{id:row.photoSetId}}):null,settings=await tx.launchSettings.findUnique({where:{version:row.settingsVersion}});
-  let answers:any,docs:any[];try{answers=completeMedicalHistory(intake?.answers);docs=validateLaunchDocuments(settings?.content?.consents);const dest=DestinationSchema.parse(row.destination);if(dest.planId!==m.planId)throw Error()}catch{throw enrollmentError(409,'INCOMPLETE_CASE')}
+  let answers:any,docs:any[];try{answers=isIntakeV2(intake?.questionnaireVersion)?completeIntakeV2(intake?.answers,now().toISOString().slice(0,10)):completeMedicalHistory(intake?.answers);if(isIntakeV2(intake?.questionnaireVersion)&&((evaluateIntakeV2(answers).hold&&!row.eligibility?.holdDecision)||(answers.A3==='dark_marks'&&row.eligibility?.screeningDecisions?.marksAcneRelated!==true)))throw Error();if(isIntakeV2(intake?.questionnaireVersion)&&(answers.planId!==m.planId||answers.A1!==new Date(id.dateOfBirth).toISOString().slice(0,10)))throw Error();docs=validateLaunchDocuments(settings?.content?.consents);const dest=isIntakeV2(intake?.questionnaireVersion)&&m.planId==='care'&&!row.destination?{planId:'care'}:DestinationSchema.parse(row.destination);if(dest.planId!==m.planId)throw Error()}catch{throw enrollmentError(409,'INCOMPLETE_CASE')}
   if(!intake||intake.patientId!==row.patientId||intake.caseId!==row.id||!intake.submittedAt||intake.questionnaireVersion!==settings.contentVersion||!set||set.patientId!==row.patientId||set.caseId!==row.id||set.status!=='submitted')throw enrollmentError(409,'INCOMPLETE_CASE');
   const receipts=await tx.consentAcceptance.findMany({where:{userId:row.patientId}});if(!docs.every(d=>receipts.some((r:any)=>r.documentKey===d.key&&r.documentVersion===d.version&&r.documentSha256===d.sha256)))throw enrollmentError(409,'INCOMPLETE_CASE');
   const items=await tx.clinicalPhotoSetItem.findMany({where:{setId:set.id}});await validateClinicalPhotoItems(tx,row.patientId,set.id,items,requiredClinicalSlots(answers),{purpose:'enrollment',id:row.id});
@@ -38,11 +39,11 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
     JOIN public.dermatologists d ON d.id=p."dermatologistId"
     WHERE d.id=${clinicianId}::uuid
    ), items AS (
-    SELECT v.id,c."patientId",p.name AS "patientName",v.kind,v.id AS "targetId",c."submittedAt" AT TIME ZONE 'UTC' AS "receivedAt",COALESCE(c.flags,'[]'::jsonb) AS flags
+    SELECT v.id,c."patientId",p.name AS "patientName",v.kind,v.id AS "targetId",COALESCE(c."submittedAt",c."createdAt") AT TIME ZONE 'UTC' AS "receivedAt",COALESCE(c.flags,'[]'::jsonb) AS flags
     FROM public.launch_cases c JOIN assigned p ON p.id=c."patientId"
     LEFT JOIN public.identity_verifications i ON i.id=c."identityId" AND i.status='uploaded'
     CROSS JOIN LATERAL (SELECT c.id,'enrollment'::text AS kind UNION ALL SELECT i.id,'identity' WHERE i.id IS NOT NULL) v
-    WHERE c.status='submitted' AND c."submittedAt" IS NOT NULL
+    WHERE (c.status='submitted' AND c."submittedAt" IS NOT NULL) OR (c.status='ineligible' AND c.eligibility->>'rulesVersion'='2.0-pending-review' AND c.eligibility->'reasons' ? 'A')
     UNION ALL
     SELECT c.id,c."patientId",p.name,'check_in',c.id,COALESCE(c."submittedAt",TIMESTAMP '1970-01-01') AT TIME ZONE 'UTC',
      to_jsonb(array_remove(ARRAY[
@@ -67,8 +68,10 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
  async review(patientId:string,clinicianId:string,reviewId:string,input:unknown){UUIDSchema.parse(patientId);UUIDSchema.parse(reviewId);const a=contracts['PUT /patients/:patientId/reviews/:reviewId'].request.parse(input);if(a.outcome==='needs_changes'&&!a.patientMessage?.trim())throw enrollmentError(400,'VALIDATION_ERROR');return db.$transaction(async(tx:any)=>{
   await authorizeAssignedPatient(tx,patientId,clinicianId);let row=await caseFor(tx,patientId);const hash=launchFingerprint(a),old=await tx.launchReview.findUnique({where:{id:reviewId}});
   if(old){if(old.patientId!==patientId||old.caseId!==row.id)throw enrollmentError(404,'NOT_FOUND');if(old.clinicianId!==clinicianId||old.requestHash!==hash)throw enrollmentError(409,'OPERATION_CONFLICT');const c=old.targetType==='check_in'?await tx.launchCheckIn.findUnique({where:{id:old.targetId}}):null;return response(tx,row,old,c,false)}
+  if(a.clearHold&&a.targetType!=='case')throw enrollmentError(400,'VALIDATION_ERROR');
   if(row.revision!==a.expectedRevision)throw enrollmentError(409,'REVISION_CONFLICT');
   const id=row.identityId?await tx.identityVerification.findUnique({where:{id:row.identityId}}):null,m=await tx.careMembership.findUnique({where:{patientId}});let c:any=null,changes:any={};
+  if(a.screeningDecisions){if(a.targetType!=='case')throw enrollmentError(400,'VALIDATION_ERROR');const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null;if(!isIntakeV2(intake?.questionnaireVersion))throw enrollmentError(400,'VALIDATION_ERROR');row={...row,eligibility:{...row.eligibility,screeningDecisions:{...row.eligibility?.screeningDecisions,...a.screeningDecisions,clinicianId,decidedAt:now().toISOString()}}};changes.eligibility=row.eligibility}
   if(a.targetType==='identity'){
    if(!id||id.id!==a.targetId||id.patientId!==patientId||id.caseId!==row.id)throw enrollmentError(404,'NOT_FOUND');if(!row.submittedAt||row.status!=='submitted'||id.status!=='uploaded')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
    if(a.outcome==='approve'){
@@ -77,19 +80,20 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
     assertCareAccess(row,m,'approval',now(),await currentNCEvidence(tx,patientId,id));
    }
    await tx.identityVerification.update({where:{id:id.id},data:{status:a.outcome==='approve'?'approved':a.outcome==='reject'?'rejected':'needs_changes',reviewedAt:now(),reviewedBy:clinicianId,patientMessage:a.patientMessage}});
-   if(a.outcome==='needs_changes')changes={status:'needs_changes',patientMessage:a.patientMessage};
+   if(a.outcome==='needs_changes')changes={...changes,status:'needs_changes',patientMessage:a.patientMessage};
   }else if(a.targetType==='case'){
    if(a.targetId!==row.id)throw enrollmentError(404,'NOT_FOUND');if(row.status!=='submitted')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
-   if(a.outcome==='approve'){await complete(tx,row,id,m);changes={status:'approved',approvedAt:now(),patientMessage:a.patientMessage};await tx.careMembership.update({where:{id:m.id},data:{status:'active',activatedAt:now(),cadenceAnchor:now()}})}else if(a.outcome==='needs_changes')changes={status:'needs_changes',patientMessage:a.patientMessage};
+   if(a.clearHold){const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null,settings=row.settingsVersion?await tx.launchSettings.findUnique({where:{version:row.settingsVersion}}):null;if(a.outcome!=='approve'||!isIntakeV2(intake?.questionnaireVersion)||!evaluateIntakeV2(intake.answers).hold||row.eligibility?.holdDecision||settings?.clinicianId!==clinicianId)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');changes={eligibility:{...row.eligibility,holdDecision:{decisionNote:a.clearHold.decisionNote,clinicianId,decidedAt:now().toISOString()}},flags:(row.flags??[]).filter((f:string)=>!f.startsWith('HOLD:'))}}else if(a.outcome==='approve'){await complete(tx,row,id,m);changes={...changes,status:'approved',approvedAt:now(),patientMessage:a.patientMessage};await tx.careMembership.update({where:{id:m.id},data:{status:'active',activatedAt:now(),cadenceAnchor:now()}})}else if(a.outcome==='needs_changes')changes={...changes,status:'needs_changes',patientMessage:a.patientMessage};
   }else{
    c=await tx.launchCheckIn.findUnique({where:{id:a.targetId}});if(!c||c.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');if(c.status!=='submitted')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
    c=await tx.launchCheckIn.update({where:{id:c.id},data:{status:a.outcome==='needs_changes'?'needs_changes':'reviewed',reviewedAt:now(),patientMessage:a.patientMessage}});
   }
+  if(a.outcome==='needs_changes'&&a.targetType!=='check_in'&&row.photoSetId){const set=await tx.clinicalPhotoSet.findUnique({where:{id:row.photoSetId}});if(set?.patientId===patientId&&set.caseId===row.id)await tx.clinicalPhotoSet.update({where:{id:set.id},data:{status:'needs_changes'}})}
   if(a.outcome==='reject'&&a.targetType!=='check_in'){
    if(!m)throw enrollmentError(403,'CARE_ACCESS_REQUIRED');changes={status:'rejected',patientMessage:a.patientMessage};const decision=await tx.careDecision.create({data:{id:randomUUID(),patientId,clinicianId,decision:'refer_out',patientMessage:a.patientMessage,photoId:null,refundStatus:'pending',createdAt:now()}});await queueRejectionRefund(tx,{membership:m,decisionId:decision.id,now:now()});
   }
   row=await tx.launchCase.update({where:{id:row.id},data:{...changes,revision:row.revision+1}});
-  const review=await tx.launchReview.create({data:{id:reviewId,patientId,caseId:row.id,clinicianId,targetType:a.targetType,targetId:a.targetId,outcome:a.outcome,patientMessage:a.patientMessage,caseRevision:a.expectedRevision,requestHash:hash,createdAt:now()}});return response(tx,row,review,c,true);
+  const review=await tx.launchReview.create({data:{id:reviewId,patientId,caseId:row.id,clinicianId,targetType:a.targetType,targetId:a.targetId,outcome:a.outcome,patientMessage:a.clearHold?.decisionNote??a.screeningDecisions?.ibd?.decisionNote??a.patientMessage,caseRevision:a.expectedRevision,requestHash:hash,createdAt:now()}});return response(tx,row,review,c,true);
  })}
  };
 }

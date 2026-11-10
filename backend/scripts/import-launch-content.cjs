@@ -9,25 +9,32 @@ function enumValues(schema){const d=schema._def;if(d.schema)return enumValues(d.
 function fixedChoices(questions,shape){for(const [id,schema]of Object.entries(shape)){const expected=enumValues(schema);if(!expected)continue;const q=questions.find(q=>q.id===id);if(!q||q.kind!==(expected.multi?'multi_choice':'choice')||q.options.length!==expected.values.length||expected.values.some(id=>!q.options.some(o=>o.id===id)))throw Error('Invalid source machine choices')}}
 function validateLaunchContent(input,validators=builtValidators()){
  const copy=z.string().trim().min(1).max(2000);
- const photoGuidance=z.object({title:copy,instructions:z.array(copy).min(1),slots:z.array(z.object({id:z.enum(['front','left','right','chest','back','close_up']),label:copy,required:z.boolean(),requiredWhen:z.object({questionId:z.literal('M6'),value:z.enum(['chest','back'])}).strict().nullable()}).strict()).length(6)}).strict().superRefine((v,ctx)=>{
+ const photoGuidance=z.object({title:copy,instructions:z.array(copy).min(1),slots:z.array(z.object({id:z.enum(['front','left','right','chest','back','close_up']),label:copy,required:z.boolean(),requiredWhen:z.object({questionId:z.enum(['M6','B8']),value:z.enum(['chest','back'])}).strict().nullable()}).strict()).length(6)}).strict().superRefine((v,ctx)=>{
   if(new Set(v.slots.map(s=>s.id)).size!==6||v.slots.some(s=>s.required!==['front','left','right'].includes(s.id)||(['chest','back'].includes(s.id)?s.requiredWhen?.value!==s.id:s.requiredWhen!==null)))ctx.addIssue({code:'custom',message:'Invalid required photo slots'});
  });
- const identityGuidance=z.object({title:copy,items:z.array(z.object({id:z.enum(['government_id','selfie','nc_attestation']),required:z.literal(true),instructions:copy}).strict()).length(3)}).strict().refine(v=>new Set(v.items.map(i=>i.id)).size===3,'Invalid identity guidance');
- const envelope=z.object({status:z.enum(['draft','approved']),versionLabel:z.string().min(1).max(80),approvalReference:z.string().min(1).max(160).nullable(),clinicianId:z.string().uuid(),consents:z.array(z.unknown()),eligibilityQuestions:z.array(z.unknown()),medicalQuestions:z.array(z.unknown()),checkInForm:z.unknown(),photoGuidance:photoGuidance.optional(),identityGuidance:identityGuidance.optional(),templates:z.array(z.object({key:z.string().regex(/^[a-z][a-z0-9_]{0,59}$/),name:z.string().min(1).max(120),steps:z.array(z.unknown()).min(1).max(20)}).strict()).length(6)}).strict().parse(input);
+ const identityGuidance=z.object({title:copy,prompt:copy.optional(),attestation:copy.optional(),items:z.array(z.object({id:z.enum(['government_id','selfie','nc_attestation']),required:z.literal(true),instructions:copy}).strict()).length(3)}).strict().refine(v=>new Set(v.items.map(i=>i.id)).size===3,'Invalid identity guidance');
+ const envelope=z.object({status:z.enum(['draft','approved']),versionLabel:z.string().min(1).max(80),approvalReference:z.string().min(1).max(160).nullable(),clinicianId:z.string().uuid(),consents:z.array(z.unknown()),eligibilityQuestions:z.array(z.unknown()),medicalQuestions:z.array(z.unknown()),checkInForm:z.unknown(),photoGuidance:photoGuidance.optional(),identityGuidance:identityGuidance.optional(),intakeV2:z.object({sections:z.array(z.object({id:copy,title:copy,intro:z.string().max(2000),questionIds:z.array(copy)}).strict()),exitPages:z.record(copy),holdNotice:copy,attestationIntro:copy,dateQuestionIds:z.array(copy),photoQuestion:z.object({id:copy,prompt:copy}).strict(),answerShape:copy,acknowledgmentLabels:z.record(copy).optional()}).strict().optional(),templates:z.array(z.object({key:z.string().regex(/^[a-z][a-z0-9_]{0,59}$/),name:z.string().min(1).max(120),steps:z.array(z.unknown()).min(1).max(20)}).strict()).length(6)}).strict().parse(input);
  const pending=label=>label==='0.9-draft'||/^\d+\.\d+-pending-review$/.test(label);
  if(envelope.status==='draft'&&!pending(envelope.versionLabel)||envelope.status==='approved'&&(!envelope.approvalReference||pending(envelope.versionLabel)))throw Error('Clinical publication approval reference required');
  const docs=validators.validateLaunchDocuments(envelope.consents);
  if(docs.some(d=>d.acceptedAt!==null)||envelope.status==='draft'&&docs.some(d=>d.versionLabel!==envelope.versionLabel||!d.body.includes('DRAFT'))||envelope.status==='approved'&&docs.some(d=>/draft|pending-review/.test(d.versionLabel)))throw Error('Invalid publication document state');
- const eligibility=validators.contract.QuestionSchema.array().length(4).parse(envelope.eligibilityQuestions);
- if(new Set(eligibility.map(q=>q.id)).size!==4||['E1','E2','E3','E4'].some(id=>!eligibility.some(q=>q.id===id)))throw Error('Invalid eligibility source identity');
- const medical=validators.validateLaunchIntakeCatalog(envelope.medicalQuestions);
- fixedChoices(eligibility,validators.contract.EligibilitySchema.shape);fixedChoices(medical,validators.contract.MedicalHistorySchema.shape);
+ let eligibility,medical;
+ if(envelope.versionLabel==='2.0-pending-review'){
+  if(!envelope.intakeV2)throw Error('V2 section metadata required');
+  const parsed=validators.validateIntakeV2Catalog(envelope.eligibilityQuestions,envelope.medicalQuestions);eligibility=parsed.eligibilityQuestions;medical=parsed.medicalQuestions;
+ }else{
+  eligibility=validators.contract.QuestionSchema.array().length(4).parse(envelope.eligibilityQuestions);
+  if(new Set(eligibility.map(q=>q.id)).size!==4||['E1','E2','E3','E4'].some(id=>!eligibility.some(q=>q.id===id)))throw Error('Invalid eligibility source identity');
+  medical=validators.validateLaunchIntakeCatalog(envelope.medicalQuestions);
+  fixedChoices(eligibility,validators.contract.EligibilitySchema.shape);fixedChoices(medical,validators.contract.MedicalHistorySchema.shape);
+ }
  const checkInForm=validators.validateLaunchCheckInContent(envelope.checkInForm);
  if(envelope.status==='draft'&&(!checkInForm.title.startsWith('DRAFT')||checkInForm.versionLabel!==envelope.versionLabel))throw Error('Draft label required');
  if(new Set(envelope.templates.map(t=>t.key)).size!==6)throw Error('Six distinct template keys required');
  // Seed starting points as drafts only. Existing clinician-owned version tooling handles later approval.
  const templates=envelope.templates.map(t=>({key:t.key,...validators.revisionInput.parse({expectedRevisionId:null,name:t.name.startsWith('DRAFT: ')?t.name:'DRAFT: '+t.name,isActive:false,steps:t.steps})}));
  const content={consents:docs,eligibilityQuestions:eligibility,medicalQuestions:medical,checkInForm,publication:{status:envelope.status,versionLabel:envelope.versionLabel,approvalReference:envelope.approvalReference}};
+ if(envelope.intakeV2)content.intakeV2=envelope.intakeV2;
  if(envelope.photoGuidance)content.photoGuidance=envelope.photoGuidance;
  if(envelope.identityGuidance)content.identityGuidance=envelope.identityGuidance;
  content.publication.sha256=createHash('sha256').update(canonical({content,templates})).digest('hex');
@@ -54,11 +61,11 @@ async function publishLaunchContent(db,publication){
  }catch(error){await db.query('ROLLBACK');throw error}
 }
 async function run(){
- const args=process.argv.slice(2);if(![1,2].includes(args.length)||args.length===2&&args[1]!=='--apply')throw Error('Expected content JSON and optional --apply');
- const fs=require('node:fs'),path=require('node:path'),file=fs.realpathSync(args[0]),name=path.basename(file);if(name.startsWith('.env')&&name!=='.env.example'||name==='Local.generated.xcconfig'||fs.statSync(file).size>250000)throw Error('Invalid source file');
- const publication=validateLaunchContent(JSON.parse(fs.readFileSync(file,'utf8')));
- if(args.length===1){console.log(JSON.stringify({validatedDocuments:4,questions:27,templates:6,applied:0}));return}
- require('dotenv').config({quiet:true});const {local}=require('./recovery-drill.cjs');local(process.env.DATABASE_URL,['postgres:','postgresql:']);local(process.env.SUPABASE_URL,['http:','https:']);
+ const {parseImportArgs,readCatalog}=require('./lib/launch-catalog.cjs');
+ const args=parseImportArgs(process.argv.slice(2));
+ const publication=validateLaunchContent({...readCatalog(args.catalogVersion),clinicianId:args.clinicianId});
+ if(!args.apply){console.log(JSON.stringify({validatedDocuments:publication.content.consents.length,questions:publication.content.eligibilityQuestions.length+publication.content.medicalQuestions.length,templates:publication.templates.length,applied:0}));return}
+ const {local}=require('./recovery-drill.cjs');local(process.env.DATABASE_URL,['postgres:','postgresql:']);local(process.env.SUPABASE_URL,['http:','https:']);
  const db=new(require('pg').Client)({connectionString:process.env.DATABASE_URL});await db.connect();try{console.log(JSON.stringify(await publishLaunchContent(db,publication)))}finally{await db.end()}
 }
 if(require.main===module)run().catch(()=>{console.error('Launch content publication failed');process.exitCode=1});

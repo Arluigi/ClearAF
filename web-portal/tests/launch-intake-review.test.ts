@@ -38,3 +38,11 @@ test('pending clinician review publications remain visibly DRAFT',()=>{
  const e=enrollment();e.case.questionnaireVersion='1.0-pending-review';
  assert.match(renderToStaticMarkup(h(LaunchIntakeDetails,{enrollment:e,catalog:null})),/DRAFT clinical content/);
 });
+test('v2 Care review permits a deferred pharmacy and renders complete voice and negative screens',()=>{
+ const e=enrollment();e.case.questionnaireVersion='2.0-pending-review';e.case.destination=null;
+ const words='Every word of my experience matters. '.repeat(200);
+ e.case.intakeV2={answers:{A1:'1990-01-01',A2:'yes',H2:true,E5:words,D1:['none']},evaluation:{missingRequired:[],exitPage:null,hold:false,requiredPhotoSlots:['front','left','right'],flags:[],excluded:[],cautions:[],eligibleDrugs:['azelaic_acid'],routes:[]},summary:{flags:[],excluded:[],cautions:[],eligibleDrugs:['azelaic_acid'],routes:[],acnePicture:{},history:[],medicines:{interactions:[],conditions:[]},patientVoice:{anythingElse:words},photoSlots:['front','left','right'],logistics:{pharmacy:null},hydroquinoneCourseClock:'12 weeks',standingRules:[],allInProducts:{},careOnlyNote:'Care only'},holdDecision:null};
+ assert.equal(launchApprovalBlock(e),null);
+ const html=renderToStaticMarkup(h(LaunchIntakeDetails,{enrollment:e,catalog:null}));
+ assert.ok(html.includes(words));assert.match(html,/Full answers, including negative screens and attestations/);assert.match(html,/D1/);assert.match(html,/No hard flags/);
+});

@@ -2,17 +2,17 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as contract from '../src/contracts/unzitLaunch';
 import {validateLaunchDocuments} from '../src/content/launchConsents';
-import {validateLaunchIntakeCatalog} from '../src/content/launchIntake';
+import {validateIntakeV2Catalog,validateLaunchIntakeCatalog} from '../src/content/launchIntake';
 import {validateLaunchCheckInContent} from '../src/content/launchCheckIn';
 import {revisionInput} from '../src/services/routineCareValidation';
 const {parseArgs,validateEnvironment,pgOptions,runHosted,main,readOperatorFile}=require('../scripts/hosted-bootstrap.cjs');
 const ref='lhaqeeitxiynzcpqbwpb', id='00000000-0000-4000-8000-000000000001';
 const email='launch-clinician@example.invalid', redirect='https://portal.example.invalid/reset-password';
 const env={DATABASE_URL:`postgresql://postgres.${ref}:synthetic-password@aws-0-us-east-1.pooler.supabase.com:5432/postgres`,SUPABASE_URL:`https://${ref}.supabase.co`,SUPABASE_SERVICE_ROLE_KEY:'synthetic-service-key',STRIPE_SECRET_KEY:'sk_test_synthetic'};
-const args=(command:string,...rest:string[])=>[command,'--project-ref',ref,...rest];
+const args=(command:string,...rest:string[])=>[command,'--project-ref',ref,...(command==='content'?['--catalog-version','1.0-pending-review']:[]),...rest];
 const settingsArgs=['--care-price','price_synthetic_care','--all-in-price','price_synthetic_all_in','--care-cents','3900','--all-in-cents','8900','--clinician-id',id,'--content-version','1.0-pending-review'];
 const clinicianArgs=['--email',email,'--redirect',redirect];
-const validators={contract,validateLaunchDocuments,validateLaunchIntakeCatalog,validateLaunchCheckInContent,revisionInput};
+const validators={contract,validateLaunchDocuments,validateIntakeV2Catalog,validateLaunchIntakeCatalog,validateLaunchCheckInContent,revisionInput};
 const price=(amount:number)=>({billing_scheme:'per_unit',transform_quantity:null,custom_unit_amount:null,livemode:false,active:true,currency:'usd',unit_amount:amount,recurring:{interval:'month',interval_count:1,usage_type:'licensed'}});
 function fixture({clinicians=[{id,email}],users=[] as any[],profile=true}:{clinicians?:any[];users?:any[];profile?:boolean}={}){
  const queries:{sql:string;values:any[]}[]=[],invitations:any[]=[],prices:string[]=[],connections:any[]=[],output:string[]=[];
@@ -33,7 +33,7 @@ function fixture({clinicians=[{id,email}],users=[] as any[],profile=true}:{clini
   return {rows:[],rowCount:1};
  }};
  const admin={auth:{admin:{inviteUserByEmail:async(address:string,options:any)=>{invitations.push({address,options});const user={id,email:address};state.users=[user];return {data:{user},error:null}}}}};
- const deps={createDb:(options:any)=>{connections.push(options);return db},createAdmin:()=>admin,readFile:(file:string)=>file.endsWith('.crt')?'synthetic-ca':file.endsWith('.json')?JSON.stringify(require('../src/content/catalogs/1.0-pending-review.json')):'email\nwaitlist@example.invalid\nwaitlist@example.invalid\n',validators,retrievePrice:async(key:string)=>{prices.push(key);return price(key.endsWith('care')?3900:8900)},log:(s:string)=>output.push(s),error:(s:string)=>output.push(s)};
+ const deps={createDb:(options:any)=>{connections.push(options);return db},createAdmin:()=>admin,readFile:(file:string)=>file.endsWith('.crt')?'synthetic-ca':file.endsWith('.json')?JSON.stringify(require('../src/content/catalogs/'+require('node:path').basename(file))):'email\nwaitlist@example.invalid\nwaitlist@example.invalid\n',validators,retrievePrice:async(key:string)=>{prices.push(key);return price(key.endsWith('care')?3900:8900)},log:(s:string)=>output.push(s),error:(s:string)=>output.push(s)};
  return {deps,db,admin,queries,invitations,prices,connections,output,state,ended:()=>ended};
 }
 const writes=(f:ReturnType<typeof fixture>)=>f.queries.filter(({sql})=>/^(insert|update|delete|begin|lock)/i.test(sql));
@@ -59,7 +59,7 @@ test('settings require a test Stripe key from environment; credential CLI flags 
  for(const flag of ['--database-url','--supabase-url','--service-role-key','--stripe-secret-key'])assert.throws(()=>parseArgs(args('status',flag,'synthetic')));
 });
 test('CLI rejects missing, duplicate, unknown flags and invalid clinician/price inputs',()=>{
- const invalid=[[],args('unknown'),['status'],args('status','--project-ref',ref),args('status','--apply'),args('content','--email',email),args('waitlist'),args('clinician','--email',email),args('settings',...settingsArgs.slice(0,-2)),args('clinician','--email','bad','--redirect',redirect),args('settings',...settingsArgs.map(x=>x==='3900'?'1':x))];
+ const invalid=[[],['content','--project-ref',ref],args('content','--catalog-version','1.0-pending-review'),['content','--project-ref',ref,'--catalog-version','../1.0-pending-review'],['content','--project-ref',ref,'--catalog-version','99.0-pending-review'],args('unknown'),['status'],args('status','--project-ref',ref),args('status','--apply'),args('content','--email',email),args('waitlist'),args('clinician','--email',email),args('settings',...settingsArgs.slice(0,-2)),args('clinician','--email','bad','--redirect',redirect),args('settings',...settingsArgs.map(x=>x==='3900'?'1':x))];
  for(const url of ['http://localhost/reset-password','https://portal.example.invalid/other',redirect+'?token=synthetic',redirect+'#synthetic','https://user:pass@portal.example.invalid/reset-password'])invalid.push(args('clinician','--email',email,'--redirect',url));
  for(const argv of invalid)assert.throws(()=>parseArgs(argv));
  assert.equal(parseArgs(args('content')).apply,false);assert.equal(parseArgs(args('content','--apply')).apply,true);
@@ -142,4 +142,12 @@ test('a pg error event during an operation becomes a controlled failure, never s
  const {EventEmitter}=require('node:events');const f=fixture();const db=Object.assign(new EventEmitter(),f.db);
  db.connect=async()=>{db.emit('error',Object.assign(Error('synthetic secret'),{code:email}))};f.deps.createDb=()=>db;
  assert.equal(await main(args('status'),env,f.deps),1);assert.deepEqual(f.output,['Hosted bootstrap failed (DATABASE_CONNECTION_FAILED)']);assert.equal(f.queries.length,0);
+});
+
+test('content selects the requested existing publication and rejects mismatched file identity',async()=>{
+ const f=fixture();const argv=['content','--project-ref',ref,'--catalog-version','2.0-pending-review'];
+ const result=await runHosted([...argv,'--apply'],env,f.deps);assert.equal(result.published,1);
+ const insert=f.queries.find(x=>x.sql.startsWith('INSERT INTO public.launch_settings'))!;assert.equal(insert.values[6],'2.0-pending-review');
+ const bad=fixture();const read=bad.deps.readFile;bad.deps.readFile=(file:string)=>file.endsWith('.json')?JSON.stringify(require('../src/content/catalogs/1.0-pending-review.json')):read(file);
+ await assert.rejects(runHosted(argv,env,bad.deps));assert.equal(writes(bad).length,0);
 });

@@ -92,12 +92,12 @@ node backend/scripts/hosted-bootstrap.cjs status --project-ref lhaqeeitxiynzcpqb
 
 Set operator variables `CLINICIAN_EMAIL`, `PORTAL_RESET_URL`, `CARE_PRICE_ID`, `ALL_IN_PRICE_ID` and `WAITLIST_CSV` in that shell. `PORTAL_RESET_URL` must be the portal's HTTPS `/reset-password` URL, without credentials, query or fragment, and must be allowed in Supabase Auth Redirect URLs. Configure the Auth email hook before inviting; `--apply` sends an actual invitation. Use distinct active Stripe **test** USD monthly licensed per-unit prices of 3900 and 8900 cents; the script retrieves and validates both through Stripe's API, including during preview.
 
-On an otherwise empty migrated database, run clinician, content, settings, then waitlist. First preview each write command by omitting `--apply`; previews read hosted state but do not invite or write. After the clinician command, set `CLINICIAN_ID` to its printed UUID for the settings command. Content discovers the sole clinician automatically and validates/publishes the committed `backend/src/content/catalogs/1.0-pending-review.json` through the shared publisher. This preserves its **draft/pending-review** state and six inactive draft templates; publication does not constitute clinical approval.
+On an otherwise empty migrated database, run clinician, content, settings, then waitlist. First preview each write command by omitting `--apply`; previews read hosted state but do not invite or write. After the clinician command, set `CLINICIAN_ID` to its printed UUID for the settings command. Content discovers the sole clinician automatically and validates/publishes the explicitly selected committed catalog through the shared publisher. `--catalog-version` is required and must name an existing publication basename in `backend/src/content/catalogs/`. This preserves its **draft/pending-review** state and six inactive draft templates; publication does not constitute clinical approval.
 
 ```sh
 node backend/scripts/hosted-bootstrap.cjs clinician --project-ref lhaqeeitxiynzcpqbwpb --email "$CLINICIAN_EMAIL" --redirect "$PORTAL_RESET_URL" --apply
-node backend/scripts/hosted-bootstrap.cjs content --project-ref lhaqeeitxiynzcpqbwpb --apply
-node backend/scripts/hosted-bootstrap.cjs settings --project-ref lhaqeeitxiynzcpqbwpb --care-price "$CARE_PRICE_ID" --all-in-price "$ALL_IN_PRICE_ID" --care-cents 3900 --all-in-cents 8900 --clinician-id "$CLINICIAN_ID" --content-version 1.0-pending-review --apply
+node backend/scripts/hosted-bootstrap.cjs content --project-ref lhaqeeitxiynzcpqbwpb --catalog-version 2.0-pending-review --apply
+node backend/scripts/hosted-bootstrap.cjs settings --project-ref lhaqeeitxiynzcpqbwpb --care-price "$CARE_PRICE_ID" --all-in-price "$ALL_IN_PRICE_ID" --care-cents 3900 --all-in-cents 8900 --clinician-id "$CLINICIAN_ID" --content-version 2.0-pending-review --apply
 node backend/scripts/hosted-bootstrap.cjs waitlist "$WAITLIST_CSV" --project-ref lhaqeeitxiynzcpqbwpb --apply
 node backend/scripts/hosted-bootstrap.cjs status --project-ref lhaqeeitxiynzcpqbwpb
 ```

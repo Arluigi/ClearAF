@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requireDermatologist, requirePatient } from '../middleware/auth';
+import {isIntakeV2} from '../services/intakeV2';
 import {authorizeAssignedPatient,assertLaunchPrescriptionAccess} from '../services/careAccess';
 import {enrollmentError} from '../services/enrollment';
 
@@ -26,7 +27,7 @@ router.post('/', requireDermatologist, async (req, res, next) => {
 
     const prescription = await prisma.$transaction(async tx=>{
     await authorizeAssignedPatient(tx,validatedData.patientId,req.user!.id);
-    await assertLaunchPrescriptionAccess(tx,validatedData.patientId);
+    const launch=await assertLaunchPrescriptionAccess(tx,validatedData.patientId);if(launch?.intakeId){const intake=await tx.intakeRevision.findUnique({where:{id:launch.intakeId}});if(isIntakeV2(intake?.questionnaireVersion))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED')}
     return tx.prescription.create({
       data: {
         patientId: validatedData.patientId,
@@ -144,7 +145,7 @@ router.patch('/:id', requireDermatologist, async (req, res, next) => {
     const existing=await tx.prescription.findUnique({where:{id}});
     if(!existing)throw enrollmentError(404,'NOT_FOUND');
     await authorizeAssignedPatient(tx,existing.patientId,req.user!.id);
-    await assertLaunchPrescriptionAccess(tx,existing.patientId);
+    const launch=await assertLaunchPrescriptionAccess(tx,existing.patientId);if(launch?.intakeId){const intake=await tx.intakeRevision.findUnique({where:{id:launch.intakeId}});if(isIntakeV2(intake?.questionnaireVersion))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED')}
     if(existing.source==='treatrx_external'||existing.launchCaseId)throw enrollmentError(409,'OPERATION_CONFLICT');
     return tx.prescription.update({
       where: {

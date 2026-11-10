@@ -1,9 +1,9 @@
 import Foundation
 
 struct LaunchRequest {
-    let path: String; let method: String; let body: Data?; let contentType: String
-    init(path: String, method: String = "GET", body: Data? = nil, contentType: String = "application/json") {
-        self.path = path; self.method = method; self.body = body; self.contentType = contentType
+    let path: String; let method: String; let body: Data?; let contentType: String; let questionnaireVersion: String?
+    init(path: String, method: String = "GET", body: Data? = nil, contentType: String = "application/json", questionnaireVersion: String? = nil) {
+        self.path = path; self.method = method; self.body = body; self.contentType = contentType; self.questionnaireVersion = questionnaireVersion
     }
     /// The launch API is additive; legacy /api/enrollment stays compatible with installed clients.
     func url(baseURL: String) throws -> URL {
@@ -35,6 +35,7 @@ extension APIService: LaunchTransport {
         var request = URLRequest(url: url)
         request.httpMethod = launch.method; request.httpBody = launch.body
         request.setValue(launch.contentType, forHTTPHeaderField: "Content-Type")
+        if let version = launch.questionnaireVersion { request.setValue(version, forHTTPHeaderField: "X-UNZIT-Questionnaire") }
         request.setValue("Bearer " + auth.accessToken, forHTTPHeaderField: "Authorization")
         let (bytes, response) = try await launchSession.data(for: request)
         try access.require(ticket)

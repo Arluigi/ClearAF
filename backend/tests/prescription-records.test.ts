@@ -19,6 +19,7 @@ test('legacy create and patch enforce live launch prerequisites inside assignmen
   s.rows.identityVerification[0].status='uploaded';assert.equal((await call('/','POST',body)).status,403);s.rows.identityVerification[0].status='approved';s.rows.careMembership[0].paidThrough=new Date('2090-01-01Z');assert.equal((await call('/','POST',body)).status,201);
   const legacy=s.rows.prescription[0];legacy.patient={dermatologistId:doctor};s.rows.launchCheckInSubmission.push({patientId:patient,submittedAt:at,answers:{physicallyInNC:false}});assert.equal((await call('/'+legacy.id,'PATCH',{dosage:'updated'})).status,403);s.rows.launchCheckInSubmission=[];assert.equal((await call('/'+legacy.id,'PATCH',{dosage:'updated'})).status,200);
   const sentId=randomUUID();await s.service.record(patient,doctor,sentId,input);assert.equal((await call('/'+sentId,'PATCH',{dosage:'changed'})).status,409);
+  s.rows.launchCase[0].intakeId=randomUUID();s.rows.intakeRevision.push({id:s.rows.launchCase[0].intakeId,questionnaireVersion:INTAKE_V2,answers:validIntakeV2Answers});assert.equal((await call('/','POST',body)).status,403);assert.equal((await call('/'+legacy.id,'PATCH',{dosage:'v2 must use recorder'})).status,403);s.rows.launchCase[0].intakeId=null;
   const query=s.db.$queryRaw;s.db.$queryRaw=async()=>{s.rows.user[0].dermatologistId=other;return []};assert.equal((await call('/','POST',body)).status,404);s.db.$queryRaw=query;
  }finally{(prisma as any).$transaction=original;await new Promise<void>(resolve=>server.close(()=>resolve()))}
 });
@@ -32,4 +33,11 @@ test('plan-switch destination requirements block recorder and shared legacy guar
  row.destination={planId:'all_in',pharmacy:'vida',shippingAddress:{recipient:'Synthetic Example',line1:'1 Example Road',line2:null,city:'Raleigh',state:'NC',postalCode:''}};await blocked();
  row.destination.shippingAddress.postalCode='27601';const result=await s.service.record(patient,doctor,randomUUID(),input);assert.deepEqual(result.prescription.pharmacy,pharmacy);
  m.planId='care';m.destinationRequired=true;await blocked();m.destinationRequired=false;await blocked();row.destination={planId:'care',pharmacy};await assertLaunchPrescriptionAccess(s.db,patient,at);
+});
+
+import {INTAKE_V2,validIntakeV2Answers} from '../src/services/intakeV2';
+test('v2 prescription screening enforces exclusions, IBD determination and documented sunscreen',async()=>{const s=ready(),row=s.rows.launchCase[0];row.intakeId=randomUUID();s.rows.intakeRevision.push({id:row.intakeId,questionnaireVersion:INTAKE_V2,answers:{...validIntakeV2Answers,B1:'female',B2:'no',B5:'no',B6:['none'],D4:['ibd'],C4:'no'}});
+ const doxy={...input,drug:'Doxycycline',strength:'100 mg'};await assert.rejects(s.service.record(patient,doctor,randomUUID(),doxy),{code:'LAUNCH_STEP_REQUIRED'});s.rows.launchCase[0].eligibility={screeningDecisions:{ibd:{activity:'inactive',priorCDifficile:false,decisionNote:'Confirmed in messaging'}}};await s.service.record(patient,doctor,randomUUID(),doxy);
+ s.rows.launchCase[0].eligibility.screeningDecisions.ibd.priorCDifficile=true;await assert.rejects(s.service.record(patient,doctor,randomUUID(),doxy),{code:'LAUNCH_STEP_REQUIRED'});
+ const hq={...input,drug:'Hydroquinone',strength:'4%'};await assert.rejects(s.service.record(patient,doctor,randomUUID(),hq),{code:'LAUNCH_STEP_REQUIRED'});s.rows.launchCase[0].eligibility.screeningDecisions.dailySunscreenConfirmed=true;await s.service.record(patient,doctor,randomUUID(),hq);
 });

@@ -22,3 +22,10 @@ test('portal preflight checks the clinician sign-in surface independent of produ
  assert.doesNotThrow(()=>validatePortalLogin(200,'<main>ClearAF Clinician portal Sign in Work email</main>'));
  for(const [status,body]of [[500,'Clinician portal Sign in Work email'],[200,'UNZIT'],[200,'Clinician portal Sign in']])assert.throws(()=>validatePortalLogin(status,body));
 });
+
+test('local journey requires an explicit existing catalog or an isolated synthetic run',()=>{
+ const {parseIntegrationArgs}=require('../scripts/unzit-integration-live.cjs');
+ assert.equal(parseIntegrationArgs(['--catalog-version','1.0-pending-review']).catalogVersion,'1.0-pending-review');
+ assert.equal(parseIntegrationArgs(['--synthetic-catalog']).synthetic,true);
+ for(const args of [[],['--catalog-version'],['--catalog-version','missing'],['--catalog-version','../1.0-pending-review'],['--synthetic-catalog','--catalog-version','1.0-pending-review'],['--catalog-version','1.0-pending-review','--catalog-version','1.0-pending-review']])assert.throws(()=>parseIntegrationArgs(args));
+});

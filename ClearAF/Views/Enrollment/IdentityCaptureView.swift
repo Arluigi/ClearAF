@@ -59,8 +59,11 @@ struct IdentityCaptureView: View {
     @State private var error: String?
     @State private var processing = false
     var body: some View {
-        LaunchPage(title: "Verify your identity") {
-            Text("Adults 18+ physically in North Carolina. A clinician compares your government photo ID and live selfie. This is a manual review.")
+        LaunchPage(title: repository.catalog?.identityGuidance?.title ?? "Verify your identity") {
+            if let guidance = repository.catalog?.identityGuidance {
+                if let prompt = guidance.prompt { Text(prompt) }
+                else { ForEach(guidance.items.filter { $0.id != "nc_attestation" }, id: \.id) { Text($0.instructions) } }
+            } else { Text("Adults 18+ physically in North Carolina. A clinician compares your government photo ID and live selfie. This is a manual review.") }
             TextField("Full legal name", text: $fullName).textContentType(.name).letterpressField(isEmpty: fullName.isEmpty)
             DatePicker("Date of birth", selection: $dateOfBirth, in: ScreeningDates.earliestBirthDate...Date.now, displayedComponents: .date)
                 .onChange(of: dateOfBirth) { _, _ in birthSelected = true }
@@ -75,7 +78,7 @@ struct IdentityCaptureView: View {
             identityImage(selfie, title: "Live selfie")
             Button(selfie == nil ? "Take a live selfie" : "Retake selfie") { requestCamera(.selfie) }.buttonStyle(.letterpress(.outlined, fullWidth: true))
             Text("Use the camera now, with your face clearly visible. A saved library image cannot be used as your selfie.").font(Letterpress.ui(13))
-            Toggle("I can read my name and date of birth, and both photos clearly show my face.", isOn: $readable).toggleStyle(.letterpressCheck)
+            Toggle(repository.catalog?.identityGuidance?.attestation ?? "I can read my name and date of birth, and both photos clearly show my face.", isOn: $readable).toggleStyle(.letterpressCheck)
             Toggle("I am physically in North Carolina right now.", isOn: $inNC).toggleStyle(.letterpressCheck)
             if !inNC { Text("You must be physically in North Carolina for this care. If you are elsewhere, seek local care.").font(Letterpress.ui(13)) }
             if let error { Text(error).foregroundStyle(Letterpress.error) }

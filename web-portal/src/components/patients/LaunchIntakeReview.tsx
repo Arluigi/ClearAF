@@ -10,6 +10,7 @@ import type { LaunchCatalog, LaunchEnrollmentResponse, LaunchQuestion } from '@/
 import { LaunchClinicalReview } from './CareDecisionDialog';
 import { LaunchMembershipStatus } from './CareStatusCard';
 import IdentityReview from './IdentityReview';
+import IntakeV2Summary from './IntakeV2Summary';
 
 function answer(value:unknown,question?:LaunchQuestion):string {
   if(typeof value==='string')return question?.options.find(option=>option.id===value)?.label??intakeAnswer(value);
@@ -19,6 +20,7 @@ function answer(value:unknown,question?:LaunchQuestion):string {
 }
 export function LaunchIntakeDetails({enrollment,catalog}:{enrollment:LaunchEnrollmentResponse;catalog:LaunchCatalog|null}) {
   const record=enrollment.case;
+  if(record.intakeV2)return <IntakeV2Summary enrollment={enrollment} catalog={catalog}/>;
   const keys=[...Array.from({length:22},(_,i)=>`M${i+1}`),'medicationPreference'];
   return <div className="space-y-5">
     <p className="text-sm">{/draft|pending-review/.test(record.questionnaireVersion)?'DRAFT clinical content':'Clinical content'} · {record.questionnaireVersion}. Flags require clinician review.</p>
@@ -33,7 +35,8 @@ export function LaunchIntakeDetails({enrollment,catalog}:{enrollment:LaunchEnrol
 export default function LaunchIntakeReview({patientId,targetId,kind,active=true}:{patientId:string;targetId?:string|null;kind?:string|null;active?:boolean}) {
   const api=useClinicalAPI();const [page,setPage]=useState(1);const section=useRef<HTMLElement>(null);
   const fetch=useCallback(()=>readLaunchChart(()=>api.launch().chart(patientId,page)),[api,patientId,page]);const chart=useRead(fetch);
-  const fetchCatalog=useCallback(()=>api.launch().catalog(),[api]);const catalog=useRead(fetchCatalog);
+  const questionnaireVersion=chart.data?.enrollment.case.questionnaireVersion;
+  const fetchCatalog=useCallback(()=>api.launch().catalog(questionnaireVersion),[api,questionnaireVersion]);const catalog=useRead(fetchCatalog);
   useEffect(()=>{if(kind==='identity'||kind==='enrollment')section.current?.scrollIntoView({block:'start'});},[kind,targetId]);
   return <section ref={section} aria-label="Enrollment review" className="space-y-5 border-t-2 border-ink pt-5">
     <div className="flex flex-wrap justify-between gap-3"><h2 className="editorial-title text-2xl">Enrollment review</h2><Button variant="outline" onClick={chart.retry}>Refresh enrollment</Button></div>

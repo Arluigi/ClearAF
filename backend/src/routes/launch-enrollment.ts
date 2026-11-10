@@ -9,8 +9,8 @@ const router=express.Router();
 // Authentication is supplied by the /api/launch mount; every patient mutation also enforces role.
 const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{res.set('Cache-Control','no-store');z.object({}).strict().parse(req.query);await handler(req,res,next)}catch(error){next(error instanceof ZodError||(error as any).statusCode?error:enrollmentError(500,'LAUNCH_OPERATION_FAILED'))}};
 const respond=(res:express.Response,result:any)=>res.status(result.created?201:200).json(result.response);
-router.get('/catalog',route(async(req,res)=>{res.json(await launchCatalog())}));
-router.get('/enrollment',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.get(req.user!.id))}));
+router.get('/catalog',route(async(req,res)=>{res.json(await launchCatalog(undefined,req.get('X-UNZIT-Questionnaire')))}));
+router.get('/enrollment',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.get(req.user!.id,req.get('X-UNZIT-Questionnaire')))}));
 router.put('/enrollment/:caseId/consents',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.consents(req.user!.id,req.params.caseId,req.body,req.ip!))}));
 router.put('/enrollment/:caseId/identity/:identityId',requirePatient,route(async(req,res)=>{const input=await readLaunchMultipart(req,'identity');respond(res,await launchEnrollment.identity(req.user!.id,req.params.caseId,req.params.identityId,input))}));
 router.put('/enrollment/:caseId/eligibility',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.eligibility(req.user!.id,req.params.caseId,req.body))}));

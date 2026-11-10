@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {z} = require('zod');
+const {catalogPath} = require('./lib/launch-catalog.cjs');
 const {validateLaunchContent, publishLaunchContent} = require('./import-launch-content.cjs');
 const {validateSettings, publishSettings} = require('./set-launch-settings.cjs');
 const {parseWaitlist, importWaitlist} = require('./import-waitlist.cjs');
@@ -16,7 +17,7 @@ const uuid = z.string().uuid();
 const versionLabel = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/);
 const priceId = z.string().regex(/^price_[A-Za-z0-9_]+$/);
 const optionsByCommand = {
-  content: [], clinician: ['email', 'redirect'],
+  content: ['catalog-version'], clinician: ['email', 'redirect'],
   settings: ['care-price', 'all-in-price', 'care-cents', 'all-in-cents', 'clinician-id', 'content-version'],
   waitlist: [], status: [],
 };
@@ -43,6 +44,7 @@ function parseArgs(argv) {
   guard(Boolean(options['project-ref']), 'INVALID_ARGUMENTS');
   for (const flag of optionsByCommand[command]) guard(Boolean(options[flag]), 'INVALID_ARGUMENTS');
   if (command === 'waitlist') guard(Boolean(options.csv), 'INVALID_ARGUMENTS');
+  if (command === 'content') options.catalogPath = catalogPath(options['catalog-version']);
   if (command === 'clinician') {
     options.email = parseWaitlist('email\n' + JSON.stringify(options.email))[0];
     const redirect = url(options.redirect);
@@ -191,7 +193,8 @@ async function executeCommand(db, deps, options, target) {
   if (options.command === 'waitlist') return await importWaitlist(db, deps.readFile(options.csv), {apply: options.apply});
   if (options.command === 'content') {
     const rows = await clinicians(db); guard(rows.length === 1, 'SINGLE_CLINICIAN_REQUIRED');
-    const source = JSON.parse(deps.readFile(path.join(__dirname, '../src/content/catalogs/1.0-pending-review.json')));
+    const source = JSON.parse(deps.readFile(options.catalogPath));
+    guard(source.versionLabel === options['catalog-version'], 'CATALOG_MISMATCH');
     const publication = validateLaunchContent({...source, clinicianId: rows[0].id}, deps.validators);
     if (!options.apply) return {applied: 0, wouldPublish: 1, clinicianId: rows[0].id,
       documents: publication.content.consents.length, templates: publication.templates.length};

@@ -1,0 +1,1725 @@
+{
+  "eligibilityQuestions": [
+    {
+      "id": "W1",
+      "prompt": "Welcome to UNZIT. UNZIT is online acne care from Dr. Amit Om, a board-certified dermatologist. Here is how it works. You answer questions and send photos of your skin. Dr. Om reviews everything himself, usually within 1 to 2 business days, and sends you a treatment plan. If prescription medicine is right for you, he sends it to your pharmacy. UNZIT is not for emergencies. If you ever have an emergency, call 911. Sometimes the safest care is in person. If Dr. Om thinks you need to be seen in person, he will tell you, and he may not prescribe. This visit takes about 10 minutes. You can save and come back.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "A1",
+      "prompt": "What is your date of birth?",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "A2",
+      "prompt": "Are you physically in North Carolina right now? UNZIT can only treat you while you are in North Carolina, because that is where Dr. Om is licensed.",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "A3",
+      "prompt": "What do you want help with?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "acne",
+          "label": "Acne (breakouts)"
+        },
+        {
+          "id": "dark_marks",
+          "label": "Dark marks left behind by acne"
+        },
+        {
+          "id": "something_else",
+          "label": "Something else"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "A4",
+      "prompt": "Safety check. Are any of these happening right now? Select all that apply, or select None.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "fever",
+          "label": "Fever, or feeling sick or unwell along with my acne"
+        },
+        {
+          "id": "joint_pain",
+          "label": "Joint pain"
+        },
+        {
+          "id": "sores",
+          "label": "Open, bleeding, or crusty sores"
+        },
+        {
+          "id": "sudden_worsening",
+          "label": "My acne suddenly got much worse in the last 2 weeks"
+        },
+        {
+          "id": "swelling",
+          "label": "Swelling of my face, lips, or eyes"
+        },
+        {
+          "id": "painful_blistering_peeling",
+          "label": "Skin that is painful, blistering, or peeling"
+        },
+        {
+          "id": "none",
+          "label": "None of these"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "A5",
+      "prompt": "Are you pregnant or breastfeeding right now?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "pregnant",
+          "label": "Pregnant"
+        },
+        {
+          "id": "breastfeeding",
+          "label": "Breastfeeding"
+        },
+        {
+          "id": "neither",
+          "label": "Neither"
+        },
+        {
+          "id": "not_applicable",
+          "label": "This does not apply to me"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "A6",
+      "prompt": "Are you taking isotretinoin right now? Isotretinoin is a strong acne pill. Brand names include Accutane, Absorica, and Claravis.",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "now",
+          "label": "Yes, I am taking it now"
+        },
+        {
+          "id": "past",
+          "label": "No, but I have taken it in the past"
+        },
+        {
+          "id": "never",
+          "label": "No, I have never taken it"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "A6choice",
+      "prompt": "UNZIT does not treat patients while they are taking isotretinoin. Combining it with other acne medicines, especially antibiotic pills, can be unsafe, and your prescribing doctor needs to be the only one directing your acne care. You can stop here and come back after your course ends, at no charge. Or you can finish this visit and Dr. Om will personally decide whether UNZIT can help you, before any plan or prescription is made.",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "stop",
+          "label": "Stop here"
+        },
+        {
+          "id": "finish",
+          "label": "Finish and let Dr. Om decide"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "A6",
+          "operator": "in",
+          "values": [
+            "now"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A6b",
+      "prompt": "When did you finish your last course of isotretinoin?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "under_3_months",
+          "label": "Less than 3 months ago"
+        },
+        {
+          "id": "3_to_12_months",
+          "label": "3 to 12 months ago"
+        },
+        {
+          "id": "over_year",
+          "label": "More than a year ago"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "A6",
+          "operator": "in",
+          "values": [
+            "past"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A7",
+      "prompt": "Verify your identity. Upload a government photo ID (driver license, state ID, or passport). Your name and date of birth must match your account. Then take a live selfie. Your selfie must match the photo on your ID. Dr. Om checks your identity himself before any treatment.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    }
+  ],
+  "medicalQuestions": [
+    {
+      "id": "B1",
+      "prompt": "What sex were you assigned at birth? This matters because some acne medicines are only used for women, and some are unsafe in pregnancy.",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "female",
+          "label": "Female"
+        },
+        {
+          "id": "male",
+          "label": "Male"
+        },
+        {
+          "id": "intersex",
+          "label": "Intersex"
+        },
+        {
+          "id": "prefer_not_to_say",
+          "label": "Prefer not to say"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B2",
+      "prompt": "Could you become pregnant?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No (for example, menopause, hysterectomy, or tubes tied)"
+        },
+        {
+          "id": "not_sure",
+          "label": "Not sure"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "B1",
+          "operator": "not_in",
+          "values": [
+            "male"
+          ]
+        },
+        {
+          "questionId": "A5",
+          "operator": "not_in",
+          "values": [
+            "pregnant",
+            "breastfeeding"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B3",
+      "prompt": "Are you trying to get pregnant now, or do you think you might in the next 6 months?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        },
+        {
+          "id": "not_sure",
+          "label": "Not sure"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "B2",
+          "operator": "in",
+          "values": [
+            "yes",
+            "not_sure"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B4",
+      "prompt": "What birth control do you use? Some acne medicines must not be used in pregnancy, and one type of birth control pill changes how safely Dr. Om can use a common acne pill, so please be specific.",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "drospirenone",
+          "label": "A pill with drospirenone (brand names include Yaz, Yasmin, Nikki, and Loryna)"
+        },
+        {
+          "id": "other_pill",
+          "label": "Another birth control pill"
+        },
+        {
+          "id": "patch_ring",
+          "label": "Patch or ring"
+        },
+        {
+          "id": "iud",
+          "label": "IUD"
+        },
+        {
+          "id": "implant",
+          "label": "Implant (Nexplanon)"
+        },
+        {
+          "id": "shot",
+          "label": "Shot (Depo-Provera)"
+        },
+        {
+          "id": "barrier",
+          "label": "Condoms or another barrier method"
+        },
+        {
+          "id": "not_sexually_active",
+          "label": "I am not sexually active"
+        },
+        {
+          "id": "none",
+          "label": "None"
+        },
+        {
+          "id": "other",
+          "label": "Other"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "B2",
+          "operator": "in",
+          "values": [
+            "yes",
+            "not_sure"
+          ]
+        },
+        {
+          "questionId": "B3",
+          "operator": "in",
+          "values": [
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B4_other",
+      "prompt": "Other",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "B4",
+          "operator": "in",
+          "values": [
+            "other"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B4b",
+      "prompt": "If you take a pill and it is not one of the brands above, what is its name? You can find it on the pack. This helps Dr. Om check for interactions.",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "B4",
+          "operator": "in",
+          "values": [
+            "other_pill"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B5",
+      "prompt": "Does your acne flare up before your period?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        },
+        {
+          "id": "not_sure",
+          "label": "Not sure"
+        },
+        {
+          "id": "not_applicable",
+          "label": "Not applicable"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "A5",
+          "operator": "not_in",
+          "values": [
+            "pregnant",
+            "breastfeeding"
+          ]
+        },
+        {
+          "questionId": "B1",
+          "operator": "not_in",
+          "values": [
+            "male"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B6",
+      "prompt": "Have you noticed any of these? Select all that apply, or select None.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "irregular_periods",
+          "label": "Irregular or missed periods"
+        },
+        {
+          "id": "new_hair_growth",
+          "label": "New hair growth on my face or body"
+        },
+        {
+          "id": "scalp_thinning",
+          "label": "Thinning hair on my scalp"
+        },
+        {
+          "id": "voice_change",
+          "label": "A deepening voice"
+        },
+        {
+          "id": "pcos",
+          "label": "I have been diagnosed with PCOS"
+        },
+        {
+          "id": "none",
+          "label": "None of these"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "A5",
+          "operator": "not_in",
+          "values": [
+            "pregnant",
+            "breastfeeding"
+          ]
+        },
+        {
+          "questionId": "B1",
+          "operator": "not_in",
+          "values": [
+            "male"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B6_details",
+      "prompt": "Anything you want to add about these?",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B7",
+      "prompt": "How long have you had acne?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "under_6_months",
+          "label": "Less than 6 months"
+        },
+        {
+          "id": "6_to_12_months",
+          "label": "6 to 12 months"
+        },
+        {
+          "id": "1_to_5_years",
+          "label": "1 to 5 years"
+        },
+        {
+          "id": "over_5_years",
+          "label": "More than 5 years"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B8",
+      "prompt": "Where is your acne? Select all that apply.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "forehead",
+          "label": "Forehead"
+        },
+        {
+          "id": "cheeks",
+          "label": "Cheeks"
+        },
+        {
+          "id": "nose",
+          "label": "Nose"
+        },
+        {
+          "id": "jaw_chin",
+          "label": "Jaw and chin"
+        },
+        {
+          "id": "neck",
+          "label": "Neck"
+        },
+        {
+          "id": "chest",
+          "label": "Chest"
+        },
+        {
+          "id": "back",
+          "label": "Back"
+        },
+        {
+          "id": "other",
+          "label": "Somewhere else"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B9",
+      "prompt": "What do your breakouts look like? Select all that apply.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "comedones",
+          "label": "Blackheads or whiteheads"
+        },
+        {
+          "id": "red_bumps",
+          "label": "Red bumps"
+        },
+        {
+          "id": "pus_bumps",
+          "label": "Bumps with pus"
+        },
+        {
+          "id": "deep_painful_lumps",
+          "label": "Deep, painful lumps under the skin"
+        },
+        {
+          "id": "dark_marks",
+          "label": "Dark marks that stay after pimples heal"
+        },
+        {
+          "id": "scars",
+          "label": "Pitted or raised scars"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B10",
+      "prompt": "Which of these is most like your skin?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "burns_rarely_tans",
+          "label": "Burns easily, rarely tans"
+        },
+        {
+          "id": "burns_then_tans",
+          "label": "Burns, then tans"
+        },
+        {
+          "id": "rarely_burns_tans_easily",
+          "label": "Rarely burns, tans easily"
+        },
+        {
+          "id": "very_rarely_burns_deeply_pigmented",
+          "label": "Very rarely burns, deeply pigmented skin"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B11",
+      "prompt": "How sensitive is your skin?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "not_sensitive",
+          "label": "Not sensitive"
+        },
+        {
+          "id": "somewhat",
+          "label": "Somewhat sensitive"
+        },
+        {
+          "id": "very",
+          "label": "Very sensitive"
+        },
+        {
+          "id": "eczema_rosacea",
+          "label": "I have eczema or rosacea"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B12",
+      "prompt": "What do you use on your skin now? Select everything you use, even if only sometimes. This matters because some store products clash with prescription creams.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "adapalene",
+          "label": "Adapalene (Differin)"
+        },
+        {
+          "id": "retinol",
+          "label": "Retinol"
+        },
+        {
+          "id": "benzoyl_peroxide",
+          "label": "Benzoyl peroxide"
+        },
+        {
+          "id": "salicylic_acid",
+          "label": "Salicylic acid"
+        },
+        {
+          "id": "vitamin_c",
+          "label": "A vitamin C serum"
+        },
+        {
+          "id": "exfoliating_acid",
+          "label": "An exfoliating acid (glycolic, lactic, or mandelic)"
+        },
+        {
+          "id": "prescription_cream",
+          "label": "A prescription cream from another doctor"
+        },
+        {
+          "id": "none",
+          "label": "None of these"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B12_details",
+      "prompt": "Anything else in your routine? (optional)",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "B12_prescription",
+      "prompt": "Which cream?",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "B12",
+          "operator": "in",
+          "values": [
+            "prescription_cream"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C1",
+      "prompt": "Which acne treatments have you tried? Select all that apply. For each one, we will ask three quick questions.",
+      "kind": "repeat",
+      "required": true,
+      "options": [
+        {
+          "id": "retinoid",
+          "label": "Prescription retinoid cream (tretinoin or tazarotene)"
+        },
+        {
+          "id": "adapalene",
+          "label": "Adapalene (Differin) from the store"
+        },
+        {
+          "id": "benzoyl_peroxide",
+          "label": "Benzoyl peroxide"
+        },
+        {
+          "id": "clindamycin",
+          "label": "Prescription antibiotic cream (clindamycin)"
+        },
+        {
+          "id": "azelaic_acid",
+          "label": "Azelaic acid"
+        },
+        {
+          "id": "antibiotic_pills",
+          "label": "Antibiotic pills (such as doxycycline or minocycline)"
+        },
+        {
+          "id": "spironolactone",
+          "label": "Spironolactone pills"
+        },
+        {
+          "id": "birth_control",
+          "label": "Birth control pills used for acne"
+        },
+        {
+          "id": "hydroquinone",
+          "label": "A skin-lightening cream (hydroquinone)"
+        },
+        {
+          "id": "salicylic_sulfur",
+          "label": "Salicylic acid or sulfur products"
+        },
+        {
+          "id": "other",
+          "label": "Something else"
+        },
+        {
+          "id": "never",
+          "label": "I have never treated my acne"
+        }
+      ],
+      "fields": [
+        {
+          "id": "duration",
+          "prompt": "How long did you use it?",
+          "kind": "choice",
+          "required": true,
+          "options": [
+            {
+              "id": "under_month",
+              "label": "Less than a month"
+            },
+            {
+              "id": "1_to_3_months",
+              "label": "1 to 3 months"
+            },
+            {
+              "id": "3_to_6_months",
+              "label": "3 to 6 months"
+            },
+            {
+              "id": "over_6_months",
+              "label": "More than 6 months"
+            }
+          ],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "helped",
+          "prompt": "Did it help?",
+          "kind": "choice",
+          "required": true,
+          "options": [
+            {
+              "id": "a_lot",
+              "label": "Helped a lot"
+            },
+            {
+              "id": "somewhat",
+              "label": "Helped somewhat"
+            },
+            {
+              "id": "no",
+              "label": "Did not help"
+            }
+          ],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "status",
+          "prompt": "Are you still using it?",
+          "kind": "choice",
+          "required": true,
+          "options": [
+            {
+              "id": "using",
+              "label": "Still using"
+            },
+            {
+              "id": "stopped",
+              "label": "Stopped"
+            }
+          ],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "stopReason",
+          "prompt": "Why did you stop?",
+          "kind": "choice",
+          "required": true,
+          "options": [
+            {
+              "id": "side_effects",
+              "label": "Side effects"
+            },
+            {
+              "id": "not_work",
+              "label": "It did not work"
+            },
+            {
+              "id": "cost",
+              "label": "Cost"
+            },
+            {
+              "id": "doctor",
+              "label": "My doctor stopped it"
+            },
+            {
+              "id": "other",
+              "label": "Other"
+            }
+          ],
+          "fields": [],
+          "showWhen": [
+            {
+              "questionId": "status",
+              "operator": "in",
+              "values": [
+                "stopped"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "details",
+          "prompt": "Anything else about that treatment? (optional)",
+          "kind": "text",
+          "required": false,
+          "options": [],
+          "fields": [],
+          "showWhen": []
+        },
+        {
+          "id": "darkened",
+          "prompt": "Did the skin where you used it ever get darker, or turn blue-gray?",
+          "kind": "choice",
+          "required": true,
+          "options": [
+            {
+              "id": "yes",
+              "label": "Yes"
+            },
+            {
+              "id": "no",
+              "label": "No"
+            }
+          ],
+          "fields": [],
+          "showWhen": [
+            {
+              "questionId": "treatmentId",
+              "operator": "in",
+              "values": [
+                "hydroquinone"
+              ]
+            }
+          ]
+        }
+      ],
+      "showWhen": []
+    },
+    {
+      "id": "C2",
+      "prompt": "Are there any side effects you are especially worried about? Select all that apply. Dr. Om will take these into account and address them in your plan.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "dryness",
+          "label": "Dryness or peeling"
+        },
+        {
+          "id": "stomach",
+          "label": "Stomach upset"
+        },
+        {
+          "id": "dizziness",
+          "label": "Dizziness"
+        },
+        {
+          "id": "sun",
+          "label": "Sun sensitivity"
+        },
+        {
+          "id": "pregnancy",
+          "label": "Any effect on pregnancy"
+        },
+        {
+          "id": "mood",
+          "label": "Mood changes"
+        },
+        {
+          "id": "none",
+          "label": "I am not especially worried about side effects"
+        },
+        {
+          "id": "other",
+          "label": "Something else"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "C2_other",
+      "prompt": "Something else",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "C2",
+          "operator": "in",
+          "values": [
+            "other"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "prompt": "If both could work for your skin, which would you prefer?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "topical",
+          "label": "Creams and gels only"
+        },
+        {
+          "id": "oral",
+          "label": "Pills are fine"
+        },
+        {
+          "id": "either",
+          "label": "Either is fine"
+        },
+        {
+          "id": "avoid_pills",
+          "label": "I would rather avoid pills if possible"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "C4",
+      "prompt": "Do you wear sunscreen on your face every day?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "sometimes",
+          "label": "Sometimes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "C5",
+      "prompt": "In the last 4 weeks, have you had any of these on your face? Select all that apply, or select None.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "waxing",
+          "label": "Waxing"
+        },
+        {
+          "id": "peel",
+          "label": "A chemical peel"
+        },
+        {
+          "id": "laser",
+          "label": "Laser treatment"
+        },
+        {
+          "id": "microneedling",
+          "label": "Microneedling"
+        },
+        {
+          "id": "none",
+          "label": "None of these"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "C6",
+      "prompt": "What has been the hardest part of dealing with acne so far? Frustration with products, cost, how it makes you feel, anything. (Optional, but Dr. Om reads every answer.)",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "D1",
+      "prompt": "Do you take any of these? Select all that apply, or select None.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "ace_arb",
+          "label": "Blood pressure pills called ACE inhibitors or ARBs (such as lisinopril or losartan)"
+        },
+        {
+          "id": "water_pills",
+          "label": "Water pills (diuretics)"
+        },
+        {
+          "id": "potassium",
+          "label": "Potassium supplements or salt substitutes (such as NoSalt)"
+        },
+        {
+          "id": "trimethoprim",
+          "label": "Trimethoprim (Bactrim)"
+        },
+        {
+          "id": "lithium",
+          "label": "Lithium"
+        },
+        {
+          "id": "digoxin",
+          "label": "Digoxin"
+        },
+        {
+          "id": "warfarin",
+          "label": "A blood thinner (warfarin)"
+        },
+        {
+          "id": "minerals_antacids",
+          "label": "Antacids, or iron, calcium, zinc, or magnesium supplements"
+        },
+        {
+          "id": "seizure_medicine",
+          "label": "Seizure medicines"
+        },
+        {
+          "id": "none",
+          "label": "None of these"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "D2",
+      "prompt": "List every other medicine, vitamin, and supplement you take, including anything over the counter. If you take nothing else, select None.",
+      "kind": "text",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "D2_none",
+      "prompt": "None",
+      "kind": "attestation",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "D3",
+      "prompt": "Are you allergic to any medicine or ingredient? Select all that apply, or select None.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "tetracyclines",
+          "label": "Tetracycline antibiotics (doxycycline, minocycline)"
+        },
+        {
+          "id": "sulfa_dapsone",
+          "label": "Sulfa medicines, or dapsone"
+        },
+        {
+          "id": "clindamycin",
+          "label": "Clindamycin"
+        },
+        {
+          "id": "benzoyl_peroxide",
+          "label": "Benzoyl peroxide"
+        },
+        {
+          "id": "retinoids",
+          "label": "Tretinoin or tazarotene"
+        },
+        {
+          "id": "sulfites",
+          "label": "Sulfites"
+        },
+        {
+          "id": "other",
+          "label": "Something else"
+        },
+        {
+          "id": "none",
+          "label": "None"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "D3b",
+      "prompt": "What happened when you took it? Select all that apply.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "rash_hives",
+          "label": "Rash or hives"
+        },
+        {
+          "id": "swelling",
+          "label": "Swelling of lips, tongue, or face"
+        },
+        {
+          "id": "breathing",
+          "label": "Trouble breathing"
+        },
+        {
+          "id": "blistering_peeling",
+          "label": "Blistering or peeling skin"
+        },
+        {
+          "id": "stomach",
+          "label": "Stomach upset"
+        },
+        {
+          "id": "skin_irritation",
+          "label": "Burning or irritation on my skin"
+        },
+        {
+          "id": "other",
+          "label": "Something else"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "D3",
+          "operator": "not_in",
+          "values": [
+            "none"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D3c",
+      "prompt": "Anything else about that reaction? Which medicine, and when? (Optional)",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "D3",
+          "operator": "not_in",
+          "values": [
+            "none"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D4",
+      "prompt": "Do you have, or have you ever had, any of these? Select all that apply, or select None.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "kidney",
+          "label": "Kidney disease"
+        },
+        {
+          "id": "liver",
+          "label": "Liver disease"
+        },
+        {
+          "id": "high_potassium",
+          "label": "High potassium"
+        },
+        {
+          "id": "heart",
+          "label": "Heart disease or an irregular heartbeat"
+        },
+        {
+          "id": "fainting_low_bp",
+          "label": "Fainting, or very low blood pressure"
+        },
+        {
+          "id": "adrenal",
+          "label": "Adrenal disease (Addison disease)"
+        },
+        {
+          "id": "lupus_sun_sensitivity",
+          "label": "Lupus, or a condition that makes you sensitive to the sun"
+        },
+        {
+          "id": "raised_brain_pressure",
+          "label": "Raised pressure in the brain (pseudotumor cerebri)"
+        },
+        {
+          "id": "swallowing_esophagus",
+          "label": "Trouble swallowing, or problems with your esophagus (food pipe)"
+        },
+        {
+          "id": "breast_cancer",
+          "label": "Breast cancer"
+        },
+        {
+          "id": "ibd",
+          "label": "Inflammatory bowel disease (Crohn disease or ulcerative colitis)"
+        },
+        {
+          "id": "g6pd",
+          "label": "G6PD deficiency (an inherited blood enzyme condition)"
+        },
+        {
+          "id": "anemia_blood",
+          "label": "Anemia, or another blood disorder"
+        },
+        {
+          "id": "none",
+          "label": "None of these"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E1",
+      "prompt": "What bothers you most about your skin? Select up to 3.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "pimples",
+          "label": "Active pimples"
+        },
+        {
+          "id": "dark_marks",
+          "label": "Dark marks"
+        },
+        {
+          "id": "scars",
+          "label": "Scars"
+        },
+        {
+          "id": "deep_bumps",
+          "label": "Deep, painful bumps"
+        },
+        {
+          "id": "oily",
+          "label": "Oily skin"
+        },
+        {
+          "id": "texture",
+          "label": "Rough or uneven texture"
+        },
+        {
+          "id": "redness",
+          "label": "Redness"
+        },
+        {
+          "id": "other",
+          "label": "Something else"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E1_other",
+      "prompt": "Something else",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "E1",
+          "operator": "in",
+          "values": [
+            "other"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "prompt": "What would success look like for you? Select all that apply.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        {
+          "id": "stop_breakouts",
+          "label": "Stop new breakouts"
+        },
+        {
+          "id": "fade_marks",
+          "label": "Fade my dark marks"
+        },
+        {
+          "id": "prevent_scars",
+          "label": "Prevent scars"
+        },
+        {
+          "id": "control_deep_bumps",
+          "label": "Get deep, painful bumps under control"
+        },
+        {
+          "id": "simple_routine",
+          "label": "A routine simple enough to stick with"
+        },
+        {
+          "id": "without_makeup",
+          "label": "Feel comfortable without makeup"
+        },
+        {
+          "id": "other",
+          "label": "Something else"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E2_other",
+      "prompt": "Something else",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "E2",
+          "operator": "in",
+          "values": [
+            "other"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E3",
+      "prompt": "Is there an event or date you are hoping your skin will be clearer by? A wedding, photos, a trip? (Optional)",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E4",
+      "prompt": "How much is acne affecting your day-to-day life right now? Your mood, confidence, social life, work, everything.",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "not_at_all",
+          "label": "Not at all"
+        },
+        {
+          "id": "a_little",
+          "label": "A little"
+        },
+        {
+          "id": "quite_a_bit",
+          "label": "Quite a bit"
+        },
+        {
+          "id": "a_lot",
+          "label": "A lot"
+        }
+      ],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "E5",
+      "prompt": "Anything else you want Dr. Om to know? Anything at all: a worry, a past experience, something about your skin that these questions did not cover. Dr. Om personally reads every word of this before he reviews your case.",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "F2",
+      "prompt": "These photos are of me, taken today, unedited, with no makeup or filters.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "G1",
+      "prompt": "You chose the Care plan, so prescriptions go to a pharmacy you pick, and you pay the pharmacy directly. Which pharmacy should Dr. Om send your prescriptions to? Give the pharmacy name and town. You can also add this later, but your prescription cannot be sent until it is here.",
+      "kind": "text",
+      "required": false,
+      "options": [],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "planId",
+          "operator": "in",
+          "values": [
+            "care"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "G2",
+      "prompt": "You chose the All-In plan, so your prescription medicines are included and shipped to you by our partner pharmacy. They can only ship within North Carolina. Is the shipping address on your account in North Carolina?",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        {
+          "id": "yes",
+          "label": "Yes"
+        },
+        {
+          "id": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [],
+      "showWhen": [
+        {
+          "questionId": "planId",
+          "operator": "in",
+          "values": [
+            "all_in"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "H1",
+      "prompt": "My answers in this visit are true and complete. I will tell UNZIT if anything changes, including pregnancy, new medicines, or new side effects.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "H2",
+      "prompt": "I am 18 or older. I am physically in North Carolina right now, and I will only use UNZIT while I am in North Carolina.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "H3",
+      "prompt": "The photo ID and selfie I provided are mine, and they are really me.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "H4",
+      "prompt": "I understand that Dr. Om reviews my case within 1 to 2 business days, that UNZIT is not monitored around the clock, and that UNZIT is not for emergencies. In an emergency I will call 911.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "H5",
+      "prompt": "I understand the medication safety rule: if I notice any side effect from a medication, even a small one, I will stop that medication and message UNZIT. I will not restart it until Dr. Om replies.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    },
+    {
+      "id": "H6",
+      "prompt": "I understand that Dr. Om may decide I need in-person care instead of a prescription, and that submitting this visit does not guarantee a prescription.",
+      "kind": "attestation",
+      "required": true,
+      "options": [],
+      "fields": [],
+      "showWhen": []
+    }
+  ],
+  "intakeV2": {
+    "sections": [
+      {
+        "id": "W",
+        "title": "Welcome and how UNZIT works",
+        "intro": "",
+        "questionIds": [
+          "W1"
+        ]
+      },
+      {
+        "id": "A",
+        "title": "Safety gates",
+        "intro": "",
+        "questionIds": [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6",
+          "A6choice",
+          "A6b",
+          "A7"
+        ]
+      },
+      {
+        "id": "B",
+        "title": "About you and your acne",
+        "intro": "Now, your acne story. There are no wrong answers here. The more honest you are, the better Dr. Om can match treatment to you.",
+        "questionIds": [
+          "B1",
+          "B2",
+          "B3",
+          "B4",
+          "B4_other",
+          "B4b",
+          "B5",
+          "B6",
+          "B6_details",
+          "B7",
+          "B8",
+          "B9",
+          "B10",
+          "B11",
+          "B12",
+          "B12_details",
+          "B12_prescription"
+        ]
+      },
+      {
+        "id": "C",
+        "title": "What you have tried, and what matters to you",
+        "intro": "Most people who come to UNZIT have already tried a lot. Tell us what happened with each treatment, honestly, including the ones that did nothing. Dr. Om reads this himself, and it stops him from prescribing you something that already failed you.",
+        "questionIds": [
+          "C1",
+          "C2",
+          "C2_other",
+          "C3",
+          "C4",
+          "C5",
+          "C6"
+        ]
+      },
+      {
+        "id": "D",
+        "title": "Safety screening",
+        "intro": "These questions protect you. Some acne medicines are unsafe with certain conditions, allergies, or other medicines. Please answer all of them, even if you are not sure why we ask.",
+        "questionIds": [
+          "D1",
+          "D2",
+          "D2_none",
+          "D3",
+          "D3b",
+          "D3c",
+          "D4"
+        ]
+      },
+      {
+        "id": "E",
+        "title": "Your goals",
+        "intro": "Last part of your story. Treatment works better when it aims at what you actually care about.",
+        "questionIds": [
+          "E1",
+          "E1_other",
+          "E2",
+          "E2_other",
+          "E3",
+          "E4",
+          "E5"
+        ]
+      },
+      {
+        "id": "F",
+        "title": "Photos",
+        "intro": "Photos are how Dr. Om examines your skin. Take them in daylight, facing a window if you can, with no makeup, no filters, and your hair pulled back. Check that each photo is sharp before you send it. Dr. Om may ask for new photos if these are not clear enough; your case pauses until good photos arrive.",
+        "questionIds": [
+          "F2"
+        ]
+      },
+      {
+        "id": "G",
+        "title": "Plan logistics",
+        "intro": "",
+        "questionIds": [
+          "G1",
+          "G2"
+        ]
+      },
+      {
+        "id": "H",
+        "title": "Attestations",
+        "intro": "",
+        "questionIds": [
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5",
+          "H6"
+        ]
+      }
+    ],
+    "exitPages": {
+      "A": "Stop here: your skin needs in-person care today. The symptoms you selected can be a sign of a severe form of acne that becomes dangerous quickly and cannot be treated safely online. Please go to urgent care or see a dermatologist today. If you feel very unwell, have a high fever, or your symptoms are getting worse fast, go to an emergency department or call 911. You have not been charged. Dr. Om will see the answers you gave today and will review them today, but please do not wait for that review to get care in person.",
+      "B": "Stop here: what you described needs urgent in-person care, not online care. Swelling of the face, lips, or eyes, or skin that is painful, blistering, or peeling, can be a sign of a serious reaction or infection. Please go to urgent care or an emergency department now. If you have trouble breathing or your throat feels tight, call 911. You have not been charged.",
+      "C": "UNZIT is for adults 18 and older, so we cannot treat you yet. Acne in your teens is very treatable, and a parent or guardian can help you find in-person care, or care designed for teens. You have not been charged.",
+      "D": "UNZIT can only treat patients who are physically in North Carolina, because that is where Dr. Om is licensed. If you will be in North Carolina, you are welcome to come back and start then. You have not been charged.",
+      "E": "UNZIT treats acne only, so it is not the right place for this concern. Rashes, eczema, moles, changing spots, and hair or scalp problems need in-person care, where a dermatologist can examine and test the skin directly. Please do not delay in-person care for anything that is new, changing, or worrying. You have not been charged."
+    },
+    "holdNotice": "Your case is on hold for Dr. Om's personal decision, because you are currently taking isotretinoin. UNZIT does not issue a plan or prescription to anyone taking isotretinoin until Dr. Om has reviewed the case himself and decided UNZIT can help safely. You will hear within 1 to 2 business days. If Dr. Om decides UNZIT is not right for you now, your payment is refunded in full under the subscription terms.",
+    "attestationIntro": "Please confirm each of these. They protect you, and they are part of your medical record.",
+    "dateQuestionIds": [
+      "A1"
+    ],
+    "photoQuestion": {
+      "id": "F1",
+      "prompt": "\"Front of your face (required)\" / \"Left side of your face (required)\" / \"Right side of your face (required)\" / \"Chest, above the breasts (required because you told us your acne is on your chest)\" / \"Back (required because you told us your acne is on your back)\" / \"Close-up of dark marks left by acne (optional)\"."
+    },
+    "answerShape": "flat_question_ids; C1 is an array of treatmentId,duration,helped,status,stopReason,details,darkened objects; never=[{treatmentId:never}]; planId=care|all_in",
+    "acknowledgmentLabels": {
+      "W1": "I understand how UNZIT works.",
+      "A7": "This ID is mine, and the selfie is really me."
+    }
+  }
+}

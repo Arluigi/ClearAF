@@ -6,7 +6,8 @@ import {contracts,UUIDSchema,EnrollmentResponseSchema,DestinationSchema} from '.
 import {enrollmentError} from './enrollment';
 import {evaluateLaunchEligibility,ageOn} from './enrollmentRules';
 import {normalizeMedicalDraft,completeMedicalHistory,launchFlags} from './launchEnrollmentValidation';
-import {activeLaunchSettings} from './launchSettings';
+import {activeLaunchSettings,selectedLaunchSettings} from './launchSettings';
+import {isIntakeV2,normalizeIntakeV2,evaluateIntakeV2,completeIntakeV2,intakeV2Projection} from './intakeV2';
 import {validateLaunchDocuments} from '../content/launchConsents';
 import {sanitizeLaunchJPEG,identityObjectPaths,storeLaunchJPEG} from './identityVerification';
 import {captureIdentity} from './photoCapture';
@@ -39,8 +40,13 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
  const version=(row:any,expected:number)=>{if(row.revision!==expected)throw enrollmentError(409,'REVISION_CONFLICT')};
  const mutable=(row:any)=>{if(['submitted','approved','rejected','ineligible'].includes(row.status))noStep()};
  const paid=async(tx:any,patientId:string)=>{const m=await tx.careMembership.findUnique({where:{patientId}});if(!m||!['paid_pending_review','active','past_due'].includes(m.status))throw enrollmentError(403,'CARE_ACCESS_REQUIRED');if(!m.paidThrough||new Date(m.paidThrough)<=now())throw enrollmentError(403,'CARE_ACCESS_REQUIRED');return m};
+ async function prepaymentOrCovered(tx:any,patientId:string,row:any){const m=await tx.careMembership.findUnique({where:{patientId}});if(row.submittedAt||m?.paidThrough)await paid(tx,patientId);return m}
  async function publication(tx:any,settingsVersion?:number){
   const settings=settingsVersion===undefined?await activeLaunchSettings(tx):await tx.launchSettings.findUnique({where:{version:settingsVersion}});if(!settings)throw enrollmentError(503,'BILLING_UNAVAILABLE');try{const docs=validateLaunchDocuments((settings.content as any)?.consents);return {settings,docs}}catch{throw enrollmentError(503,'BILLING_UNAVAILABLE')}
+ }
+ async function casePublication(tx:any,row:any){
+  if(row.settingsVersion){const pinned=await tx.launchSettings.findUnique({where:{version:row.settingsVersion}});if(['submitted','approved','rejected'].includes(row.status)||isIntakeV2(pinned?.contentVersion))return publication(tx,row.settingsVersion)}
+  const selected=await selectedLaunchSettings(tx);return publication(tx,selected.version);
  }
  async function currentReceipts(tx:any,patientId:string,docs:any[]){
   const receipts=await tx.consentAcceptance.findMany({where:{userId:patientId}});
@@ -48,22 +54,22 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
  }
  async function dto(tx:any,row:any){
   const frozen=['submitted','approved','rejected'].includes(row.status);if(frozen&&!row.settingsVersion)throw enrollmentError(503,'BILLING_UNAVAILABLE');
-  const {settings,docs}=await publication(tx,frozen?row.settingsVersion:undefined),consents=await currentReceipts(tx,row.patientId,docs);
+  const {settings,docs}=await casePublication(tx,row),consents=await currentReceipts(tx,row.patientId,docs);
   const identity=row.identityId?await tx.identityVerification.findUnique({where:{id:row.identityId}}):null;
   const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null;
   const set=row.photoSetId?await tx.clinicalPhotoSet.findUnique({where:{id:row.photoSetId}}):null;
   const member=await tx.careMembership.findUnique({where:{patientId:row.patientId}});
   const membership=member?{id:member.id,planId:member.planId,status:member.status,amountCents:member.amountCents,currency:member.currency,activatedAt:iso(member.activatedAt),currentPeriodEnd:iso(member.currentPeriodEnd),paidThrough:iso(member.paidThrough),cancelAtPeriodEnd:member.cancelAtPeriodEnd??false,cadenceAnchor:iso(member.cadenceAnchor),destinationRequired:member.destinationRequired??false,refundStatus:member.refundStatus??'not_applicable',access:careAccess(row,member,now())??'enrollment'}:null;
-  return EnrollmentResponseSchema.parse({case:{id:row.id,revision:row.revision,status:row.status,identity:identity?{id:identity.id,status:identity.status,fullName:identity.fullName,dateOfBirth:new Date(identity.dateOfBirth).toISOString().slice(0,10),attestedInNC:identity.attestedInNC,attestedAt:iso(identity.attestedAt),reviewedAt:iso(identity.reviewedAt),reviewedBy:identity.reviewedBy??null,patientMessage:identity.patientMessage??null}:null,eligibility:row.eligibility??null,medicalHistory:intake?.answers??{},questionnaireVersion:intake?.questionnaireVersion??settings.contentVersion,photoSet:set?await setDTO(tx,set):null,destination:row.destination??null,planId:member?.planId??row.planId??null,flags:row.flags??[],submittedAt:iso(row.submittedAt),approvedAt:iso(row.approvedAt),patientMessage:row.patientMessage??null},membership,consents});
+  return EnrollmentResponseSchema.parse({case:{id:row.id,revision:row.revision,status:row.status,identity:identity?{id:identity.id,status:identity.status,fullName:identity.fullName,dateOfBirth:new Date(identity.dateOfBirth).toISOString().slice(0,10),attestedInNC:identity.attestedInNC,attestedAt:iso(identity.attestedAt),reviewedAt:iso(identity.reviewedAt),reviewedBy:identity.reviewedBy??null,patientMessage:identity.patientMessage??null}:null,eligibility:row.eligibility?{answers:row.eligibility.answers,eligible:row.eligibility.eligible,reasons:row.eligibility.reasons,flags:row.eligibility.flags,rulesVersion:row.eligibility.rulesVersion}:null,medicalHistory:isIntakeV2(intake?.questionnaireVersion??settings.contentVersion)?{}:intake?.answers??{},questionnaireVersion:intake?.questionnaireVersion??settings.contentVersion,...(isIntakeV2(intake?.questionnaireVersion??settings.contentVersion)?{intakeV2:intakeV2Projection(intake?.answers??{},row.eligibility??{},now().toISOString().slice(0,10))}:{}),photoSet:set?await setDTO(tx,set):null,destination:row.destination??null,planId:member?.planId??row.planId??null,flags:row.flags??[],submittedAt:iso(row.submittedAt),approvedAt:iso(row.approvedAt),patientMessage:row.patientMessage??null},membership,consents});
  }
  async function setDTO(tx:any,set:any){return {id:set.id,purpose:set.purpose,status:set.status,requiredSlots:set.requiredSlots,items:(await tx.clinicalPhotoSetItem.findMany({where:{setId:set.id}})).map(({slot,photoId,captureId}:any)=>({slot,photoId,captureId}))}}
  const update=async(tx:any,row:any,data:any)=>tx.launchCase.update({where:{id:row.id},data:{...data,revision:row.revision+1}});
  const reply=async(tx:any,row:any,created:boolean)=>({response:await dto(tx,row),created});
  return {
   readDTO:dto,
-  async get(patientId:string){return db.$transaction(async(tx:any)=>{await lock(tx,patientId);let row=await tx.launchCase.findUnique({where:{patientId}});if(!row){await publication(tx);row=await tx.launchCase.create({data:{patientId,revision:0,status:'consents',flags:[],createdAt:now()}})}return reply(tx,row,false)})},
+  async get(patientId:string,questionnaireVersion?:string){return db.$transaction(async(tx:any)=>{await lock(tx,patientId);let row=await tx.launchCase.findUnique({where:{patientId}});if(!row){const selected=await selectedLaunchSettings(tx,questionnaireVersion);await publication(tx,selected.version);row=await tx.launchCase.create({data:{patientId,revision:0,status:'consents',settingsVersion:selected.version,flags:[],createdAt:now()}})}else if(isIntakeV2(questionnaireVersion)&&!row.settingsVersion&&row.revision===0&&row.status==='consents'&&!row.identityId&&!row.intakeId&&!row.eligibility&&!row.photoSetId&&!row.destination&&!row.planId&&!row.submittedAt&&!await tx.careMembership.findUnique({where:{patientId}})&&!await tx.consentAcceptance.findFirst({where:{userId:patientId}})){const selected=await selectedLaunchSettings(tx,questionnaireVersion);await publication(tx,selected.version);row=await tx.launchCase.update({where:{id:row.id},data:{settingsVersion:selected.version}})}return reply(tx,row,false)})},
   async consents(patientId:string,caseId:string,input:unknown,observedIp:string){return db.$transaction(async(tx:any)=>{
-   await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['PUT /enrollment/:caseId/consents'].request.parse(input),{docs}=await publication(tx);
+   await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['PUT /enrollment/:caseId/consents'].request.parse(input),{docs}=await casePublication(tx,row);
    if(!isIP(observedIp))throw enrollmentError(400,'VALIDATION_ERROR');
    if(a.acceptances.some((v:any)=>!docs.some(d=>d.key===v.key&&d.version===v.version&&d.sha256===v.sha256)))throw enrollmentError(409,'CONSENT_OUTDATED');
    const receipts=await currentReceipts(tx,patientId,docs);if(receipts.every(d=>d.acceptedAt))return reply(tx,row,false);
@@ -74,13 +80,14 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
   async identity(patientId:string,caseId:string,identityId:string,input:unknown){return uploadTransaction(patientId,async(tx:any,write)=>{
    await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));UUIDSchema.parse(identityId);const a=contracts['PUT /enrollment/:caseId/identity/:identityId'].request.parse(input),hash=launchFingerprint(a),existing=await tx.identityVerification.findUnique({where:{id:identityId}});
    if(existing){if(existing.patientId!==patientId||existing.caseId!==caseId)throw enrollmentError(404,'NOT_FOUND');if(existing.requestHash!==hash)throw enrollmentError(409,'OPERATION_CONFLICT');return reply(tx,row,false)}
-   mutable(row);version(row,Number(a.expectedRevision));const {docs}=await publication(tx);if(!(await currentReceipts(tx,patientId,docs)).every(d=>d.acceptedAt)||!['identity','needs_changes'].includes(row.status))noStep();
+   mutable(row);version(row,Number(a.expectedRevision));const {docs,settings}=await casePublication(tx,row);if(!(await currentReceipts(tx,patientId,docs)).every(d=>d.acceptedAt)||(!isIntakeV2(settings.contentVersion)&&!['identity','needs_changes'].includes(row.status)))noStep();
+   if(isIntakeV2(settings.contentVersion)){const prior=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null,e=evaluateIntakeV2(prior?.answers??{},now().toISOString().slice(0,10));if(e.exitPage||['W1','A1','A2','A3','A4','A5','A6','A6choice','A6b'].some(k=>e.missingRequired.includes(k)))noStep();if(prior?.answers?.A1!==a.dateOfBirth)throw enrollmentError(409,'OPERATION_CONFLICT')}
    if(ageOn(a.dateOfBirth,now().toISOString().slice(0,10))<18||a.dateOfBirth>now().toISOString().slice(0,10)||a.physicallyInNC!=='true')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
    const [idPhoto,selfie]=await Promise.all([sanitizeLaunchJPEG(a.idPhoto,'identity'),sanitizeLaunchJPEG(a.selfie,'identity')]);
    // Never reuse paths with uncertain cleanup; use a new attempt ID or verified operator cleanup.
    const {idPhotoPath,selfiePath}=identityObjectPaths(patientId,identityId);for(const path of [idPhotoPath,selfiePath]){const photoId=path.split('/')[1].slice(0,36),intent=await tx.photoCleanup.findUnique({where:{photoId}});if(intent)throw enrollmentError(409,'OPERATION_CONFLICT')}await write(idPhotoPath,idPhoto);await write(selfiePath,selfie);
    await tx.identityVerification.create({data:{id:identityId,caseId,patientId,idPhotoPath,selfiePath,fullName:a.fullName,dateOfBirth:new Date(a.dateOfBirth+'T00:00:00Z'),attestedInNC:true,attestedAt:now(),status:'uploaded',requestHash:hash}});
-   row=await update(tx,row,{identityId,status:'eligibility'});return reply(tx,row,true);
+   row=await update(tx,row,{identityId,status:isIntakeV2(settings.contentVersion)?'medical_history':'eligibility'});return reply(tx,row,true);
   })},
   async eligibility(patientId:string,caseId:string,input:unknown){return db.$transaction(async(tx:any)=>{
    await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['PUT /enrollment/:caseId/eligibility'].request.parse(input);
@@ -91,24 +98,34 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
    row=await update(tx,row,{eligibility:{answers:a.answers,...result},rulesVersion:result.rulesVersion,flags:result.flags,status:result.eligible?(covered?'medical_history':'payment'):'ineligible'});return reply(tx,row,true);
   })},
   async medical(patientId:string,caseId:string,revisionId:string,input:unknown){return db.$transaction(async(tx:any)=>{
-   await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));UUIDSchema.parse(revisionId);const a=contracts['PUT /enrollment/:caseId/medical/:revisionId'].request.parse(input),answers=normalizeMedicalDraft(a.answers),hash=launchFingerprint({questionnaireVersion:a.questionnaireVersion,answers}),existing=await tx.intakeRevision.findUnique({where:{id:revisionId}});
+   await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));UUIDSchema.parse(revisionId);const a=contracts['PUT /enrollment/:caseId/medical/:revisionId'].request.parse(input),answers=isIntakeV2(a.questionnaireVersion)?normalizeIntakeV2(a.answers):normalizeMedicalDraft(a.answers),hash=launchFingerprint({questionnaireVersion:a.questionnaireVersion,answers}),existing=await tx.intakeRevision.findUnique({where:{id:revisionId}});
    if(existing){if(existing.patientId!==patientId||existing.caseId!==caseId)throw enrollmentError(404,'NOT_FOUND');if(existing.requestHash!==hash)throw enrollmentError(409,'OPERATION_CONFLICT');return reply(tx,row,false)}
-   await paid(tx,patientId);mutable(row);version(row,a.expectedRevision);if(!['payment','medical_history','photos','destination','needs_changes'].includes(row.status))noStep();
-   const {settings}=await publication(tx);if(a.questionnaireVersion!==settings.contentVersion)throw enrollmentError(409,'CONSENT_OUTDATED');
+   mutable(row);version(row,a.expectedRevision);const {settings}=await casePublication(tx,row);if(a.questionnaireVersion!==settings.contentVersion)throw enrollmentError(409,'CONSENT_OUTDATED');
+   if(isIntakeV2(a.questionnaireVersion)){
+    const membership=await prepaymentOrCovered(tx,patientId,row),covered=!!membership&&['paid_pending_review','active','past_due'].includes(membership.status)&&membership.paidThrough&&new Date(membership.paidThrough)>now();
+    const prior=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null,unchanged=!!prior&&prior.questionnaireVersion===a.questionnaireVersion&&launchFingerprint(prior.answers)===launchFingerprint(answers);
+    const evaluation=evaluateIntakeV2(answers,now().toISOString().slice(0,10));
+    await tx.intakeRevision.create({data:{id:revisionId,caseId,patientId,questionnaireVersion:a.questionnaireVersion,answers,requestHash:hash,createdAt:now()}});
+    const legacy={E1:(answers as any).A3??'acne',E2:(answers as any).A2??'no',E3:(answers as any).A5??'neither',E4:'no'};
+    row=await update(tx,row,{intakeId:revisionId,planId:(answers as any).planId??row.planId,eligibility:{answers:legacy,eligible:!evaluation.exitPage,reasons:evaluation.exitPage?[evaluation.exitPage]:[],flags:evaluation.flags,rulesVersion:a.questionnaireVersion,...(unchanged&&row.eligibility?.holdDecision?{holdDecision:row.eligibility.holdDecision}:{}),...(unchanged&&row.eligibility?.screeningDecisions?{screeningDecisions:row.eligibility.screeningDecisions}:{})},rulesVersion:a.questionnaireVersion,settingsVersion:settings.version,patientMessage:evaluation.exitPage?(settings.content as any)?.intakeV2?.exitPages?.[evaluation.exitPage]??'You have not been charged.':row.patientMessage,status:evaluation.exitPage?'ineligible':evaluation.missingRequired.length===0&&row.identityId?(covered?'medical_history':'payment'):row.identityId?'medical_history':'consents',flags:evaluation.flags});
+    if(evaluation.exitPage==='A'){const patient=await tx.user.findUnique({where:{id:patientId}});if(!patient.dermatologistId&&settings.clinicianId)await tx.user.update({where:{id:patientId},data:{dermatologistId:settings.clinicianId}})}
+    return reply(tx,row,true);
+   }
+   await paid(tx,patientId);if(!['payment','medical_history','photos','destination','needs_changes'].includes(row.status))noStep();
    await tx.intakeRevision.create({data:{id:revisionId,caseId,patientId,questionnaireVersion:a.questionnaireVersion,answers,requestHash:hash,createdAt:now()}});
    let complete=false;try{completeMedicalHistory(answers);complete=true}catch{}
    row=await update(tx,row,{intakeId:revisionId,status:complete?'photos':'medical_history',flags:[...new Set([...(row.eligibility?.flags??[]),...launchFlags(answers)])]});return reply(tx,row,true);
   })},
   async destination(patientId:string,caseId:string,input:unknown){return db.$transaction(async(tx:any)=>{
-   await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['PUT /enrollment/:caseId/destination'].request.parse(input),m=await paid(tx,patientId);
+   await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['PUT /enrollment/:caseId/destination'].request.parse(input),{settings}=await casePublication(tx,row),v2=isIntakeV2(settings.contentVersion),m=v2?await tx.careMembership.findUnique({where:{patientId}}):await paid(tx,patientId);
    if(row.destination&&launchFingerprint(row.destination)===launchFingerprint(a.destination))return reply(tx,row,false);
-   if(row.status!=='approved')mutable(row);version(row,a.expectedRevision);if(a.destination.planId!==m.planId)throw enrollmentError(409,'OPERATION_CONFLICT');if(!['photos','destination','needs_changes','approved'].includes(row.status))noStep();
-   row=await update(tx,row,{destination:a.destination});await tx.careMembership.update({where:{id:m.id},data:{destinationRequired:false}});return reply(tx,row,true);
+   if(row.status!=='approved')mutable(row);version(row,a.expectedRevision);if(a.destination.planId!==(m?.planId??row.planId))throw enrollmentError(409,'OPERATION_CONFLICT');if(!(v2?['consents','identity','medical_history','payment','photos','destination','needs_changes','approved']:['photos','destination','needs_changes','approved']).includes(row.status))noStep();
+   row=await update(tx,row,{destination:a.destination});if(m)await tx.careMembership.update({where:{id:m.id},data:{destinationRequired:false}});return reply(tx,row,true);
   })},
   async capture(patientId:string,captureId:string,input:unknown){return uploadTransaction(patientId,async(tx:any,write)=>{
-   await lock(tx,patientId);UUIDSchema.parse(captureId);const a=contracts['POST /photo-captures/:captureId'].request.parse(input);await paid(tx,patientId);
+   await lock(tx,patientId);UUIDSchema.parse(captureId);const a=contracts['POST /photo-captures/:captureId'].request.parse(input);if(a.targetType!=='enrollment')await paid(tx,patientId);
    if(new Date(a.captureDate)>new Date(now().getTime()+5*60_000))throw enrollmentError(400,'VALIDATION_ERROR');
-   if(a.targetType==='enrollment'){const row=await owned(tx,patientId,a.targetId);if(!['photos','destination','needs_changes'].includes(row.status))noStep()}
+   if(a.targetType==='enrollment'){const row=await owned(tx,patientId,a.targetId),{settings}=await casePublication(tx,row);if(!isIntakeV2(settings.contentVersion))await paid(tx,patientId);else await prepaymentOrCovered(tx,patientId,row);if(!(isIntakeV2(settings.contentVersion)?['medical_history','payment','photos','destination','needs_changes']:['photos','destination','needs_changes']).includes(row.status))noStep()}
    else {const checkIn=await tx.launchCheckIn.findUnique({where:{id:a.targetId}});if(!checkIn||checkIn.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');const {membership}=await requirePatientCareScope(tx,patientId,'clinical_write',now());assertCurrentCheckIn(checkIn,membership);assertCheckInPhotoDate(checkIn,new Date(a.captureDate),now(),now());if(!['due','draft','needs_changes'].includes(checkIn.status))noStep()}
    const hash=launchFingerprint(a),identity=captureIdentity(patientId,captureId),existing=await tx.skinPhoto.findUnique({where:{id:identity.id}});
    if(existing){if(existing.userId!==patientId||existing.photoUrl!==identity.storagePath||iso(existing.captureDate)!==a.captureDate||existing.notes!==(a.notes??'')||existing.launchRequestHash!==hash||existing.launchTargetType!==a.targetType||existing.launchTargetId!==a.targetId)throw enrollmentError(409,'OPERATION_CONFLICT');return {capture:{id:existing.id,captureId,captureDate:iso(existing.captureDate),uploadedAt:iso(existing.createdAt)},created:false}}
@@ -116,8 +133,8 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
    const photo=await tx.skinPhoto.create({data:{id:identity.id,userId:patientId,photoUrl:identity.storagePath,launchTargetType:a.targetType,launchTargetId:a.targetId,launchRequestHash:hash,skinScore:0,notes:a.notes??'',captureDate:new Date(a.captureDate),createdAt:now()}});return {capture:{id:photo.id,captureId,captureDate:iso(photo.captureDate),uploadedAt:iso(photo.createdAt)},created:true};
   })},
   async photoSet(patientId:string,setId:string,input:unknown){return db.$transaction(async(tx:any)=>{
-   await lock(tx,patientId);UUIDSchema.parse(setId);const a=contracts['PUT /photo-sets/:setId'].request.parse(input);await paid(tx,patientId);let row:any,checkIn:any;
-   if(a.purpose==='enrollment'){row=await owned(tx,patientId,a.targetId);if(!['photos','destination','needs_changes'].includes(row.status))noStep()}
+   await lock(tx,patientId);UUIDSchema.parse(setId);const a=contracts['PUT /photo-sets/:setId'].request.parse(input);if(a.purpose!=='enrollment')await paid(tx,patientId);let row:any,checkIn:any;
+   if(a.purpose==='enrollment'){row=await owned(tx,patientId,a.targetId);const {settings}=await casePublication(tx,row);if(!isIntakeV2(settings.contentVersion))await paid(tx,patientId);else await prepaymentOrCovered(tx,patientId,row);if(!(isIntakeV2(settings.contentVersion)?['medical_history','payment','photos','destination','needs_changes']:['photos','destination','needs_changes']).includes(row.status))noStep()}
    else {checkIn=await tx.launchCheckIn.findUnique({where:{id:a.targetId}});if(!checkIn||checkIn.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');const {membership}=await requirePatientCareScope(tx,patientId,'clinical_write',now());assertCurrentCheckIn(checkIn,membership);if(!['due','draft','needs_changes'].includes(checkIn.status))noStep();row=await tx.launchCase.findUnique({where:{patientId}})}
    const existing=await tx.clinicalPhotoSet.findUnique({where:{id:setId}});if(existing&&(existing.patientId!==patientId||existing.purpose!==a.purpose||existing.caseId!==(a.purpose==='enrollment'?a.targetId:null)||existing.checkInId!==(a.purpose==='check_in'?a.targetId:null)))throw enrollmentError(404,'NOT_FOUND');
    const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null,required=requiredClinicalSlots(intake?.answers??{});
@@ -131,14 +148,14 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
   async submit(patientId:string,caseId:string,input:unknown){return db.$transaction(async(tx:any)=>{
    await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['POST /enrollment/:caseId/submit'].request.parse(input);
    if(row.status==='submitted'&&row.photoSetId===a.photoSetId)return reply(tx,row,false);
-   mutable(row);version(row,a.expectedRevision);const m=await paid(tx,patientId),{docs,settings}=await publication(tx);
+   mutable(row);version(row,a.expectedRevision);const m=await paid(tx,patientId),{docs,settings}=await casePublication(tx,row);
    const id=row.identityId?await tx.identityVerification.findUnique({where:{id:row.identityId}}):null,intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null;
    if(!id||id.patientId!==patientId||!id.attestedInNC||['rejected','needs_changes'].includes(id.status)||!row.eligibility?.eligible||!intake||intake.questionnaireVersion!==settings.contentVersion||!(await currentReceipts(tx,patientId,docs)).every(d=>d.acceptedAt))throw enrollmentError(409,'INCOMPLETE_CASE');
-   let history:any,destination:any;try{history=completeMedicalHistory(intake.answers);destination=DestinationSchema.parse(row.destination)}catch{throw enrollmentError(409,'INCOMPLETE_CASE')};if(destination.planId!==m.planId)throw enrollmentError(409,'INCOMPLETE_CASE');
-   const set=await tx.clinicalPhotoSet.findUnique({where:{id:a.photoSetId}});if(!set||set.patientId!==patientId||set.caseId!==caseId||!(set.status==='draft'||set.status==='submitted'&&row.submittedAt&&row.photoSetId===set.id))throw enrollmentError(409,'INCOMPLETE_PHOTO_SET');const items=(await setDTO(tx,set)).items;await validateClinicalPhotoItems(tx,patientId,set.id,items,requiredClinicalSlots(history),{purpose:'enrollment',id:caseId});
+   let history:any,destination:any;try{history=isIntakeV2(intake.questionnaireVersion)?completeIntakeV2(intake.answers,now().toISOString().slice(0,10)):completeMedicalHistory(intake.answers);if(isIntakeV2(intake.questionnaireVersion)&&(history.planId!==m.planId||history.A1!==new Date(id.dateOfBirth).toISOString().slice(0,10)))throw Error();destination=isIntakeV2(intake.questionnaireVersion)&&m.planId==='care'&&!row.destination?{planId:'care'}:DestinationSchema.parse(row.destination)}catch{throw enrollmentError(409,'INCOMPLETE_CASE')};if(destination.planId!==m.planId)throw enrollmentError(409,'INCOMPLETE_CASE');
+   const set=await tx.clinicalPhotoSet.findUnique({where:{id:a.photoSetId}});if(!set||set.patientId!==patientId||set.caseId!==caseId||!(set.status==='draft'||['submitted','needs_changes'].includes(set.status)&&row.submittedAt&&row.photoSetId===set.id))throw enrollmentError(409,'INCOMPLETE_PHOTO_SET');const items=(await setDTO(tx,set)).items;await validateClinicalPhotoItems(tx,patientId,set.id,items,requiredClinicalSlots(history),{purpose:'enrollment',id:caseId});
    const patient=await tx.user.findUnique({where:{id:patientId}});if(!patient.dermatologistId){if(!settings.clinicianId||!await tx.dermatologist.findUnique({where:{id:settings.clinicianId}}))throw enrollmentError(409,'INCOMPLETE_CASE');await tx.user.update({where:{id:patientId},data:{dermatologistId:settings.clinicianId}})}
    if(!intake.submittedAt)await tx.intakeRevision.update({where:{id:intake.id},data:{answers:history,submittedAt:now(),attestedAt:now()}});
-   if(set.status==='draft')await tx.clinicalPhotoSet.update({where:{id:set.id},data:{status:'submitted',requiredSlots:requiredClinicalSlots(history)}});
+   if(['draft','needs_changes'].includes(set.status))await tx.clinicalPhotoSet.update({where:{id:set.id},data:{status:'submitted',requiredSlots:requiredClinicalSlots(history)}});
    row=await update(tx,row,{status:'submitted',submittedAt:now(),photoSetId:set.id,planId:m.planId,settingsVersion:settings.version});
    const response=await dto(tx,row);
    await tx.launchCaseSubmission.create({data:{id:randomUUID(),caseId:row.id,patientId,caseRevision:row.revision,settingsVersion:settings.version,submittedAt:row.submittedAt,snapshot:{formatVersion:1,source:'submission',references:{identityId:row.identityId,intakeId:row.intakeId,photoSetId:row.photoSetId},case:response.case,consents:response.consents}}});

@@ -16,6 +16,7 @@ export function assertCareAccess(caseRow:any,membership:any,scope:CareScope,now=
  if(scope==='approval'){
   if(!membership||!['paid_pending_review','active','past_due'].includes(membership.status)||!membership.paidThrough||new Date(membership.paidThrough)<=now)throw enrollmentError(403,'CARE_ACCESS_REQUIRED');
  }else if(access!=='care')throw enrollmentError(403,scope==='clarification'?'LAUNCH_STEP_REQUIRED':'CARE_ACCESS_REQUIRED');
+ if(scope==='prescription'&&(caseRow.flags??[]).some((f:string)=>f.startsWith('HOLD:'))&&!caseRow.eligibility?.holdDecision)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
  if(['approval','prescription'].includes(scope)&&affirmativeNC!==true)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
 }
 export async function requirePatientCareScope(db:any,patientId:string,scope:CareScope,now=new Date(),affirmativeNC?:boolean){

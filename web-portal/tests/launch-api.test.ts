@@ -25,3 +25,16 @@ test('launch transport retains bearer, privacy, error codes and account cancella
     const request=api.chart('p');await new Promise<void>(resolve=>setImmediate(resolve));apiService.acceptSession({access_token:'other',user:{id:'clinician-b'}});pending!();await assert.rejects(request);assert.throws(()=>api.chart('p'));
   } finally {supabase.auth.getSession=old;globalThis.fetch=oldFetch;}
 });
+test('v2 catalog opt-in and structured personal screening decisions stay additive',async()=>{
+ const calls:{path:string;options?:RequestInit}[]=[];
+ const api=createLaunchAPI(async <T>(path:string,options?:RequestInit)=>{calls.push({path,options});return {} as T;});
+ await api.catalog('2.0-pending-review');
+ await api.catalog('1.0-pending-review');
+ await api.review('patient','review',{targetType:'case',targetId:'case',expectedRevision:4,outcome:'approve',patientMessage:null,clearHold:{decisionNote:'Personal review after messaging'},screeningDecisions:{ibd:{activity:'inactive',priorCDifficile:false,decisionNote:'Confirmed with patient'},marksAcneRelated:true,dailySunscreenConfirmed:true}});
+ assert.deepEqual(calls[0].options?.headers,{'X-UNZIT-Questionnaire':'2.0-pending-review'});
+ assert.equal(calls[1].options,undefined);
+ const body=JSON.parse(String(calls[2].options?.body));
+ assert.equal(body.clearHold.decisionNote,'Personal review after messaging');
+ assert.equal(body.screeningDecisions.ibd.priorCDifficile,false);
+ assert.equal(body.screeningDecisions.marksAcneRelated,true);
+});

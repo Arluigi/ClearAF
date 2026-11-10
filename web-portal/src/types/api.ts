@@ -194,7 +194,10 @@ export type LaunchConsent = {key:LaunchConsentKey;version:number;versionLabel:st
   sha256:string;effectiveAt:LaunchInstant;acceptedAt:LaunchInstant|null};
 export type LaunchCatalog = {contractVersion:1;settingsVersion:number;plans:LaunchPlan[];consents:LaunchConsent[];
   reviewCopy:'Review within 1 to 2 business days.';questionnaireVersion:string;
-  eligibilityQuestions:LaunchQuestion[];medicalQuestions:LaunchQuestion[]};
+  eligibilityQuestions:LaunchQuestion[];medicalQuestions:LaunchQuestion[];
+  intakeV2?:{sections:{id:string;title:string;intro:string;questionIds:string[]}[];exitPages:Record<string,string>;holdNotice:string;attestationIntro:string};
+  photoGuidance?:{title:string;instructions:string[];slots:{id:string;label:string}[]};
+  identityGuidance?:{title:string;prompt?:string;attestation?:string;items:{id:string;instructions:string}[]}};
 export type LaunchQuestion = {id:string;prompt:string;kind:'choice'|'multi_choice'|'text'|'repeat'|'attestation';
   required:boolean;options:{id:string;label:string}[];fields:LaunchQuestion[];
   showWhen:{questionId:string;operator:'in'|'not_in';values:string[]}[]};
@@ -237,7 +240,10 @@ export type LaunchCapture = {id:LaunchUUID;captureId:LaunchUUID;captureDate:Laun
 export type LaunchCase = {id:LaunchUUID;revision:number;status:LaunchCaseStatus;identity:LaunchIdentity|null;
   eligibility:LaunchEligibilityResult|null;medicalHistory:LaunchMedicalDraft;questionnaireVersion:string;
   photoSet:LaunchPhotoSet|null;destination:LaunchDestination|null;planId:LaunchPlanId|null;flags:string[];
-  submittedAt:LaunchInstant|null;approvedAt:LaunchInstant|null;patientMessage:string|null};
+  submittedAt:LaunchInstant|null;approvedAt:LaunchInstant|null;patientMessage:string|null;intakeV2?:LaunchIntakeV2|null};
+export type LaunchIntakeFinding={drug:string;reason:string;questionIds:string[]};
+export type LaunchIntakeV2={answers:Record<string,unknown>;evaluation:{missingRequired:string[];exitPage:string|null;hold:boolean;requiredPhotoSlots:LaunchPhotoSlot[];flags:string[];excluded:LaunchIntakeFinding[];cautions:LaunchIntakeFinding[];eligibleDrugs:string[];routes:string[]};
+  summary:{flags:string[];excluded:LaunchIntakeFinding[];cautions:LaunchIntakeFinding[];eligibleDrugs:string[];routes:string[];acnePicture:Record<string,unknown>;history:Record<string,unknown>[];medicines:Record<string,unknown>;patientVoice:Record<string,unknown>;photoSlots:LaunchPhotoSlot[];logistics:Record<string,unknown>;hydroquinoneCourseClock:string;standingRules:string[];allInProducts:Record<string,string[]>;careOnlyNote:string};holdDecision:Record<string,unknown>|null;screeningDecisions?:Record<string,unknown>|null};
 export type LaunchMembership = {id:LaunchUUID;planId:LaunchPlanId;status:'awaiting_payment'|'paid_pending_review'|'active'|'past_due'|'ended'|'rejected';
   amountCents:number;currency:'usd';activatedAt:LaunchInstant|null;currentPeriodEnd:LaunchInstant|null;
   paidThrough:LaunchInstant|null;cancelAtPeriodEnd:boolean;cadenceAnchor:LaunchInstant|null;destinationRequired?:boolean;

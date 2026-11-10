@@ -11,13 +11,13 @@ localTest('queue reads current assignment without locks and paginates all kinds 
   // Temporary tables isolate synthetic rows from the application and require no migrations.
   await c.query(`CREATE TEMP TABLE user_profiles (id uuid, name text, "dermatologistId" uuid);
    CREATE TEMP TABLE dermatologists (id uuid);
-   CREATE TEMP TABLE launch_cases (id uuid, "patientId" uuid, status text, "submittedAt" timestamp, "identityId" uuid, flags jsonb);
+   CREATE TEMP TABLE launch_cases (id uuid, "patientId" uuid, status text, "submittedAt" timestamp, "identityId" uuid, flags jsonb, "createdAt" timestamp DEFAULT '2027-01-01', eligibility jsonb);
    CREATE TEMP TABLE identity_verifications (id uuid, status text);
    CREATE TEMP TABLE launch_check_ins (id uuid, "patientId" uuid, status text, "submittedAt" timestamp, answers jsonb)`);
   const doctor='10000000-0000-4000-8000-000000000001',other='10000000-0000-4000-8000-000000000002',patient='20000000-0000-4000-8000-000000000001',id='30000000-0000-4000-8000-000000000001',check='40000000-0000-4000-8000-000000000001';
   await c.query('INSERT INTO dermatologists VALUES ($1),($2)',[doctor,other]);
   await c.query('INSERT INTO user_profiles VALUES ($1,$2,$3)',[patient,'Synthetic',doctor]);
-  await c.query(`INSERT INTO launch_cases VALUES ($1,$2,'submitted','2027-01-01',$1,'["case_flag"]')`,[id,patient]);
+  await c.query(`INSERT INTO launch_cases(id,"patientId",status,"submittedAt","identityId",flags) VALUES ($1,$2,'submitted','2027-01-01',$1,'["case_flag"]')`,[id,patient]);
   await c.query(`INSERT INTO identity_verifications VALUES ($1,'uploaded')`,[id]);
   await c.query(`INSERT INTO launch_check_ins VALUES ($1,$2,'submitted','2026-12-31',$3)`,[check,patient,{physicallyInNC:false,sideEffects:{none:false},pregnancyStatus:'not_sure',newMedicines:{none:false}}]);
   let calls=0;

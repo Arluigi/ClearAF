@@ -10,7 +10,7 @@ struct PlanChoiceView: View {
     var body: some View {
         LaunchPage(title: "Choose your care plan") {
             if let catalog = enrollment.catalog {
-                ForEach(catalog.plans) { plan in
+                ForEach(catalog.plans.filter { enrollment.state?.case.intakeV2 == nil || $0.id.rawValue == enrollment.state?.case.intakeV2?.answers["planId"]?.string }) { plan in
                     VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                         LetterpressRadioRow(title: plan.name, selected: selected == plan.id) { selected = plan.id }
                         Text(LaunchBillingCopy.price(cents: plan.amountCents, currency: plan.currency) + " / month").font(Letterpress.data(24))
@@ -20,6 +20,7 @@ struct PlanChoiceView: View {
                     }
                 }
                 Text("Your subscription renews monthly until you cancel. The billing period begins when payment is confirmed. Clinical care and check-in cadence begin only after your clinician approves your identity and medical information.")
+                if enrollment.state?.case.intakeV2 != nil && billing.checkoutRequired { NavigationLink("Review intake before payment") { IntakeV2View(repository: enrollment, ticket: ticket) }.buttonStyle(.letterpress(.outlined, fullWidth: true)) }
                 if !billing.checkoutRequired {
                     PaymentStatusView(billing: billing, enrollment: enrollment, ticket: ticket)
                 } else {
@@ -39,7 +40,7 @@ struct PlanChoiceView: View {
             }
             if let error = billing.error { Text(error).foregroundStyle(Letterpress.error) }
         }
-        .task { _ = await billing.refresh(ticket: ticket) }
+        .task { selected = enrollment.state?.case.planId ?? enrollment.state?.case.intakeV2?.answers["planId"].flatMap { LaunchPlanID(rawValue: $0.string) }; _ = await billing.refresh(ticket: ticket) }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refresh() } }
         .onChange(of: enrollment.catalog?.settingsVersion) { _, _ in selected = nil }
     }

@@ -35,12 +35,14 @@ struct LaunchEnrollmentView: View {
             }
         }
         .tint(Letterpress.ink)
-        .task { await repository.loadCatalog(ticket: ticket); _ = await repository.refresh(ticket: ticket) }
+        .task { _ = await repository.refresh(ticket: ticket); await repository.loadCatalog(ticket: ticket) }
         .onChange(of: scenePhase) { _, phase in if phase == .active { refresh() } }
         .onChange(of: repository.state, initial: true) { _, _ in APIService.shared.launchEnrollmentFinished() }
     }
     @ViewBuilder private func step(_ state: LaunchEnrollmentResponse) -> some View {
-        switch state.case.status {
+        if IntakeV2Routing.usesQuestionnaire(state) {
+            IntakeV2View(repository: repository, ticket: ticket)
+        } else { switch state.case.status {
         case .consents: ConsentDocumentsView(repository: repository, ticket: ticket)
         case .identity: IdentityCaptureView(repository: repository, ticket: ticket)
         case .eligibility: EligibilityView(repository: repository, ticket: ticket)
@@ -72,7 +74,8 @@ struct LaunchEnrollmentView: View {
             CaseSubmittedView(repository: repository, ticket: ticket)
         }
     }
-    private func refresh() { Task { await repository.loadCatalog(ticket: ticket); _ = await repository.refresh(ticket: ticket) } }
+        }
+    private func refresh() { Task { _ = await repository.refresh(ticket: ticket); await repository.loadCatalog(ticket: ticket) } }
 }
 
 struct LaunchPage<Content: View>: View {

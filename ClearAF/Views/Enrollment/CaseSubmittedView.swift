@@ -22,6 +22,7 @@ struct CaseSubmittedView: View {
         if let state = repository.state {
             LaunchPage(title: state.case.status == .rejected ? "Your care review" : "Your enrollment is with your clinician") {
                 Text(LaunchCaseReceipt.copy(status: state.case.status, refund: state.membership?.refundStatus))
+                if state.case.intakeV2?.evaluation.hold == true, let notice = repository.catalog?.intakeV2?.holdNotice { Text(notice) }
                 if let message = state.case.patientMessage { Text(message).font(Letterpress.display(24)) }
                 Text(identityStatus(state.case.identity?.status)).font(Letterpress.data(12))
                 Text(state.case.status == .approved ? "Clinical review approved" : state.case.status == .rejected ? "Clinical review declined" : "Clinical review pending").font(Letterpress.data(12))
@@ -36,9 +37,10 @@ struct CaseFinalReviewView: View {
     var body: some View {
         LaunchPage(title: "Review and submit") {
             Text("Your clinician will review your identity, health history, photos and destination together.")
+            if repository.state?.case.intakeV2?.evaluation.hold == true, let notice = repository.catalog?.intakeV2?.holdNotice { Text(notice) }
             if let state = repository.state {
                 Text(state.case.photoSet.map { "\($0.items.count) photos shared" } ?? "Photos are not complete").font(Letterpress.data(13))
-                Text(state.case.destination == nil ? "Destination needed" : "Destination saved")
+                Text(state.case.destination == nil ? (state.case.intakeV2 != nil && state.case.planId == .care ? "Pharmacy can be added before a prescription is sent." : "Destination needed") : "Destination saved")
                 Text("Review within 1 to 2 business days.")
                 Button(repository.saving ? "Submitting…" : "Submit for clinical review") { Task { _ = await repository.submitCase(ticket: ticket) } }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!repository.canSubmitCase || repository.saving)
                 if !repository.canSubmitCase { Text("Complete the required photos and save your destination before submitting.").font(Letterpress.ui(13)) }
@@ -49,7 +51,12 @@ struct CaseFinalReviewView: View {
 }
 extension LaunchEnrollmentRepository {
     var canSubmitCase: Bool {
-        guard let state, [.destination, .photos, .needsChanges].contains(state.case.status), let set = state.case.photoSet, set.status == .draft, state.case.destination != nil else { return false }
+        guard let state, let set = state.case.photoSet, IntakeV2Routing.canSubmitPhotoSet(set, previouslySubmitted: state.case.submittedAt != nil) else { return false }
+        if let intake = state.case.intakeV2 {
+            guard state.case.identity != nil, !IntakeV2Routing.needsIdentity(state.case.identity) else { return false }
+            return [.medicalHistory, .destination, .photos, .needsChanges].contains(state.case.status) && intake.evaluation.missingRequired.isEmpty && intake.evaluation.exitPage == nil && state.membership?.status == .paidPendingReview && LaunchPhotoRules.complete(set) && (state.case.planId == .care || state.case.destination != nil)
+        }
+        guard [.destination, .photos, .needsChanges].contains(state.case.status), state.case.destination != nil else { return false }
         return LaunchPhotoRules.complete(set)
     }
     @discardableResult func submitCase(ticket: AccountAccess.Ticket) async -> Bool {

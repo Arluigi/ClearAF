@@ -14,12 +14,14 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
     @Published private(set) var saving = false
     @Published private(set) var error: String?
     @Published private(set) var medicalNeedsReapply = false
+    @Published private(set) var intakeV2Draft: [String: IntakeValue]?
+    @Published private(set) var intakeV2DraftRevision: Int?
     private let access: AccountAccess; private let transport: any LaunchTransport; private let directory: URL?
     private var epoch = UUID(); private var ticket: AccountAccess.Ticket?; private var file: URL?
     init(access: AccountAccess, transport: any LaunchTransport, directory: URL? = nil) {
         self.access = access; self.transport = transport; self.directory = directory
     }
-    func cancel() { medicalNeedsReapply = false; epoch = UUID(); ticket = nil; file = nil; state = nil; catalog = nil; draft = nil; loading = false; saving = false; error = nil }
+    func cancel() { intakeV2Draft = nil; intakeV2DraftRevision = nil; medicalNeedsReapply = false; epoch = UUID(); ticket = nil; file = nil; state = nil; catalog = nil; draft = nil; loading = false; saving = false; error = nil }
     func resume(ticket: AccountAccess.Ticket) throws {
         try access.require(ticket)
         guard self.ticket != ticket else { return }
@@ -29,6 +31,8 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let path = folder.appendingPathComponent("launch-enrollment.json")
         self.ticket = ticket; file = path
+        let v2Path = path.deletingLastPathComponent().appendingPathComponent("intake-v2.json")
+        if let bytes = try? Data(contentsOf: v2Path), bytes.count <= 1024 * 1024, let saved = try? JSONDecoder().decode(IntakeV2LocalDraft.self, from: bytes) { intakeV2Draft = saved.answers; intakeV2DraftRevision = saved.revision }
         if FileManager.default.fileExists(atPath: path.path) {
             let bytes = try Data(contentsOf: path)
             guard bytes.count <= 1024 * 1024 else { throw LaunchFailure.invalidData }
@@ -52,7 +56,7 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         let current = epoch; loading = true
         defer { if current == epoch { loading = false } }
         do {
-            let data = try await transport.send(LaunchRequest(path: "/enrollment"), ticket: ticket)
+            let data = try await transport.send(LaunchRequest(path: "/enrollment", questionnaireVersion: "2.0-pending-review"), ticket: ticket)
             try require(ticket, epoch: current)
             let next = try JSONDecoder().decode(LaunchEnrollmentResponse.self, from: data)
             try apply(next)
@@ -79,7 +83,7 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         do { try resume(ticket: ticket) } catch { return }
         let current = epoch
         do {
-            let bytes = try await transport.send(LaunchRequest(path: "/catalog"), ticket: ticket)
+            let bytes = try await transport.send(LaunchRequest(path: "/catalog", questionnaireVersion: state?.case.questionnaireVersion ?? "2.0-pending-review"), ticket: ticket)
             try require(ticket, epoch: current)
             let next = try JSONDecoder().decode(LaunchCatalog.self, from: bytes)
             guard next.contractVersion == 1 else { throw LaunchFailure.invalidData }
@@ -88,12 +92,13 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
     }
     @discardableResult func mutate(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async -> Bool {
         guard !saving, (try? require(ticket, epoch: epoch)) != nil else { return false }
-        let current = epoch; saving = true; error = nil
+        let current = epoch; let priorRevision = state?.case.revision; saving = true; error = nil
         defer { if epoch == current { saving = false } }
         do {
             let bytes = try await transport.send(request, ticket: ticket)
             try require(ticket, epoch: current)
             try apply(JSONDecoder().decode(LaunchEnrollmentResponse.self, from: bytes))
+            if intakeV2DraftRevision == priorRevision { intakeV2DraftRevision = state?.case.revision; if let intakeV2Draft { try stageIntakeV2(intakeV2Draft, ticket: ticket) } }
             return true
         } catch {
             guard (try? require(ticket, epoch: current)) != nil else { return false }
@@ -102,6 +107,36 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
             return false
         }
     }
+
+    private struct IntakeV2LocalDraft: Codable { let answers: [String: IntakeValue]; let revision: Int }
+    func stageIntakeV2(_ answers: [String: IntakeValue], ticket: AccountAccess.Ticket) throws {
+        try require(ticket, epoch: epoch)
+        guard let file, let current = state else { throw LaunchFailure.invalidData }
+        let revision = intakeV2DraftRevision ?? current.case.revision
+        let bytes = try JSONEncoder().encode(IntakeV2LocalDraft(answers: answers, revision: revision))
+        guard bytes.count <= 1024 * 1024 else { throw LaunchFailure.invalidData }
+        try bytes.write(to: file.deletingLastPathComponent().appendingPathComponent("intake-v2.json"), options: [.atomic, .completeFileProtection])
+        intakeV2Draft = answers; intakeV2DraftRevision = revision
+    }
+    @discardableResult func saveIntakeV2(_ answers: [String: IntakeValue], ticket: AccountAccess.Ticket, reapply: Bool = false) async -> Bool {
+        guard let current = state, current.case.questionnaireVersion == "2.0-pending-review" else { return false }
+        guard reapply || intakeV2DraftRevision == nil || intakeV2DraftRevision == current.case.revision else { return false }
+        struct Body: Encodable { let expectedRevision: Int; let questionnaireVersion: String; let answers: [String: IntakeValue] }
+        do {
+            let cleaned = IntakeV2Rules.cleaned(answers, questions: (catalog?.eligibilityQuestions ?? []) + (catalog?.medicalQuestions ?? []))
+            let request = try LaunchRequest.json("/enrollment/\(current.case.id.uuidString.lowercased())/medical/\(UUID().uuidString.lowercased())", Body(expectedRevision: current.case.revision, questionnaireVersion: current.case.questionnaireVersion, answers: cleaned))
+            guard await mutate(request, ticket: ticket), let latest = state else { return false }
+            intakeV2DraftRevision = latest.case.revision
+            try stageIntakeV2(cleaned, ticket: ticket)
+            return true
+        } catch { return false }
+    }
+    func rebaseIntakeV2Draft(ticket: AccountAccess.Ticket) throws {
+        try require(ticket, epoch: epoch)
+        intakeV2DraftRevision = state?.case.revision
+        if let intakeV2Draft { try stageIntakeV2(intakeV2Draft, ticket: ticket) }
+    }
+
     var canEditMedical: Bool {
         guard let state, let membership = state.membership,
               [.paidPendingReview, .active].contains(membership.status) else { return false }
