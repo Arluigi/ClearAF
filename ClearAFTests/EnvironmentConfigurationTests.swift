@@ -8,8 +8,8 @@ struct EnvironmentConfigurationTests {
         #expect(SupabaseConfig.url == "http://127.0.0.1:54321")
         #expect(AppEnvironment.apiURL == "http://127.0.0.1:3001/api")
 #else
-        #expect(SupabaseConfig.url == "https://glrfxjydebnilsptlksg.supabase.co")
-        #expect(AppEnvironment.apiURL == "https://clearaf-api.vercel.app/api")
+        #expect(SupabaseConfig.url == "https://lhaqeeitxiynzcpqbwpb.supabase.co")
+        #expect(AppEnvironment.apiURL == "https://unzit-api-593272381529.us-east1.run.app/api")
 #endif
     }
 
@@ -19,12 +19,12 @@ struct EnvironmentConfigurationTests {
         for host in ["https://Mac.local", "Mac.local:3002", "example.com", "a.b.local", "-a.local", "a-.local", "a_.local", " Mac.local", "Mac.local/", "Mac.local.", String(repeating: "a", count: 64) + ".local"] {
             #expect(throws: (any Error).self) { try AppEnvironment.endpoints(localDeviceHost: host, debug: true) }
         }
-        #expect(try AppEnvironment.endpoints(localDeviceHost: "evil.invalid", debug: false).api == "https://clearaf-api.vercel.app/api")
+        #expect(try AppEnvironment.endpoints(localDeviceHost: "evil.invalid", debug: false).api == "https://unzit-api-593272381529.us-east1.run.app/api")
     }
 
     @Test func rejectsTheOtherEnvironmentsUploadOrigin() {
 #if DEBUG
-        let otherOrigin = "https://glrfxjydebnilsptlksg.supabase.co"
+        let otherOrigin = "https://lhaqeeitxiynzcpqbwpb.supabase.co"
 #else
         let otherOrigin = "http://127.0.0.1:54321"
 #endif

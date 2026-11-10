@@ -6,7 +6,7 @@ enum AppEnvironment {
     enum ConfigurationError: Error { case invalidDeviceHost }
 
     static func endpoints(localDeviceHost host: String, debug: Bool) throws -> Endpoints {
-        guard debug else { return Endpoints(api: "https://clearaf-api.vercel.app/api", supabase: "https://glrfxjydebnilsptlksg.supabase.co") }
+        guard debug else { return Endpoints(api: "https://unzit-api-593272381529.us-east1.run.app/api", supabase: "https://lhaqeeitxiynzcpqbwpb.supabase.co") }
         if host.isEmpty { return Endpoints(api: "http://127.0.0.1:3001/api", supabase: "http://127.0.0.1:54321") }
         // One DNS label (1–63 ASCII characters), followed by the Bonjour suffix.
         guard host.range(of: #"\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.local\z"#, options: .regularExpression) != nil else {
@@ -45,6 +45,6 @@ enum SupabaseConfig {
         return key
     }()
 #else
-    static let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdscmZ4anlkZWJuaWxzcHRsa3NnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzUyNTksImV4cCI6MjA3MTExMTI1OX0.CqVuJxORUU6PgL-o7ElT_0j9M2wmX65FOuvp8wP7K6E"
+    static let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoYXFlZWl0eGl5bnpjcHFid3BiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4OTA5OTAsImV4cCI6MjEwOTQ2Njk5MH0.PVkq5EMOBSSIYTjT4VfiF_1eYSgOIcN4i5WxcYY4ck8"
 #endif
 }
