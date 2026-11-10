@@ -23,7 +23,9 @@ test('new capture publication validates source copy without mutating historical 
  assert.equal(value.identityGuidance.prompt,old.identityGuidance.prompt);
  assert.equal(value.identityGuidance.copy.birthConfirmation,'I confirm this is my date of birth.');
  assert.equal(value.photoGuidance.copy.afterSave,'Saved privately on this device, then shared with this clinical photo set. Continue only after sharing is confirmed.');
- assert.deepEqual(value.consents.map((d:any)=>d.body),old.consents.map((d:any)=>d.body));
+ // 2.1 corrects the NC license number (2022-00012, per Dr. Om, Nov 10 2026); otherwise bodies match 2.0.
+ assert.deepEqual(value.consents.map((d:any)=>d.body),old.consents.map((d:any)=>d.body.replace(/(?<!\d)022-00012/g,'2022-00012')));
+ assert.ok(value.consents.every((d:any)=>!/(?<!\d)022-00012/.test(d.body)));
  assert.deepEqual(value.consents.map((d:any)=>d.version),[4,4,4,4]);
  assert.doesNotThrow(()=>assertDocumentHistory([{content:{consents:old.consents}}],result.content.consents));
  for(const d of value.consents)assert.equal(d.sha256,createHash('sha256').update(d.body).digest('hex'));
