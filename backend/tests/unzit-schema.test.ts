@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Client} from 'pg';
-const tables=['launch_settings','launch_allowlist','launch_cases','identity_verifications','intake_revisions','clinical_photo_sets','clinical_photo_set_items','care_memberships','billing_payments','billing_operations','stripe_events','launch_check_ins','launch_reviews'];
+const tables=['launch_settings','launch_allowlist','launch_cases','identity_verifications','intake_revisions','clinical_photo_sets','clinical_photo_set_items','care_memberships','billing_payments','billing_operations','stripe_events','launch_check_ins','launch_check_in_submissions','launch_reviews'];
 // Fixed local connection: tests can never resolve hosted credentials.
 const db=new Client({connectionString:'postgresql://postgres:postgres@127.0.0.1:54322/postgres'});
 test('launch tables deny both client roles and use RLS',async()=>{

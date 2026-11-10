@@ -1,0 +1,8 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {launchOccurrence} from '../src/services/launchCheckIns';
+const due=(plan:'care'|'all_in',anchor:string,n:number)=>launchOccurrence(plan,new Date(anchor),n).dueAt.toISOString();
+test('Care calendar months clamp from original January anchor rather than drift',()=>{assert.equal(due('care','2027-01-31T15:00:00Z',1),'2027-02-28T15:00:00.000Z');assert.equal(due('care','2027-01-31T15:00:00Z',2),'2027-03-31T14:00:00.000Z');assert.equal(due('care','2028-01-31T15:00:00Z',1),'2028-02-29T15:00:00.000Z')});
+test('NC cadence preserves wall time across spring and fall DST',()=>{assert.equal(due('care','2027-02-15T15:30:00Z',1),'2027-03-15T14:30:00.000Z');assert.equal(due('all_in','2026-10-26T14:30:00Z',1),'2026-11-02T15:30:00.000Z')});
+test('All-In replaces monthly with exactly eight weekly occurrences then monthly from day 56',()=>{const a='2027-01-31T15:00:00Z';const expected=['2027-02-07T15:00:00.000Z','2027-02-14T15:00:00.000Z','2027-02-21T15:00:00.000Z','2027-02-28T15:00:00.000Z','2027-03-07T15:00:00.000Z','2027-03-14T14:00:00.000Z','2027-03-21T14:00:00.000Z','2027-03-28T14:00:00.000Z','2027-04-28T14:00:00.000Z'];assert.deepEqual(expected.map((_,i)=>due('all_in',a,i+1)),expected);assert.equal(launchOccurrence('all_in',new Date(a),8).kind,'weekly');assert.equal(launchOccurrence('all_in',new Date(a),9).kind,'monthly')});
+test('nonexistent spring wall times advance through gap; ambiguous fall times choose earlier instant',()=>{assert.equal(due('all_in','2027-02-14T07:30:00Z',4),'2027-03-14T07:30:00.000Z');assert.equal(due('all_in','2026-10-25T05:30:00Z',1),'2026-11-01T05:30:00.000Z')});

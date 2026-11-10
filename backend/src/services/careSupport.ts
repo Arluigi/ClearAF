@@ -25,13 +25,15 @@ export async function templates(ownerId:string,page:number,limit:number){return 
 })}
 export async function saveForm(userId:string,clinicianId:string,id:string,input:z.infer<typeof formInput>){return retry(()=>prisma.$transaction(async tx=>{
  await lockPatient(tx,userId,clinicianId);const existing=await tx.careFormRevision.findUnique({where:{id}});
- if(existing){const prior=await tx.careFormRevision.findFirst({where:{userId,version:existing.version-1}});if(existing.userId!==userId||existing.createdBy!==clinicianId||existing.title!==input.title||existing.isActive!==input.isActive||!equal(existing.questions,input.questions)||(prior?.id??null)!==input.expectedRevisionId)throw conflict();return {form:existing,created:false}}
- const latest=await tx.careFormRevision.findFirst({where:{userId},orderBy:{version:'desc'}});if((latest?.id??null)!==input.expectedRevisionId)throw conflict();
- const form=await tx.careFormRevision.create({data:{id,userId,createdBy:clinicianId,version:(latest?.version??0)+1,title:input.title,isActive:input.isActive,questions:input.questions}});return {form,created:true};
+ if(existing){if(existing.launchManaged)throw conflict();const prior=await tx.careFormRevision.findFirst({where:{userId,launchManaged:false,version:{lt:existing.version}},orderBy:{version:'desc'}});if(existing.userId!==userId||existing.createdBy!==clinicianId||existing.title!==input.title||existing.isActive!==input.isActive||!equal(existing.questions,input.questions)||(prior?.id??null)!==input.expectedRevisionId)throw conflict();return {form:existing,created:false}}
+ const latest=await tx.careFormRevision.findFirst({where:{userId,launchManaged:false},orderBy:{version:'desc'}});if((latest?.id??null)!==input.expectedRevisionId)throw conflict();
+ // SQL keeps one per-patient sequence; optimistic concurrency uses only the optional legacy chain.
+ const globalLatest=await tx.careFormRevision.findFirst({where:{userId},orderBy:{version:'desc'}});
+ const form=await tx.careFormRevision.create({data:{id,userId,createdBy:clinicianId,version:(globalLatest?.version??0)+1,title:input.title,isActive:input.isActive,questions:input.questions,launchManaged:false}});return {form,created:true};
 }))}
-export async function currentForm(userId:string,clinicianId?:string){return prisma.$transaction(async tx=>{await lockPatient(tx,userId,clinicianId);return {form:await tx.careFormRevision.findFirst({where:{userId},orderBy:{version:'desc'}})}})}
+export async function currentForm(userId:string,clinicianId?:string){return prisma.$transaction(async tx=>{await lockPatient(tx,userId,clinicianId);return {form:await tx.careFormRevision.findFirst({where:{userId,launchManaged:false},orderBy:{version:'desc'}})}})}
 export async function saveResponse(userId:string,id:string,input:z.infer<typeof responseInput>){return retry(()=>prisma.$transaction(async tx=>{
- await lockPatient(tx,userId);const form=await tx.careFormRevision.findUnique({where:{id:input.formId}});if(!form||form.userId!==userId)throw careError(404,'Form not found');if(!form.isActive)throw careError(400,'Inactive form cannot receive responses');
+ await lockPatient(tx,userId);const form=await tx.careFormRevision.findUnique({where:{id:input.formId}});if(!form||form.userId!==userId)throw careError(404,'Form not found');if(form.launchManaged)throw careError(403,'Launch check-ins require photos and structured follow-up');if(!form.isActive)throw careError(400,'Inactive form cannot receive responses');
  validateAnswers(z.array(questionInput).parse(form.questions),input.answers);
  const existing=await tx.careFormResponse.findUnique({where:{id},include:{form:true}});if(existing){if(existing.userId!==userId)throw careError(404,'Response not found');if(existing.formId!==input.formId||existing.submittedAt.getTime()!==Date.parse(input.submittedAt)||!equal(existing.answers,input.answers))throw conflict();return {response:existing,created:false}}
  const response=await tx.careFormResponse.create({data:{id,userId,formId:input.formId,submittedAt:new Date(input.submittedAt),answers:input.answers},include:{form:true}});return {response,created:true};

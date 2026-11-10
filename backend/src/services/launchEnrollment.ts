@@ -1,4 +1,4 @@
-import {careAccess} from './careAccess';
+import {careAccess,requirePatientCareScope} from './careAccess';
 import {randomUUID,createHash} from 'node:crypto';
 import {isIP} from 'node:net';
 import {prisma} from '../config/database';
@@ -10,7 +10,7 @@ import {activeLaunchSettings} from './launchSettings';
 import {validateLaunchDocuments} from '../content/launchConsents';
 import {sanitizeLaunchJPEG,identityObjectPaths,storeLaunchJPEG} from './identityVerification';
 import {captureIdentity} from './photoCapture';
-import {requiredClinicalSlots,validateClinicalPhotoItems} from './clinicalPhotoSets';
+import {requiredClinicalSlots,validateClinicalPhotoItems,assertCurrentCheckIn,assertCheckInPhotoDate} from './clinicalPhotoSets';
 export const launchFingerprint=(value:unknown):string=>{
  const canonical=(v:any):any=>Buffer.isBuffer(v)?createHash('sha256').update(v).digest('hex'):Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
  return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
@@ -107,7 +107,7 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
    await lock(tx,patientId);UUIDSchema.parse(captureId);const a=contracts['POST /photo-captures/:captureId'].request.parse(input);await paid(tx,patientId);
    if(new Date(a.captureDate)>new Date(now().getTime()+5*60_000))throw enrollmentError(400,'VALIDATION_ERROR');
    if(a.targetType==='enrollment'){const row=await owned(tx,patientId,a.targetId);if(!['photos','destination','needs_changes'].includes(row.status))noStep()}
-   else {const checkIn=await tx.launchCheckIn.findUnique({where:{id:a.targetId}});if(!checkIn||checkIn.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');if(!['due','draft','needs_changes'].includes(checkIn.status))noStep()}
+   else {const checkIn=await tx.launchCheckIn.findUnique({where:{id:a.targetId}});if(!checkIn||checkIn.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');const {membership}=await requirePatientCareScope(tx,patientId,'clinical_write',now());assertCurrentCheckIn(checkIn,membership);assertCheckInPhotoDate(checkIn,new Date(a.captureDate),now(),now());if(!['due','draft','needs_changes'].includes(checkIn.status))noStep()}
    const hash=launchFingerprint(a),identity=captureIdentity(patientId,captureId),existing=await tx.skinPhoto.findUnique({where:{id:identity.id}});
    if(existing){if(existing.userId!==patientId||existing.photoUrl!==identity.storagePath||iso(existing.captureDate)!==a.captureDate||existing.notes!==(a.notes??'')||existing.launchRequestHash!==hash||existing.launchTargetType!==a.targetType||existing.launchTargetId!==a.targetId)throw enrollmentError(409,'OPERATION_CONFLICT');return {capture:{id:existing.id,captureId,captureDate:iso(existing.captureDate),uploadedAt:iso(existing.createdAt)},created:false}}
    const pending=await tx.photoCleanup.findUnique({where:{photoId:identity.id}});if(pending)throw enrollmentError(409,'OPERATION_CONFLICT');const bytes=await sanitizeLaunchJPEG(a.photo,'skin');await write(identity.storagePath,bytes);
@@ -116,14 +116,14 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
   async photoSet(patientId:string,setId:string,input:unknown){return db.$transaction(async(tx:any)=>{
    await lock(tx,patientId);UUIDSchema.parse(setId);const a=contracts['PUT /photo-sets/:setId'].request.parse(input);await paid(tx,patientId);let row:any,checkIn:any;
    if(a.purpose==='enrollment'){row=await owned(tx,patientId,a.targetId);if(!['photos','destination','needs_changes'].includes(row.status))noStep()}
-   else {checkIn=await tx.launchCheckIn.findUnique({where:{id:a.targetId}});if(!checkIn||checkIn.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');if(!['due','draft','needs_changes'].includes(checkIn.status))noStep();row=await tx.launchCase.findUnique({where:{patientId}})}
+   else {checkIn=await tx.launchCheckIn.findUnique({where:{id:a.targetId}});if(!checkIn||checkIn.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');const {membership}=await requirePatientCareScope(tx,patientId,'clinical_write',now());assertCurrentCheckIn(checkIn,membership);if(!['due','draft','needs_changes'].includes(checkIn.status))noStep();row=await tx.launchCase.findUnique({where:{patientId}})}
    const existing=await tx.clinicalPhotoSet.findUnique({where:{id:setId}});if(existing&&(existing.patientId!==patientId||existing.purpose!==a.purpose||existing.caseId!==(a.purpose==='enrollment'?a.targetId:null)||existing.checkInId!==(a.purpose==='check_in'?a.targetId:null)))throw enrollmentError(404,'NOT_FOUND');
    const intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null,required=requiredClinicalSlots(intake?.answers??{});
    await validateClinicalPhotoItems(tx,patientId,setId,a.items,required,{purpose:a.purpose,id:a.targetId},false);
    if(existing){const old=await setDTO(tx,existing);if(launchFingerprint(old.items)===launchFingerprint(a.items)&&launchFingerprint(existing.requiredSlots)===launchFingerprint(required))return {photoSet:old,created:false};if(existing.status!=='draft')throw enrollmentError(409,'OPERATION_CONFLICT');await tx.clinicalPhotoSetItem.deleteMany({where:{setId}})}
    const set=existing?await tx.clinicalPhotoSet.update({where:{id:setId},data:{requiredSlots:required}}):await tx.clinicalPhotoSet.create({data:{id:setId,patientId,purpose:a.purpose,caseId:a.purpose==='enrollment'?a.targetId:null,checkInId:a.purpose==='check_in'?a.targetId:null,requiredSlots:required,status:'draft',createdAt:now()}});
    for(const item of a.items)await tx.clinicalPhotoSetItem.create({data:{setId,patientId,...item}});
-   if(a.purpose==='enrollment')await tx.launchCase.update({where:{id:row.id},data:{photoSetId:setId,status:required.every(slot=>a.items.some((item:any)=>item.slot===slot))?'destination':'photos'}});else await tx.launchCheckIn.update({where:{id:checkIn.id},data:{photoSetId:setId,status:'draft'}});
+   if(a.purpose==='enrollment')await tx.launchCase.update({where:{id:row.id},data:{photoSetId:setId,status:required.every(slot=>a.items.some((item:any)=>item.slot===slot))?'destination':'photos'}});else if(!checkIn.submittedAt)await tx.launchCheckIn.update({where:{id:checkIn.id},data:{photoSetId:setId,status:'draft'}});
    return {photoSet:await setDTO(tx,set),created:!existing};
   })},
   async submit(patientId:string,caseId:string,input:unknown){return db.$transaction(async(tx:any)=>{

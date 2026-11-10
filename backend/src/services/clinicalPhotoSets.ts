@@ -19,3 +19,11 @@ export async function assertMutableLaunchPhoto(db:any,photoId:string){
  if(set&&set.status!=='draft')throw enrollmentError(409,'OPERATION_CONFLICT');
 }
 export async function assertLegacyPhotoWriter(db:any,patientId:string){if(await db.launchCase.findUnique({where:{patientId}}))throw enrollmentError(403,'LAUNCH_STEP_REQUIRED')}
+
+// Webhooks re-anchor immediately; never depend on a GET to supersede an old future obligation.
+export function assertCurrentCheckIn(row:any,membership:any){if(!row.submittedAt&&membership?.cadenceAnchor&&new Date(row.cadenceAnchor).getTime()!==new Date(membership.cadenceAnchor).getTime()&&new Date(row.dueAt)>new Date(membership.cadenceAnchor))throw enrollmentError(409,'OPERATION_CONFLICT')}
+
+export function assertCheckInPhotoDate(row:any,captureDate:Date,uploadedAt:Date,now:Date){
+ const after=new Date(row.submittedAt??row.captureAfter??row.cadenceAnchor);
+ if(!Number.isFinite(captureDate.getTime())||!Number.isFinite(uploadedAt.getTime())||captureDate<after||captureDate.getTime()>uploadedAt.getTime()+300000||captureDate.getTime()>now.getTime()+300000)throw enrollmentError(409,'INCOMPLETE_PHOTO_SET');
+}

@@ -22,3 +22,10 @@ const zoneInput=z.string().min(1).max(100).refine(zone=>{if(/^[+-]/.test(zone))r
 export const timelineQuery=z.object({from:instantInput,to:instantInput,timeZone:zoneInput}).strict().superRefine((v,c)=>{const from=Date.parse(v.from),to=Date.parse(v.to);if(from>to)c.addIssue({code:'custom',path:['to'],message:'to must not be before from'});else if(to-from>timelineMaxDays*86400000)c.addIssue({code:'custom',path:['to'],message:'Range is too long'})});
 export function localDateIn(instant:Date,timeZone:string){const parts=new Intl.DateTimeFormat('en-US',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(instant);const part=(type:string)=>parts.find(p=>p.type===type)?.value;return `${part('year')}-${part('month')}-${part('day')}`}
 export function daySpan(fromDate:string,toDate:string){return Math.round((Date.parse(`${toDate}T00:00:00Z`)-Date.parse(`${fromDate}T00:00:00Z`))/86400000)+1}
+
+// Conditional detail requirements belong to launch final submission, not optional legacy forms.
+export function normalizeLaunchFollowUp(input:import('../contracts/unzitLaunch').FollowUp){
+ const value=structuredClone(input);
+ for(const key of ['sideEffects','newMedicines'] as const){if(value[key].none)value[key].details=null;else{const text=value[key].details?.trim();if(!text)throw new z.ZodError([{code:'custom',path:['answers',key,'details'],message:'Details are required'}]);value[key].details=text}}
+ return value;
+}

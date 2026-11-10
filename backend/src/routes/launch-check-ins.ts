@@ -1,0 +1,11 @@
+import express from 'express';
+import {ZodError} from 'zod';
+import {requirePatient} from '../middleware/auth';
+import {contracts} from '../contracts/unzitLaunch';
+import {launchCheckIns} from '../services/launchCheckIns';
+import {enrollmentError} from '../services/enrollment';
+const router=express.Router();
+const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{res.set('Cache-Control','no-store');await handler(req,res,next)}catch(error){next(error instanceof ZodError||(error as any).statusCode?error:enrollmentError(500,'LAUNCH_OPERATION_FAILED'))}};
+router.get('/check-ins',requirePatient,route(async(req,res)=>{const q=contracts['GET /check-ins'].request.parse(req.query);res.json(await launchCheckIns.list(req.user!.id,q.page,q.limit))}));
+router.put('/check-ins/:checkInId/submissions/:responseId',requirePatient,route(async(req,res)=>{contracts['GET /catalog'].request.parse(req.query);const result=await launchCheckIns.submit(req.user!.id,req.params.checkInId,req.params.responseId,req.body);res.status(result.created?201:200).json({checkIn:result.checkIn})}));
+export default router;
