@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Offline inspection of the actual capture components. No camera, account, or upload is fabricated as successful.
 enum CaptureReviewMockContent {
-    // Exact snapshot of backend/src/content/catalogs/2.1-pending-review.json capture fields.
+    // Exact snapshot of backend/src/content/catalogs/2.2-pending-review.json capture fields.
     // Kept in Swift so the fixture is compiled out of Release, including its content.
     static let guidance = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
     static let json = #"""
@@ -11,7 +11,7 @@ enum CaptureReviewMockContent {
   "photoGuidance": {
     "title": "Photos",
     "instructions": [
-      "Photos are how Dr. Om examines your skin. Take them in daylight, facing a window if you can, with no makeup, no filters, and your hair pulled back. Check that each photo is sharp before you send it. Dr. Om may ask for new photos if these are not clear enough; your case pauses until good photos arrive.",
+      "Photos are how your doctor examines your skin. Take them in daylight, facing a window if you can, with no makeup, no filters, and your hair pulled back. Check that each photo is sharp before you send it. Your doctor may ask for new photos if these are not clear enough; your case pauses until good photos arrive.",
       "Never send photos of the genital area or breasts. Chest photos must be above the breasts. You may cover or crop anything you choose.",
       "UNZIT treats acne only. We cannot check moles or spots. If you have a spot that is new, changing, bleeding, or not healing, please have it checked in person promptly, even if you are joining UNZIT for your acne."
     ],
@@ -61,14 +61,14 @@ enum CaptureReviewMockContent {
     ],
     "copy": {
       "setReviewHint": "Zoom in and check it is sharp. These photos are shared with your clinician as a set.",
-      "completionHint": "Share every required angle before continuing. A photo saved only on this device is not yet part of your clinical photo set.",
+      "completionHint": "Add all required photos to continue. Photos aren’t sent to your doctor until you tap Share.",
       "reviewAdvice": "Check the angle, lighting and focus before sharing. Retake a blurred photo.",
       "zoomLabel": "Zoom in and check that each photo is sharp.",
-      "afterSave": "Saved privately on this device, then shared with this clinical photo set. Continue only after sharing is confirmed.",
-      "discardMessage": "It hasn't been saved to your record.",
-      "prepareFailure": "The photo could not be prepared within the upload limit. Retake it in good light, using a different photo for each angle.",
-      "safetyTitle": "Something's wrong?",
-      "safetyMessage": "Tell your care team about a reaction or sudden change"
+      "afterSave": "This photo is saved privately and will be sent to your doctor when you share your photo set.",
+      "discardMessage": "Discard this photo? It hasn’t been sent to your doctor.",
+      "prepareFailure": "We couldn’t upload this photo. Retake it in good light, and use a separate photo for each angle.",
+      "safetyTitle": "Having a problem?",
+      "safetyMessage": "If this is an emergency, call 911. For a reaction to a UNZIT medicine, stop it and message your doctor in the app."
     }
   },
   "identityGuidance": {
@@ -82,7 +82,7 @@ enum CaptureReviewMockContent {
       {
         "id": "selfie",
         "required": true,
-        "instructions": "Take a live selfie. Your selfie must match the photo on your ID. Dr. Om reviews your identity before care."
+        "instructions": "Take a live selfie. Your selfie must match the photo on your ID. Your doctor reviews your identity before care."
       },
       {
         "id": "nc_attestation",
@@ -90,7 +90,7 @@ enum CaptureReviewMockContent {
         "instructions": "I am physically in North Carolina right now."
       }
     ],
-    "prompt": "Verify your identity. Upload a government photo ID (driver license, state ID, or passport). Your name and date of birth must match your account. Then take a live selfie. Your selfie must match the photo on your ID. Dr. Om checks your identity himself before any treatment.",
+    "prompt": "Verify your identity. Upload a government photo ID (driver license, state ID, or passport). Your name and date of birth must match your account. Then take a live selfie. Your selfie must match the photo on your ID. Your doctor checks your identity before any treatment.",
     "attestation": "This ID is mine, and the selfie is really me.",
     "copy": {
       "fullNameLabel": "Full legal name",
@@ -100,13 +100,13 @@ enum CaptureReviewMockContent {
       "selfieTitle": "Live selfie",
       "idInstructions": "Keep the full name, date of birth and face readable. Your ID is kept separately from your skin photos.",
       "selfieInstructions": "Use the camera now, with your face clearly visible. A saved library image cannot be used as your selfie.",
-      "ncWarning": "You must be physically in North Carolina for this care. If you are elsewhere, seek local care.",
-      "completionHint": "Add both readable photos, confirm your date of birth, and attest your current location to continue. UNZIT is for adults 18+.",
+      "ncWarning": "UNZIT can only treat you while you are physically in North Carolina. If you are somewhere else right now, please get care where you are.",
+      "completionHint": "To continue, add a clear photo of your ID and a selfie, confirm your date of birth and confirm you’re in North Carolina. UNZIT is for adults 18 and older.",
       "idPreviewLabel": "Government photo ID preview. Check that it is readable.",
       "selfiePreviewLabel": "Live selfie preview. Check that it is readable.",
-      "prepareFailure": "The photo could not be prepared within the upload limit. Retake it in good light and check the text and face are sharp.",
-      "safetyTitle": "Something's wrong?",
-      "safetyMessage": "Tell your care team about a reaction or sudden change"
+      "prepareFailure": "We couldn’t upload this photo. Retake it in good light and make sure the text and your face are sharp.",
+      "safetyTitle": "Having a problem?",
+      "safetyMessage": "If this is an emergency, call 911. For a reaction to a UNZIT medicine, stop it and message your doctor in the app."
     }
   }
 }

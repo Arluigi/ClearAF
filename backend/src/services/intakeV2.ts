@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import fragment from '../content/intakeV2Questions.json';
 export const INTAKE_V2='2.0-pending-review';
-export const isIntakeV2=(version:unknown)=>version===INTAKE_V2||version==='2.1-pending-review';
+export const isIntakeV2=(version:unknown)=>version===INTAKE_V2||version==='2.1-pending-review'||version==='2.2-pending-review';
 export const intakeV2Catalog=fragment;
 const questions=[...fragment.eligibilityQuestions,...fragment.medicalQuestions];
 export type IntakeV2Answers=Record<string,any>;

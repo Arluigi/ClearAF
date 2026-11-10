@@ -56,7 +56,7 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         let current = epoch; loading = true
         defer { if current == epoch { loading = false } }
         do {
-            let data = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/enrollment", questionnaireVersion: "2.1-pending-review"), ticket: ticket)
+            let data = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/enrollment", questionnaireVersion: "2.2-pending-review"), ticket: ticket)
             try require(ticket, epoch: current)
             let next = try JSONDecoder().decode(LaunchEnrollmentResponse.self, from: data)
             try apply(next)
@@ -83,7 +83,7 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         do { try resume(ticket: ticket) } catch { return }
         let current = epoch
         do {
-            let bytes = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/catalog", questionnaireVersion: state?.case.questionnaireVersion ?? "2.1-pending-review"), ticket: ticket)
+            let bytes = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/catalog", questionnaireVersion: state?.case.questionnaireVersion ?? "2.2-pending-review"), ticket: ticket)
             try require(ticket, epoch: current)
             let next = try JSONDecoder().decode(LaunchCatalog.self, from: bytes)
             guard next.contractVersion == 1, next.hasCompatibleCaptureGuidance else { throw LaunchFailure.invalidData }

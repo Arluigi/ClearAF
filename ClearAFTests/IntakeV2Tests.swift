@@ -103,7 +103,7 @@ final class CaptureCatalogTests: XCTestCase {
         XCTAssertEqual(guidance.item("nc_attestation", legacy: "Legacy"), "Published NC")
     }
     func testCurrentCatalogCannotEnableLegacyCaptureFallbacks() {
-        var catalog = LaunchCatalog(contractVersion: 1, settingsVersion: 1, plans: [], consents: [], reviewCopy: "", questionnaireVersion: "2.1-pending-review", eligibilityQuestions: [], medicalQuestions: [])
+        var catalog = LaunchCatalog(contractVersion: 1, settingsVersion: 1, plans: [], consents: [], reviewCopy: "", questionnaireVersion: "2.2-pending-review", eligibilityQuestions: [], medicalQuestions: [])
         XCTAssertFalse(catalog.hasCompatibleCaptureGuidance)
         catalog = LaunchCatalog(contractVersion: 1, settingsVersion: 1, plans: [], consents: [], reviewCopy: "", questionnaireVersion: "2.0-pending-review", eligibilityQuestions: [], medicalQuestions: [])
         XCTAssertTrue(catalog.hasCompatibleCaptureGuidance)
@@ -111,6 +111,7 @@ final class CaptureCatalogTests: XCTestCase {
     func testBothKnownV2CatalogsRouteThroughV2() {
         XCTAssertTrue(IntakeV2Routing.isV2("2.0-pending-review"))
         XCTAssertTrue(IntakeV2Routing.isV2("2.1-pending-review"))
+        XCTAssertTrue(IntakeV2Routing.isV2("2.2-pending-review"))
         XCTAssertFalse(IntakeV2Routing.isV2("1.0-pending-review"))
     }
 #if DEBUG

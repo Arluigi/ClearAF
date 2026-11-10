@@ -7,7 +7,7 @@ const id=encodeURIComponent;
 const paging=(page=1)=>new URLSearchParams({page:String(page),limit:'20'});
 export function createLaunchAPI(request:Request) {
   return {
-    catalog:(questionnaireVersion?:string)=>request<LaunchCatalog>('/catalog',(questionnaireVersion==='2.0-pending-review'||questionnaireVersion==='2.1-pending-review')?{headers:{'X-UNZIT-Questionnaire':questionnaireVersion}}:undefined),
+    catalog:(questionnaireVersion?:string)=>request<LaunchCatalog>('/catalog',(questionnaireVersion==='2.0-pending-review'||questionnaireVersion==='2.1-pending-review'||questionnaireVersion==='2.2-pending-review')?{headers:{'X-UNZIT-Questionnaire':questionnaireVersion}}:undefined),
     chart:(patientId:string,page=1,signal?:AbortSignal)=>request<LaunchChartResponse>(`/patients/${id(patientId)}/chart?${paging(page)}`,{signal}),
     queue:(kind?:LaunchQueueItem['kind'],page=1,signal?:AbortSignal)=>{const query=paging(page);if(kind)query.set('kind',kind);return request<LaunchPage<LaunchQueueItem>>(`/review-queue?${query}`,{signal});},
     images:(patientId:string,identityId:string,signal?:AbortSignal)=>request<{idPhoto:LaunchSignedImage;selfie:LaunchSignedImage}>(`/patients/${id(patientId)}/identity/${id(identityId)}/images`,{signal}),

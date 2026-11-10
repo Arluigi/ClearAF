@@ -2,7 +2,7 @@
   "eligibilityQuestions": [
     {
       "id": "W1",
-      "prompt": "Welcome to UNZIT. UNZIT is online acne care from Dr. Amit Om, a board-certified dermatologist. Here is how it works. You answer questions and send photos of your skin. Dr. Om reviews everything himself, usually within 1 to 2 business days, and sends you a treatment plan. If prescription medicine is right for you, he sends it to your pharmacy. UNZIT is not for emergencies. If you ever have an emergency, call 911. Sometimes the safest care is in person. If Dr. Om thinks you need to be seen in person, he will tell you, and he may not prescribe. This visit takes about 10 minutes. You can save and come back.",
+      "prompt": "Welcome to UNZIT. UNZIT is online acne care from your doctor, a board-certified dermatologist. Here is how it works. You answer questions and send photos of your skin. Your doctor reviews everything himself, usually within 1 to 2 business days, and sends you a treatment plan. If prescription medicine is right for you, he sends it to your pharmacy. UNZIT is not for emergencies. If you ever have an emergency, call 911. Sometimes the safest care is in person. If your doctor thinks you need to be seen in person, he will tell you, and he may not prescribe. This visit takes about 10 minutes. You can save and come back.",
       "kind": "attestation",
       "required": true,
       "options": [],
@@ -20,7 +20,7 @@
     },
     {
       "id": "A2",
-      "prompt": "Are you physically in North Carolina right now? UNZIT can only treat you while you are in North Carolina, because that is where Dr. Om is licensed.",
+      "prompt": "Are you physically in North Carolina right now? UNZIT can only treat you while you are in North Carolina, because that is where your doctor is licensed.",
       "kind": "choice",
       "required": true,
       "options": [
@@ -146,7 +146,7 @@
     },
     {
       "id": "A6choice",
-      "prompt": "UNZIT does not treat patients while they are taking isotretinoin. Combining it with other acne medicines, especially antibiotic pills, can be unsafe, and your prescribing doctor needs to be the only one directing your acne care. You can stop here and come back after your course ends, at no charge. Or you can finish this visit and Dr. Om will personally decide whether UNZIT can help you, before any plan or prescription is made.",
+      "prompt": "UNZIT does not treat patients while they are taking isotretinoin. Combining it with other acne medicines, especially antibiotic pills, can be unsafe, and your prescribing doctor needs to be the only one directing your acne care. You can stop here and come back after your course ends, at no charge. Or you can finish this visit and your doctor will personally decide whether UNZIT can help you, before any plan or prescription is made.",
       "kind": "choice",
       "required": true,
       "options": [
@@ -156,7 +156,7 @@
         },
         {
           "id": "finish",
-          "label": "Finish and let Dr. Om decide"
+          "label": "Finish and let your doctor decide"
         }
       ],
       "fields": [],
@@ -202,7 +202,7 @@
     },
     {
       "id": "A7",
-      "prompt": "Verify your identity. Upload a government photo ID (driver license, state ID, or passport). Your name and date of birth must match your account. Then take a live selfie. Your selfie must match the photo on your ID. Dr. Om checks your identity himself before any treatment.",
+      "prompt": "Verify your identity. Upload a government photo ID (driver license, state ID, or passport). Your name and date of birth must match your account. Then take a live selfie. Your selfie must match the photo on your ID. Your doctor checks your identity before any treatment.",
       "kind": "attestation",
       "required": true,
       "options": [],
@@ -308,7 +308,7 @@
     },
     {
       "id": "B4",
-      "prompt": "What birth control do you use? Some acne medicines must not be used in pregnancy, and one type of birth control pill changes how safely Dr. Om can use a common acne pill, so please be specific.",
+      "prompt": "What birth control do you use? Some acne medicines must not be used in pregnancy, and one type of birth control pill changes how safely your doctor can use a common acne pill, so please be specific.",
       "kind": "choice",
       "required": true,
       "options": [
@@ -391,7 +391,7 @@
     },
     {
       "id": "B4b",
-      "prompt": "If you take a pill and it is not one of the brands above, what is its name? You can find it on the pack. This helps Dr. Om check for interactions.",
+      "prompt": "If you take a pill and it is not one of the brands above, what is its name? You can find it on the pack. This helps your doctor check for interactions.",
       "kind": "text",
       "required": false,
       "options": [],
@@ -929,7 +929,7 @@
     },
     {
       "id": "C2",
-      "prompt": "Are there any side effects you are especially worried about? Select all that apply. Dr. Om will take these into account and address them in your plan.",
+      "prompt": "Are there any side effects you are especially worried about? Select all that apply. Your doctor will take these into account and address them in your plan.",
       "kind": "multi_choice",
       "required": true,
       "options": [
@@ -1066,7 +1066,7 @@
     },
     {
       "id": "C6",
-      "prompt": "What has been the hardest part of dealing with acne so far? Frustration with products, cost, how it makes you feel, anything. (Optional, but Dr. Om reads every answer.)",
+      "prompt": "What has been the hardest part of dealing with acne so far? Frustration with products, cost, how it makes you feel, anything. (Optional, but your doctor reads every answer.)",
       "kind": "text",
       "required": false,
       "options": [],
@@ -1463,7 +1463,7 @@
     },
     {
       "id": "E5",
-      "prompt": "Anything else you want Dr. Om to know? Anything at all: a worry, a past experience, something about your skin that these questions did not cover. Dr. Om personally reads every word of this before he reviews your case.",
+      "prompt": "Anything else you want your doctor to know? Anything at all: a worry, a past experience, something about your skin that these questions did not cover. Your doctor personally reads every word of this before he reviews your case.",
       "kind": "text",
       "required": false,
       "options": [],
@@ -1481,7 +1481,7 @@
     },
     {
       "id": "G1",
-      "prompt": "You chose the Care plan, so prescriptions go to a pharmacy you pick, and you pay the pharmacy directly. Which pharmacy should Dr. Om send your prescriptions to? Give the pharmacy name and town. You can also add this later, but your prescription cannot be sent until it is here.",
+      "prompt": "You chose the Care plan, so prescriptions go to a pharmacy you pick, and you pay the pharmacy directly. Which pharmacy should your doctor send your prescriptions to? Give the pharmacy name and town. You can also add this later, but your prescription cannot be sent until it is here.",
       "kind": "text",
       "required": false,
       "options": [],
@@ -1551,7 +1551,7 @@
     },
     {
       "id": "H4",
-      "prompt": "I understand that Dr. Om reviews my case within 1 to 2 business days, that UNZIT is not monitored around the clock, and that UNZIT is not for emergencies. In an emergency I will call 911.",
+      "prompt": "I understand that your doctor reviews my case within 1 to 2 business days, that UNZIT is not monitored around the clock, and that UNZIT is not for emergencies. In an emergency I will call 911.",
       "kind": "attestation",
       "required": true,
       "options": [],
@@ -1560,7 +1560,7 @@
     },
     {
       "id": "H5",
-      "prompt": "I understand the medication safety rule: if I notice any side effect from a medication, even a small one, I will stop that medication and message UNZIT. I will not restart it until Dr. Om replies.",
+      "prompt": "I understand the medication safety rule: if I notice any side effect from a medication, even a small one, I will stop that medication and message UNZIT. I will not restart it until your doctor replies.",
       "kind": "attestation",
       "required": true,
       "options": [],
@@ -1569,7 +1569,7 @@
     },
     {
       "id": "H6",
-      "prompt": "I understand that Dr. Om may decide I need in-person care instead of a prescription, and that submitting this visit does not guarantee a prescription.",
+      "prompt": "I understand that your doctor may decide I need in-person care instead of a prescription, and that submitting this visit does not guarantee a prescription.",
       "kind": "attestation",
       "required": true,
       "options": [],
@@ -1606,7 +1606,7 @@
       {
         "id": "B",
         "title": "About you and your acne",
-        "intro": "Now, your acne story. There are no wrong answers here. The more honest you are, the better Dr. Om can match treatment to you.",
+        "intro": "Now, your acne story. There are no wrong answers here. The more honest you are, the better your doctor can match treatment to you.",
         "questionIds": [
           "B1",
           "B2",
@@ -1630,7 +1630,7 @@
       {
         "id": "C",
         "title": "What you have tried, and what matters to you",
-        "intro": "Most people who come to UNZIT have already tried a lot. Tell us what happened with each treatment, honestly, including the ones that did nothing. Dr. Om reads this himself, and it stops him from prescribing you something that already failed you.",
+        "intro": "Most people who come to UNZIT have already tried a lot. Tell us what happened with each treatment, honestly, including the ones that did nothing. Your doctor reads this himself, and it stops him from prescribing you something that already failed you.",
         "questionIds": [
           "C1",
           "C2",
@@ -1672,7 +1672,7 @@
       {
         "id": "F",
         "title": "Photos",
-        "intro": "Photos are how Dr. Om examines your skin. Take them in daylight, facing a window if you can, with no makeup, no filters, and your hair pulled back. Check that each photo is sharp before you send it. Dr. Om may ask for new photos if these are not clear enough; your case pauses until good photos arrive.",
+        "intro": "Photos are how your doctor examines your skin. Take them in daylight, facing a window if you can, with no makeup, no filters, and your hair pulled back. Check that each photo is sharp before you send it. Your doctor may ask for new photos if these are not clear enough; your case pauses until good photos arrive.",
         "questionIds": [
           "F2"
         ]
@@ -1701,13 +1701,13 @@
       }
     ],
     "exitPages": {
-      "A": "Stop here: your skin needs in-person care today. The symptoms you selected can be a sign of a severe form of acne that becomes dangerous quickly and cannot be treated safely online. Please go to urgent care or see a dermatologist today. If you feel very unwell, have a high fever, or your symptoms are getting worse fast, go to an emergency department or call 911. You have not been charged. Dr. Om will see the answers you gave today and will review them today, but please do not wait for that review to get care in person.",
+      "A": "Stop here: your skin needs in-person care today. The symptoms you selected can be a sign of a severe form of acne that becomes dangerous quickly and cannot be treated safely online. Please go to urgent care or see a dermatologist today. If you feel very unwell, have a high fever, or your symptoms are getting worse fast, go to an emergency department or call 911. You have not been charged. Your doctor will see the answers you gave today and will review them today, but please do not wait for that review to get care in person.",
       "B": "Stop here: what you described needs urgent in-person care, not online care. Swelling of the face, lips, or eyes, or skin that is painful, blistering, or peeling, can be a sign of a serious reaction or infection. Please go to urgent care or an emergency department now. If you have trouble breathing or your throat feels tight, call 911. You have not been charged.",
       "C": "UNZIT is for adults 18 and older, so we cannot treat you yet. Acne in your teens is very treatable, and a parent or guardian can help you find in-person care, or care designed for teens. You have not been charged.",
-      "D": "UNZIT can only treat patients who are physically in North Carolina, because that is where Dr. Om is licensed. If you will be in North Carolina, you are welcome to come back and start then. You have not been charged.",
+      "D": "UNZIT can only treat patients who are physically in North Carolina, because that is where your doctor is licensed. If you will be in North Carolina, you are welcome to come back and start then. You have not been charged.",
       "E": "UNZIT treats acne only, so it is not the right place for this concern. Rashes, eczema, moles, changing spots, and hair or scalp problems need in-person care, where a dermatologist can examine and test the skin directly. Please do not delay in-person care for anything that is new, changing, or worrying. You have not been charged."
     },
-    "holdNotice": "Your case is on hold for Dr. Om's personal decision, because you are currently taking isotretinoin. UNZIT does not issue a plan or prescription to anyone taking isotretinoin until Dr. Om has reviewed the case himself and decided UNZIT can help safely. You will hear within 1 to 2 business days. If Dr. Om decides UNZIT is not right for you now, your payment is refunded in full under the subscription terms.",
+    "holdNotice": "Your case is on hold for your doctor's personal decision, because you are currently taking isotretinoin. UNZIT does not issue a plan or prescription to anyone taking isotretinoin until your doctor has reviewed the case himself and decided UNZIT can help safely. You will hear within 1 to 2 business days. If your doctor decides UNZIT is not right for you now, your payment is refunded in full under the subscription terms.",
     "attestationIntro": "Please confirm each of these. They protect you, and they are part of your medical record.",
     "dateQuestionIds": [
       "A1"

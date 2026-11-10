@@ -12,13 +12,13 @@ function validateLaunchContent(input,validators=builtValidators()){
  const photoGuidance=validators.contract.PhotoGuidanceSchema;
  const identityGuidance=validators.contract.IdentityGuidanceSchema;
  const envelope=z.object({status:z.enum(['draft','approved']),versionLabel:z.string().min(1).max(80),approvalReference:z.string().min(1).max(160).nullable(),clinicianId:z.string().uuid(),consents:z.array(z.unknown()),eligibilityQuestions:z.array(z.unknown()),medicalQuestions:z.array(z.unknown()),checkInForm:z.unknown(),photoGuidance:photoGuidance.optional(),identityGuidance:identityGuidance.optional(),intakeV2:z.object({sections:z.array(z.object({id:copy,title:copy,intro:z.string().max(2000),questionIds:z.array(copy)}).strict()),exitPages:z.record(copy),holdNotice:copy,attestationIntro:copy,dateQuestionIds:z.array(copy),photoQuestion:z.object({id:copy,prompt:copy}).strict(),answerShape:copy,acknowledgmentLabels:z.record(copy).optional()}).strict().optional(),templates:z.array(z.object({key:z.string().regex(/^[a-z][a-z0-9_]{0,59}$/),name:z.string().min(1).max(120),steps:z.array(z.unknown()).min(1).max(20)}).strict()).length(6)}).strict().parse(input);
- if(envelope.versionLabel==='2.1-pending-review'&&(!envelope.photoGuidance?.copy||!envelope.identityGuidance?.copy))throw Error('Capture copy required');
+ if(['2.1-pending-review','2.2-pending-review'].includes(envelope.versionLabel)&&(!envelope.photoGuidance?.copy||!envelope.identityGuidance?.copy))throw Error('Capture copy required');
  const pending=label=>label==='0.9-draft'||/^\d+\.\d+-pending-review$/.test(label);
  if(envelope.status==='draft'&&!pending(envelope.versionLabel)||envelope.status==='approved'&&(!envelope.approvalReference||pending(envelope.versionLabel)))throw Error('Clinical publication approval reference required');
  const docs=validators.validateLaunchDocuments(envelope.consents);
  if(docs.some(d=>d.acceptedAt!==null)||envelope.status==='draft'&&docs.some(d=>d.versionLabel!==envelope.versionLabel||!d.body.includes('DRAFT'))||envelope.status==='approved'&&docs.some(d=>/draft|pending-review/.test(d.versionLabel)))throw Error('Invalid publication document state');
  let eligibility,medical;
- if(['2.0-pending-review','2.1-pending-review'].includes(envelope.versionLabel)){
+ if(['2.0-pending-review','2.1-pending-review','2.2-pending-review'].includes(envelope.versionLabel)){
   if(!envelope.intakeV2)throw Error('V2 section metadata required');
   const parsed=validators.validateIntakeV2Catalog(envelope.eligibilityQuestions,envelope.medicalQuestions);eligibility=parsed.eligibilityQuestions;medical=parsed.medicalQuestions;
  }else{

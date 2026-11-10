@@ -152,7 +152,7 @@ import XCTest
         let loaded = await repo.loadPhotoGuidance(ticket: ticket)
         XCTAssertTrue(loaded)
         XCTAssertEqual(repo.photoGuidance?.instructions, ["Published check-in guidance"])
-        XCTAssertEqual(transport.requests.first?.questionnaireVersion, "2.1-pending-review")
+        XCTAssertEqual(transport.requests.first?.questionnaireVersion, "2.2-pending-review")
         repo.cancel()
         XCTAssertNil(repo.photoGuidance)
     }
@@ -162,7 +162,7 @@ import XCTest
         transport.oldCatalogOnly = true
         let loaded = await repo.loadPhotoGuidance(ticket: ticket)
         XCTAssertTrue(loaded)
-        XCTAssertEqual(transport.requests.map(\.questionnaireVersion), ["2.1-pending-review", "2.0-pending-review"])
+        XCTAssertEqual(transport.requests.map(\.questionnaireVersion), ["2.2-pending-review", "2.0-pending-review"])
         repo.cancel(); transport.requests = []; transport.offline = true
         let offline = await repo.loadPhotoGuidance(ticket: ticket)
         XCTAssertFalse(offline)
@@ -189,7 +189,7 @@ import XCTest
     var pause = false
     var continuation: CheckedContinuation<Data, Error>?
     var catalog: Data {
-        var envelope: [String: Any] = ["contractVersion": 1, "settingsVersion": 1, "plans": [], "consents": [], "reviewCopy": "Review", "questionnaireVersion": oldCatalogOnly ? "2.0-pending-review" : "2.1-pending-review", "eligibilityQuestions": [], "medicalQuestions": []]
+        var envelope: [String: Any] = ["contractVersion": 1, "settingsVersion": 1, "plans": [], "consents": [], "reviewCopy": "Review", "questionnaireVersion": oldCatalogOnly ? "2.0-pending-review" : "2.2-pending-review", "eligibilityQuestions": [], "medicalQuestions": []]
         for (key, value) in CaptureReviewMockContent.guidance { envelope[key] = value }
         var photo = envelope["photoGuidance"] as! [String: Any]
         photo["instructions"] = ["Published check-in guidance"]
@@ -199,7 +199,7 @@ import XCTest
     func send(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data {
         requests.append(request)
         if offline { throw URLError(.notConnectedToInternet) }
-        if oldCatalogOnly && request.questionnaireVersion == "2.1-pending-review" { throw LaunchFailure.server(status: 503, code: "BILLING_UNAVAILABLE") }
+        if oldCatalogOnly && request.questionnaireVersion == "2.2-pending-review" { throw LaunchFailure.server(status: 503, code: "BILLING_UNAVAILABLE") }
         if pause { return try await withCheckedThrowingContinuation { continuation = $0 } }
         return catalog
     }

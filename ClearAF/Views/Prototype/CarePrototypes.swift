@@ -4,7 +4,7 @@ import SwiftUI
 struct MyPlanPrototype: View {
     var body: some View {
         PrototypePage(title: "Mild red bumps", eyebrow: "My Plan · Template 2 · Sample only") {
-            Text("Example plan for the proposal. Prescriptions require Dr. Om’s individual review.")
+            Text("Example plan for the proposal. Prescriptions require your doctor’s individual review.")
                 .font(Letterpress.ui(13)).foregroundStyle(Letterpress.inkSecondary)
             Text(PrototypeCopy.sideEffects)
                 .font(Letterpress.ui(15, weight: .medium))
@@ -22,7 +22,7 @@ struct MyPlanPrototype: View {
                 prescription("Tretinoin 0.025%", sig: "Pea-sized, whole face, dry skin, every other night for 2 weeks, then nightly.")
                 prescription("Benzoyl peroxide 4 to 5% wash", sig: "Use in the morning. Leave 1 to 2 min, rinse. Use BPO in morning, not at the same time as tretinoin.")
             }
-            Text("Do not restart a stopped medication until Dr. Om replies.")
+            Text("Do not restart a stopped medication until your doctor replies.")
                 .font(Letterpress.ui(13)).foregroundStyle(Letterpress.inkSecondary)
         }
     }

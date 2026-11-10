@@ -1,7 +1,7 @@
 import Foundation
 
 enum IntakeV2Routing {
-    static func isV2(_ version: String) -> Bool { ["2.0-pending-review", "2.1-pending-review"].contains(version) }
+    static func isV2(_ version: String) -> Bool { ["2.0-pending-review", "2.1-pending-review", "2.2-pending-review"].contains(version) }
     static func canInitialize(_ state: LaunchEnrollmentResponse?, catalog: LaunchCatalog?) -> Bool {
         guard let state, let catalog else { return false }
         return isV2(state.case.questionnaireVersion) && catalog.questionnaireVersion == state.case.questionnaireVersion && catalog.intakeV2 != nil
@@ -113,7 +113,7 @@ struct LaunchIdentityGuidance: Codable, Equatable {
 extension LaunchCatalog {
     /// A current publication must never silently substitute older Swift instructions.
     var hasCompatibleCaptureGuidance: Bool {
-        guard questionnaireVersion == "2.1-pending-review" else { return true }
+        guard ["2.1-pending-review", "2.2-pending-review"].contains(questionnaireVersion) else { return true }
         let photoKeys: Set<String> = ["setReviewHint", "completionHint", "reviewAdvice", "zoomLabel", "afterSave", "discardMessage", "prepareFailure", "safetyTitle", "safetyMessage"]
         let identityKeys: Set<String> = ["fullNameLabel", "dateOfBirthLabel", "birthConfirmation", "idTitle", "selfieTitle", "idInstructions", "selfieInstructions", "ncWarning", "completionHint", "idPreviewLabel", "selfiePreviewLabel", "prepareFailure", "safetyTitle", "safetyMessage"]
         guard let photoGuidance, let identityGuidance,

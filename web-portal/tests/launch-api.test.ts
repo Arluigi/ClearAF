@@ -45,5 +45,6 @@ test('catalog preserves both supported v2 publication headers and legacy calls s
  assert.deepEqual(calls.map(call=>call.path),Array(5).fill('/catalog'));
  assert.deepEqual(calls[0].options?.headers,{'X-UNZIT-Questionnaire':'2.0-pending-review'});
  assert.deepEqual(calls[1].options?.headers,{'X-UNZIT-Questionnaire':'2.1-pending-review'});
- for(const call of calls.slice(2))assert.equal(call.options,undefined);
+ for(const call of calls.slice(2,4))assert.equal(call.options,undefined);
+ assert.deepEqual(calls[4].options?.headers,{'X-UNZIT-Questionnaire':'2.2-pending-review'});
 });

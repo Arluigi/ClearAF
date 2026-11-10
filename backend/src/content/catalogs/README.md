@@ -5,6 +5,15 @@ file; never overwrite a previous publication or accepted consent identity. Both
 publications below remain drafts pending clinical and legal review. Import does
 not establish approval for clinical use or distribution.
 
+## 2.2-pending-review
+
+`2.2-pending-review.json` inherits 2.1 and incorporates the clinician's capture
+wording review. Nonlegal patient copy addresses “your doctor”; historical 2.0
+and 2.1 remain immutable. The four legal bodies, SHA256 digests and corrected
+NC license `2022-00012` are unchanged. Consent metadata advances to numeric
+version 5 and label 2.2 under the existing publication identity rules; each
+acceptance remains separate. Legal wording is still pending counsel review.
+
 ## 2.1-pending-review
 
 `2.1-pending-review.json` adds capture, review and retake copy to the API guidance

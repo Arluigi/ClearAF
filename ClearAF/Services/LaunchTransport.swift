@@ -29,7 +29,7 @@ extension LaunchTransport {
     /// Retry only an unavailable publication, never a network or authorization failure.
     @MainActor func sendCaptureCatalogRequest(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data {
         do { return try await send(request, ticket: ticket) }
-        catch LaunchFailure.server(status: 503, code: "BILLING_UNAVAILABLE") where request.questionnaireVersion == "2.1-pending-review" {
+        catch LaunchFailure.server(status: 503, code: "BILLING_UNAVAILABLE") where ["2.1-pending-review", "2.2-pending-review"].contains(request.questionnaireVersion ?? "") {
             return try await send(LaunchRequest(path: request.path, questionnaireVersion: "2.0-pending-review"), ticket: ticket)
         }
     }

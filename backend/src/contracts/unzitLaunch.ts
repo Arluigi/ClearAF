@@ -108,7 +108,7 @@ export const IdentityGuidanceSchema=obj({title:captureText,prompt:captureText.op
 export type PhotoGuidance=z.infer<typeof PhotoGuidanceSchema>;
 export type IdentityGuidance=z.infer<typeof IdentityGuidanceSchema>;
 export const CatalogSchema=obj({contractVersion:z.literal(1),settingsVersion:z.number().int().positive(),plans:z.array(PlanSchema).length(2),consents:z.array(ConsentSchema).length(4),reviewCopy:z.literal('Review within 1 to 2 business days.'),questionnaireVersion:str,eligibilityQuestions:z.array(QuestionSchema),medicalQuestions:z.array(QuestionSchema),photoGuidance:PhotoGuidanceSchema.optional(),identityGuidance:IdentityGuidanceSchema.optional(),intakeV2:z.unknown().optional()}).superRefine((value,ctx)=>{
- if(value.questionnaireVersion==='2.1-pending-review'){
+ if(['2.1-pending-review','2.2-pending-review'].includes(value.questionnaireVersion)){
   for(const key of ['photoGuidance','identityGuidance'] as const)if(!value[key]?.copy)ctx.addIssue({code:'custom',path:[key,'copy'],message:'Complete capture copy required for this publication'});
  }
 });

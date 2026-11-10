@@ -35,7 +35,7 @@ struct ConsentsPrototype: View {
         .sheet(isPresented: Binding(get: { reading != nil }, set: { if !$0 { reading = nil } })) {
             NavigationStack {
                 PrototypePage(title: reading ?? "Consent") {
-                    Text("v1.0 · Draft for Dr. Om review").letterpressEyebrow()
+                    Text("v1.0 · Draft for your doctor’s review").letterpressEyebrow()
                     Text("Document reader placeholder. The full consent text requires clinical and legal approval before publication.")
                 }
                 .toolbar(.visible, for: .navigationBar)

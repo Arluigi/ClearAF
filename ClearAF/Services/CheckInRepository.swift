@@ -105,7 +105,7 @@ import Combine
         do { try resume(ticket: ticket) } catch { return false }
         let current = epoch
         do {
-            let bytes = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/catalog", questionnaireVersion: "2.1-pending-review"), ticket: ticket)
+            let bytes = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/catalog", questionnaireVersion: "2.2-pending-review"), ticket: ticket)
             try require(ticket, current)
             let catalog = try JSONDecoder().decode(LaunchCatalog.self, from: bytes)
             guard catalog.contractVersion == 1, catalog.hasCompatibleCaptureGuidance else { throw LaunchFailure.invalidData }

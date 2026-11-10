@@ -24,14 +24,14 @@ struct UNZITLaunchTests {
             await session.load()
             #expect(session.loaded)
             #expect(session.enrollment.state != nil, "Missing mock case for \(route.rawValue)")
-            #expect(session.enrollment.catalog?.questionnaireVersion == (route.isCaptureReview ? "2.1-pending-review" : "0.9-draft"))
+            #expect(session.enrollment.catalog?.questionnaireVersion == (route.isCaptureReview ? "2.2-pending-review" : "0.9-draft"))
             #expect(session.enrollment.catalog?.consents.count == 4)
             #expect(session.enrollment.error == nil)
         }
     }
     @Test func captureReviewGuidanceMatchesPendingReviewCatalog() throws {
         let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("backend/src/content/catalogs/2.1-pending-review.json")
+            .appendingPathComponent("backend/src/content/catalogs/2.2-pending-review.json")
         let catalog = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
         for field in ["identityGuidance", "photoGuidance"] {
             let expected = try JSONSerialization.data(withJSONObject: try #require(catalog[field]), options: .sortedKeys)

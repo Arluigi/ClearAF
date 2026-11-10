@@ -64,7 +64,7 @@ struct LaunchMockRoot: View {
                 else { Text("Loading synthetic enrollment…").font(Letterpress.ui(16)) }
             }
             .background(Letterpress.canvas.ignoresSafeArea())
-            .toolbar { if !LaunchMockRoute.hidesReviewBadge() { ToolbarItem(placement: .topBarTrailing) { Text("DRAFT · \(route.isCaptureReview ? "2.1-pending-review" : "0.9-draft")").font(Letterpress.data(10)) } } }
+            .toolbar { if !LaunchMockRoute.hidesReviewBadge() { ToolbarItem(placement: .topBarTrailing) { Text("DRAFT · \(route.isCaptureReview ? "2.2-pending-review" : "0.9-draft")").font(Letterpress.data(10)) } } }
         }
         .tint(Letterpress.ink)
         .task { await session.load() }
@@ -140,7 +140,7 @@ struct LaunchMockRoot: View {
         let plans: [[String: Any]] = [("care", "Care", 3900, false, 0), ("all_in", "All-In", 8900, true, 8)].map { id, name, cents, rx, weeks in ["id": id, "name": name, "amountCents": cents, "currency": "usd", "interval": "month", "includesPartnerRx": rx, "cadence": ["weeklyWeeks": weeks, "then": "monthly"]] }
         var result: [String: Any] = ["contractVersion": 1, "settingsVersion": 1, "plans": plans, "consents": consents, "reviewCopy": "Review within 1 to 2 business days.", "questionnaireVersion": "0.9-draft", "eligibilityQuestions": eligibility, "medicalQuestions": questions]
         if route.isCaptureReview {
-            result["questionnaireVersion"] = "2.1-pending-review"
+            result["questionnaireVersion"] = "2.2-pending-review"
             for (key, value) in CaptureReviewMockContent.guidance { result[key] = value }
         }
         return result
@@ -150,7 +150,7 @@ struct LaunchMockRoot: View {
         let photos: [String: Any] = ["id": "00000000-0000-4000-8000-000000000004", "purpose": "enrollment", "status": route == .submitted ? "submitted" : "draft", "requiredSlots": ["front", "left", "right"], "items": photoItems]
         let pharmacy: [String: Any] = ["planId": "care", "pharmacy": ["name": "Synthetic Pharmacy", "addressLine1": "1 Example Street", "addressLine2": NSNull(), "city": "Raleigh", "state": "NC", "postalCode": "27601", "phone": "9195550100"]]
         let identity: [String: Any] = ["id": "00000000-0000-4000-8000-000000000005", "status": "uploaded", "fullName": "Synthetic Adult", "dateOfBirth": "1990-01-01", "attestedInNC": true, "attestedAt": instant, "reviewedAt": NSNull(), "reviewedBy": NSNull(), "patientMessage": NSNull()]
-        return ["id": Self.caseID.uuidString.lowercased(), "revision": 1, "status": route.status, "identity": identity, "eligibility": NSNull(), "medicalHistory": ["M1": "female", "M2": "yes", "M3": "no", "M4": ["method": "iud", "details": NSNull()], "M6": ["cheeks"]], "questionnaireVersion": route.isCaptureReview ? "2.1-pending-review" : "0.9-draft", "photoSet": [.review, .submitted, .rejected].contains(route) ? photos as Any : NSNull(), "destination": [.review, .submitted, .rejected].contains(route) ? pharmacy as Any : NSNull(), "planId": plan, "flags": [], "submittedAt": route == .submitted ? instant as Any : NSNull(), "approvedAt": NSNull(), "patientMessage": NSNull()]
+        return ["id": Self.caseID.uuidString.lowercased(), "revision": 1, "status": route.status, "identity": identity, "eligibility": NSNull(), "medicalHistory": ["M1": "female", "M2": "yes", "M3": "no", "M4": ["method": "iud", "details": NSNull()], "M6": ["cheeks"]], "questionnaireVersion": route.isCaptureReview ? "2.2-pending-review" : "0.9-draft", "photoSet": [.review, .submitted, .rejected].contains(route) ? photos as Any : NSNull(), "destination": [.review, .submitted, .rejected].contains(route) ? pharmacy as Any : NSNull(), "planId": plan, "flags": [], "submittedAt": route == .submitted ? instant as Any : NSNull(), "approvedAt": NSNull(), "patientMessage": NSNull()]
     }
 }
 #endif

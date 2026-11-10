@@ -134,8 +134,8 @@ struct SubmittedPrototype: View {
     var body: some View {
         PrototypePage(title: "Your case is submitted", eyebrow: "UNZIT · Sample confirmation") {
             Text("What happens next").font(Letterpress.display(28))
-            step("01", title: "Dr. Om reviews your case", detail: "Your identity, history and photo set are reviewed together within 1 to 2 business days.")
-            step("02", title: "Watch for a message", detail: "If Dr. Om needs more information or clearer photos, we’ll ask in the app. The review clock restarts when you answer.")
+            step("01", title: "Your doctor reviews your case", detail: "Your identity, history and photo set are reviewed together within 1 to 2 business days.")
+            step("02", title: "Watch for a message", detail: "If your doctor needs more information or clearer photos, we’ll ask in the app. The review clock restarts when you answer.")
             step("03", title: "Read your personal plan", detail: "Your AM and PM routine and any appropriate prescriptions appear in My Plan.")
             step("04", title: "Your pharmacy fills the prescription", detail: "Vida ships included formulary prescriptions to your North Carolina address. Your own pharmacy is paid directly.")
             NavigationLink { MyPlanPrototype() } label: { Text("Preview My Plan") }

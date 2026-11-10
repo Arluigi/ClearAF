@@ -51,11 +51,11 @@ test('catalog projection delivers every capture field additively and older catal
  }
 });
 test('new capture version uses v2 rules while installed v2 and unversioned builds retain their publication',async()=>{
- assert.equal(isIntakeV2('2.1-pending-review'),true);assert.equal(isIntakeV2('2.0-pending-review'),true);assert.equal(isIntakeV2('2.2-pending-review'),false);
+ assert.equal(isIntakeV2('2.1-pending-review'),true);assert.equal(isIntakeV2('2.0-pending-review'),true);assert.equal(isIntakeV2('2.3-pending-review'),false);
  const v1=settings(require('../src/content/catalogs/1.0-pending-review.json'),8),v2=settings(old,9),v21=settings(next(),10);
  const db={launchSettings:{findFirst:async()=>v21,findMany:async()=>[v21,v2,v1]}};
  assert.equal((await selectedLaunchSettings(db,'2.1-pending-review')).version,10);
  assert.equal((await selectedLaunchSettings(db,'2.0-pending-review')).version,9);
  assert.equal((await selectedLaunchSettings(db)).version,8);
- await assert.rejects(selectedLaunchSettings(db,'2.2-pending-review'),{statusCode:503,code:'BILLING_UNAVAILABLE'});
+ await assert.rejects(selectedLaunchSettings(db,'2.3-pending-review'),{statusCode:503,code:'BILLING_UNAVAILABLE'});
 });
