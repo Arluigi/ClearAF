@@ -4,21 +4,21 @@ These commands are a manual release runbook, not a record of a production deploy
 
 ## First deploy and secrets
 
-Install/authenticate the Google Cloud CLI and select an operator with permission to enable APIs, manage Artifact Registry/Cloud Run, create service accounts/secrets and grant secret access. The Cloud Build identity needs build/log/source-staging permissions and Artifact Registry Writer on the `unzit` repository. The deployer needs permission to act as `unzit-api@unzit-prod.iam.gserviceaccount.com`. These are operator/build permissions; the runtime account gets only `roles/secretmanager.secretAccessor`, scoped to each named secret. Do not reuse an existing runtime account with unrelated grants.
+Install/authenticate the Google Cloud CLI and select an operator with permission to enable APIs, manage Artifact Registry/Cloud Run, create service accounts/secrets and grant secret access. The Cloud Build identity needs build/log/source-staging permissions and Artifact Registry Writer on the `unzit` repository. The deployer needs permission to act as `unzit-api@unzit-prod-514222.iam.gserviceaccount.com`. These are operator/build permissions; the runtime account gets only `roles/secretmanager.secretAccessor`, scoped to each named secret. Do not reuse an existing runtime account with unrelated grants.
 
 1. From the repository root, review `backend/env.example` and `scripts/cloudrun-config.sh`. The manifest lists runtime names only; scripts never load dotenv files. `DIRECT_URL` is schema-tooling-only. Old JWT/AWS/S3 settings are no longer used by runtime Auth/Storage. `PORT` is supplied by Cloud Run; `NODE_ENV=production` is ordinary container configuration. CORS and enrollment settings are provisioned through Secret Manager alongside credentials so configuration stays revision-bound.
-2. After release approval, run `bash scripts/cloudrun-secrets.sh`. It enables Secret Manager and creates missing **empty** secret resources in `unzit-prod`; it neither reads nor stores values. For each printed command, copy the corresponding value into the clipboard and run the command, for example:
+2. After release approval, run `bash scripts/cloudrun-secrets.sh`. It enables Secret Manager and creates missing **empty** secret resources in `unzit-prod-514222`; it neither reads nor stores values. For each printed command, copy the corresponding value into the clipboard and run the command, for example:
 
    ```sh
-   pbpaste | gcloud secrets versions add database-url --project=unzit-prod --data-file=-
+   pbpaste | gcloud secrets versions add database-url --project=unzit-prod-514222 --data-file=-
    ```
 
    Set every manifest name, including CORS/enrollment configuration. Use the full dashboard signing secret (`v1,whsec_...`) for `SEND_EMAIL_HOOK_SECRET`. `PAUBOX_FROM` must use a sender/domain authorized by Paubox, such as `UNZIT <hello@tryunzit.com>`. The current shared Paubox endpoint authenticates with `PAUBOX_API_KEY`; `PAUBOX_API_USERNAME` is retained as an account reference for compatibility, rather than inserted into the endpoint URL. Clear the clipboard after entering values. No secret value belongs in shell arguments, source files or logs.
 3. Record the current revision before replacing an existing service:
 
    ```sh
-   gcloud run services describe unzit-api --project=unzit-prod --region=us-east1 --format='value(status.latestReadyRevisionName)'
-   gcloud run services describe unzit-api --project=unzit-prod --region=us-east1 --format='yaml(status.traffic)'
+   gcloud run services describe unzit-api --project=unzit-prod-514222 --region=us-east1 --format='value(status.latestReadyRevisionName)'
+   gcloud run services describe unzit-api --project=unzit-prod-514222 --region=us-east1 --format='yaml(status.traffic)'
    ```
 
 4. After release approval, run `bash scripts/deploy-cloudrun.sh`. It enables Run, Artifact Registry, Secret Manager and Cloud Build; creates missing `unzit` Docker repository and `unzit-api` runtime account; grants access only to manifest secrets; builds and deploys. Repeated execution reuses resources. Each revision pins enabled numeric secret versions, selected at deploy time. Source upload uses the Docker context allowlist, so dotenv, dependency trees, tests and outputs never reach Cloud Build. Builds run on Cloud Build's Linux builder, rather than the developer Mac's architecture.
@@ -41,7 +41,7 @@ Paubox API acceptance is not proof of inbox delivery. Complete a hosted syntheti
 Route all traffic back to the previously recorded, compatible revision:
 
 ```sh
-gcloud run services update-traffic unzit-api --project=unzit-prod --region=us-east1 --to-revisions=PREVIOUS_REVISION=100
+gcloud run services update-traffic unzit-api --project=unzit-prod-514222 --region=us-east1 --to-revisions=PREVIOUS_REVISION=100
 ```
 
 Then check `/health`, `/ready` and synthetic authorization. Keep the old revision's numeric secret versions enabled for rollback. Traffic rollback restores code and the revision's secret-version selections; it does not undo database or Supabase dashboard configuration changes. If needed, disable the Send Email hook in the dashboard to restore the previously configured sender, after confirming that sender is appropriate for the release.
@@ -49,7 +49,7 @@ Then check `/health`, `/ready` and synthetic authorization. Keep the old revisio
 Inspect operational logs with:
 
 ```sh
-gcloud run services logs read unzit-api --project=unzit-prod --region=us-east1 --limit=50
+gcloud run services logs read unzit-api --project=unzit-prod-514222 --region=us-east1 --limit=50
 ```
 
 Do not include secrets, links, recipient addresses or bodies in incident notes. The email hook deliberately returns generic failure messages rather than provider response bodies.

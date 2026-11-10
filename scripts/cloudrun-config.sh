@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared names only: never load dotenv files or hold secret values in shell variables.
-CLOUDRUN_PROJECT=unzit-prod
+CLOUDRUN_PROJECT=unzit-prod-514222
 CLOUDRUN_REGION=us-east1
 CLOUDRUN_SERVICE=unzit-api
 CLOUDRUN_REPOSITORY=unzit
