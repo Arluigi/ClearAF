@@ -24,7 +24,7 @@ struct MedicalHistoryView: View {
         LaunchPage(title: sectionTitles[section]) {
             if repository.canEditMedical {
                 Text("Step \(section + 1) of \(sectionTitles.count)").font(Letterpress.data(12))
-                if let version = repository.catalog?.questionnaireVersion { Text("\(version.contains("draft") ? "DRAFT · " : "")Version \(version)").font(Letterpress.data(12)) }
+                if let version = repository.catalog?.questionnaireVersion { Text("\((version.contains("draft") || version.contains("pending-review")) ? "DRAFT · " : "")Version \(version)").font(Letterpress.data(12)) }
                 if !catalogComplete {
                     Text("The complete questionnaire could not be loaded. Reload it to continue.")
                     Button("Reload questionnaire") { Task { await repository.loadCatalog(ticket: ticket) } }.buttonStyle(.letterpress(.outlined))

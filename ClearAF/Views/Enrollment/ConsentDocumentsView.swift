@@ -22,7 +22,7 @@ struct ConsentDocumentsView: View {
             ForEach(documents) { document in
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     Toggle(document.title, isOn: Binding(get: { selection.contains(document) }, set: { selection.set(document, accepted: $0) })).toggleStyle(.letterpressCheck)
-                    Text("\(document.versionLabel.contains("draft") ? "DRAFT · " : "")Version \(document.versionLabel)").font(Letterpress.data(12))
+                    Text("\((document.versionLabel.contains("draft") || document.versionLabel.contains("pending-review")) ? "DRAFT · " : "")Version \(document.versionLabel)").font(Letterpress.data(12))
                     Button("Read full document") { reading = document }.buttonStyle(.letterpress(.underline)).accessibilityLabel("Read \(document.title), version \(document.versionLabel)")
                     LetterpressRule()
                 }
@@ -40,7 +40,7 @@ struct ConsentDocumentsView: View {
             NavigationStack {
                 LaunchPage(title: document.title) {
                     Text("Version \(document.versionLabel)").font(Letterpress.data(12))
-                    if document.versionLabel.contains("draft") { Text("DRAFT — pending clinical and legal approval").font(Letterpress.ui(13)) }
+                    if (document.versionLabel.contains("draft") || document.versionLabel.contains("pending-review")) { Text("DRAFT — pending clinical and legal approval").font(Letterpress.ui(13)) }
                     Text(document.body).textSelection(.enabled)
                 }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { reading = nil } } }
             }

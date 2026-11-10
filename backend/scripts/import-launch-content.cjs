@@ -9,15 +9,16 @@ function enumValues(schema){const d=schema._def;if(d.schema)return enumValues(d.
 function fixedChoices(questions,shape){for(const [id,schema]of Object.entries(shape)){const expected=enumValues(schema);if(!expected)continue;const q=questions.find(q=>q.id===id);if(!q||q.kind!==(expected.multi?'multi_choice':'choice')||q.options.length!==expected.values.length||expected.values.some(id=>!q.options.some(o=>o.id===id)))throw Error('Invalid source machine choices')}}
 function validateLaunchContent(input,validators=builtValidators()){
  const envelope=z.object({status:z.enum(['draft','approved']),versionLabel:z.string().min(1).max(80),approvalReference:z.string().min(1).max(160).nullable(),clinicianId:z.string().uuid(),consents:z.array(z.unknown()),eligibilityQuestions:z.array(z.unknown()),medicalQuestions:z.array(z.unknown()),checkInForm:z.unknown(),templates:z.array(z.object({key:z.string().regex(/^[a-z][a-z0-9_]{0,59}$/),name:z.string().min(1).max(120),steps:z.array(z.unknown()).min(1).max(20)}).strict()).length(6)}).strict().parse(input);
- if(envelope.status==='draft'&&envelope.versionLabel!=='0.9-draft'||envelope.status==='approved'&&!envelope.approvalReference)throw Error('Clinical publication approval reference required');
+ const pending=label=>label==='0.9-draft'||/^\d+\.\d+-pending-review$/.test(label);
+ if(envelope.status==='draft'&&!pending(envelope.versionLabel)||envelope.status==='approved'&&(!envelope.approvalReference||pending(envelope.versionLabel)))throw Error('Clinical publication approval reference required');
  const docs=validators.validateLaunchDocuments(envelope.consents);
- if(docs.some(d=>d.acceptedAt!==null)||envelope.status==='draft'&&docs.some(d=>d.versionLabel!=='0.9-draft')||envelope.status==='approved'&&docs.some(d=>d.versionLabel.includes('draft')))throw Error('Invalid publication document state');
+ if(docs.some(d=>d.acceptedAt!==null)||envelope.status==='draft'&&docs.some(d=>d.versionLabel!==envelope.versionLabel||!d.body.includes('DRAFT'))||envelope.status==='approved'&&docs.some(d=>/draft|pending-review/.test(d.versionLabel)))throw Error('Invalid publication document state');
  const eligibility=validators.contract.QuestionSchema.array().length(4).parse(envelope.eligibilityQuestions);
  if(new Set(eligibility.map(q=>q.id)).size!==4||['E1','E2','E3','E4'].some(id=>!eligibility.some(q=>q.id===id)))throw Error('Invalid eligibility source identity');
  const medical=validators.validateLaunchIntakeCatalog(envelope.medicalQuestions);
  fixedChoices(eligibility,validators.contract.EligibilitySchema.shape);fixedChoices(medical,validators.contract.MedicalHistorySchema.shape);
  const checkInForm=validators.validateLaunchCheckInContent(envelope.checkInForm);
- if(envelope.status==='draft'&&(!checkInForm.title.startsWith('DRAFT')||checkInForm.versionLabel!=='0.9-draft'))throw Error('Draft label required');
+ if(envelope.status==='draft'&&(!checkInForm.title.startsWith('DRAFT')||checkInForm.versionLabel!==envelope.versionLabel))throw Error('Draft label required');
  if(new Set(envelope.templates.map(t=>t.key)).size!==6)throw Error('Six distinct template keys required');
  // Seed starting points as drafts only. Existing clinician-owned version tooling handles later approval.
  const templates=envelope.templates.map(t=>({key:t.key,...validators.revisionInput.parse({expectedRevisionId:null,name:t.name.startsWith('DRAFT: ')?t.name:'DRAFT: '+t.name,isActive:false,steps:t.steps})}));

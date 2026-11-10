@@ -34,3 +34,7 @@ test('reassignment denial and revision conflicts retire protected identity bytes
  const revoked:string[]=[];const images=new ProtectedIdentityImages(async()=>({idPhoto:{url:'https://example.invalid/i',expiresAt:'2099-01-01'},selfie:{url:'https://example.invalid/s',expiresAt:'2099-01-01'}}),async()=>new Response(new Blob(['synthetic'])),{createObjectURL:()=>`blob:${Math.random()}`,revokeObjectURL:x=>revoked.push(x)});
  for(const status of [403,404,409]){await images.load();assert.equal(images.reviewFailure({status}),status===409?'conflict':'denied');assert.equal(images.snapshot().data,null);}assert.equal(revoked.length,6);
 });
+test('pending clinician review publications remain visibly DRAFT',()=>{
+ const e=enrollment();e.case.questionnaireVersion='1.0-pending-review';
+ assert.match(renderToStaticMarkup(h(LaunchIntakeDetails,{enrollment:e,catalog:null})),/DRAFT clinical content/);
+});

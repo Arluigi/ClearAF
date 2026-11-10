@@ -21,7 +21,7 @@ export function LaunchIntakeDetails({enrollment,catalog}:{enrollment:LaunchEnrol
   const record=enrollment.case;
   const keys=[...Array.from({length:22},(_,i)=>`M${i+1}`),'medicationPreference'];
   return <div className="space-y-5">
-    <p className="text-sm">{record.questionnaireVersion.includes('draft')?'DRAFT clinical content':'Clinical content'} · {record.questionnaireVersion}. Flags require clinician review.</p>
+    <p className="text-sm">{/draft|pending-review/.test(record.questionnaireVersion)?'DRAFT clinical content':'Clinical content'} · {record.questionnaireVersion}. Flags require clinician review.</p>
     <ul className="divide-y divide-rule">{consentReceipts(enrollment.consents).map(receipt=><li className="break-words py-2 text-sm" key={receipt.key}>{receipt.text}</li>)}</ul>
     <section aria-label="Eligibility and clinical flags"><h3 className="font-medium">Eligibility and flags</h3><p className="whitespace-pre-wrap break-words text-sm">{intakeAnswer(record.eligibility?.answers)} · {[...record.flags,...record.eligibility?.flags??[]].join(', ')||'No flags recorded'}</p></section>
     <dl className="divide-y divide-rule">{keys.map(key=>{const question=(catalog?.questionnaireVersion===record.questionnaireVersion?catalog:null)?.medicalQuestions.find(q=>q.id===key);const value=record.medicalHistory[key as keyof typeof record.medicalHistory];return <div key={key} className="grid gap-2 py-3 sm:grid-cols-2"><dt className="text-sm text-ink-secondary">{key} · {question?.prompt??'Question wording unavailable'}</dt><dd className="whitespace-pre-wrap break-words text-sm">{answer(value,question)}</dd></div>;})}</dl>
