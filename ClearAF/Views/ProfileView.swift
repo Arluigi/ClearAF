@@ -38,6 +38,12 @@ struct ProfileView: View {
                     .padding(.top, Letterpress.Space.s18)
                 section("Care team") { CareTeamRow() }
                 section("Reminders") { reminderSummary }
+                section("Membership") {
+                    if let ticket = api.access.snapshot() {
+                        NavigationLink("Membership and billing") { MembershipView(billing: api.billing, enrollment: api.launchEnrollment, ticket: ticket) }
+                            .buttonStyle(.letterpress(.underline))
+                    }
+                }
                 section("Account") { account }
                 VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
                     Button("Sign out") { api.logout() }

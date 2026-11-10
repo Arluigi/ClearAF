@@ -84,3 +84,32 @@ struct CareStatusCard: View {
         .accessibilityIdentifier("careStatusCard")
     }
 }
+
+/// Read-only prescription history remains available after paid care ends.
+struct LaunchPrescriptionHistoryView: View {
+    @ObservedObject var repository: LaunchPrescriptionRepository
+    let ticket: AccountAccess.Ticket
+    var body: some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s14) {
+            LetterpressRule(weight: .major)
+            Text("Recorded prescriptions").font(Letterpress.display(24)).accessibilityAddTraits(.isHeader)
+            Text(LaunchPrescriptionCopy.status).font(Letterpress.ui(13)).foregroundStyle(Letterpress.inkSecondary)
+            if repository.loading && repository.records.isEmpty { Text("Loading prescription history…") }
+            else if repository.records.isEmpty { Text("No recorded prescriptions were returned.").font(Letterpress.ui(15)) }
+            ForEach(repository.records) { record in
+                VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+                    Text(record.drug + " · " + record.strength).font(Letterpress.ui(17, weight: .medium)).foregroundStyle(Letterpress.attentionText)
+                    Text(record.sig).font(Letterpress.ui(15))
+                    Text("Recorded sent \(LaunchCheckInCopy.date(record.sentAt))").font(Letterpress.data(12))
+                    Text([record.pharmacy.name, record.pharmacy.addressLine1, record.pharmacy.addressLine2, record.pharmacy.city + ", " + record.pharmacy.state + " " + record.pharmacy.postalCode, record.pharmacy.phone].compactMap { $0 }.joined(separator: "\n")).font(Letterpress.ui(13))
+                    LetterpressRule()
+                }
+            }
+            if let error = repository.error { Text(error).font(Letterpress.ui(13)).foregroundStyle(Letterpress.error) }
+            HStack {
+                Button(repository.loading ? "Refreshing…" : "Refresh prescriptions") { Task { _ = await repository.load(ticket: ticket) } }.buttonStyle(.letterpress(.underline)).disabled(repository.loading)
+                if repository.page < repository.totalPages { Button("Earlier records") { Task { _ = await repository.load(ticket: ticket, next: true) } }.buttonStyle(.letterpress(.underline)).disabled(repository.loading) }
+            }
+        }.task { _ = await repository.load(ticket: ticket) }
+    }
+}

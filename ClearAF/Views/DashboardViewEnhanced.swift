@@ -100,6 +100,15 @@ struct DashboardViewEnhanced: View {
                     TodayUnreadNote(selectedTab: $selectedTab)
                         .padding(.horizontal, Letterpress.Space.s22)
                         .padding(.top, Letterpress.Space.s22)
+                    if LaunchFlags.launchCheckIns, let ticket = APIService.shared.access.snapshot() {
+                        NavigationLink {
+                            LaunchCheckInsView(repository: APIService.shared.launchCheckIns, ticket: ticket, sites: APIService.shared.launchEnrollment.state?.case.medicalHistory.M6 ?? [])
+                        } label: {
+                            HStack { Text("Scheduled check-ins"); Spacer(); Image(systemName: "chevron.right").accessibilityHidden(true) }
+                                .font(Letterpress.ui(16, weight: .medium)).foregroundStyle(Letterpress.ink)
+                                .frame(minHeight: Letterpress.minTouch).overlay(alignment: .top) { LetterpressRule() }
+                        }.buttonStyle(.plain).padding(.horizontal, Letterpress.Space.s22).padding(.top, Letterpress.Space.s22)
+                    }
                     if LaunchFlags.clinicianForms {
                         TodayCheckInRow()
                             .padding(.horizontal, Letterpress.Space.s22)

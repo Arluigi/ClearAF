@@ -83,6 +83,7 @@ class APIService: ObservableObject {
     private let baseURL = AppEnvironment.apiURL
     private let session = AccountNetwork.session()
     let access = AccountAccess()
+    let launchSession = AccountNetwork.session()
     enum Phase: Equatable { case loading, signedOut, profileError, enrollment, onboarding, ready, recovery }
     @Published var currentUser: APIUser?
     @Published var phase: Phase = .loading
@@ -97,7 +98,11 @@ class APIService: ObservableObject {
     @MainActor lazy var photoReviews = PhotoReviewRepository(access: access, transport: self)
     @MainActor lazy var messaging = MessagingRepository(access: access, transport: self)
     @MainActor lazy var checkIns = CheckInRepository(access: access, transport: self)
+    @MainActor lazy var launchCheckIns = LaunchCheckInRepository(access: access, transport: self)
+    @MainActor lazy var launchPrescriptions = LaunchPrescriptionRepository(access: access, transport: self)
     @MainActor lazy var routines = RoutineRepository(access: access, transport: self)
+    @MainActor lazy var billing = BillingRepository(access: access, transport: self)
+    @MainActor lazy var launchEnrollment = LaunchEnrollmentRepository(access: access, transport: self)
     @MainActor lazy var enrollment = EnrollmentRepository(access: access, transport: self)
     @MainActor lazy var careDecisions = CareDecisionRepository(access: access, transport: self)
     @MainActor lazy var urgentReports = UrgentReportRepository(access: access, transport: self)
@@ -142,16 +147,16 @@ class APIService: ObservableObject {
                 let store = try PersistenceController(accountID: id)
                 try hydrate(profile.user, in: store.container.viewContext)
                 // Eligibility and consent come before onboarding and the tabs.
-                guard await enrollment.load(ticket: ticket) else {
+                guard await launchEnrollment.refresh(ticket: ticket) else {
                     guard access.snapshot() == ticket else { return }
-                    accountError = enrollment.error ?? AccountFailure.profileUnavailable.localizedDescription
+                    accountError = launchEnrollment.error ?? AccountFailure.profileUnavailable.localizedDescription
                     phase = .profileError
                     return
                 }
                 try access.require(ticket)
                 persistence = store
                 currentUser = profile.user
-                if enrollment.state?.status != .enrolled { phase = .enrollment }
+                if !LaunchEnrollmentRoute.canOpenCare(caseStatus: launchEnrollment.state?.case.status ?? .consents, membershipAccess: launchEnrollment.state?.membership?.access) { phase = .enrollment }
                 else { phase = profile.user.onboardingCompleted ? .ready : .onboarding }
             } catch {
                 guard access.snapshot() == ticket else { return }
@@ -180,9 +185,13 @@ class APIService: ObservableObject {
         photos.cancel()
         routines.cancel()
         checkIns.cancel()
+        launchCheckIns.cancel()
+        launchPrescriptions.cancel()
         messaging.cancel()
         photoReviews.cancel()
         enrollment.cancel()
+        launchEnrollment.cancel()
+        billing.cancel()
         careDecisions.cancel()
         urgentReports.cancel()
         recheckingEnrollment = false
@@ -198,6 +207,12 @@ class APIService: ObservableObject {
         SupabaseService.shared.signOut()
     }
 
+    @MainActor func launchEnrollmentFinished() {
+        guard phase == .enrollment, let state = launchEnrollment.state,
+              LaunchEnrollmentRoute.canOpenCare(caseStatus: state.case.status, membershipAccess: state.membership?.access) else { return }
+        phase = currentUser?.onboardingCompleted == true ? .ready : .onboarding
+    }
+
     @MainActor func enrollmentFinished() {
         guard phase == .enrollment, enrollment.state?.status == .enrolled else { return }
         phase = currentUser?.onboardingCompleted == true ? .ready : .onboarding
@@ -208,11 +223,12 @@ class APIService: ObservableObject {
         guard phase == .ready || phase == .onboarding, !recheckingEnrollment, let ticket = access.snapshot() else { return }
         recheckingEnrollment = true
         Task { @MainActor in
-            let loaded = await enrollment.load(ticket: ticket)
+            let loaded = await launchEnrollment.refresh(ticket: ticket)
             guard access.snapshot() == ticket else { return }
             recheckingEnrollment = false
             guard loaded, phase == .ready || phase == .onboarding,
-                  let status = enrollment.state?.status, status != .enrolled else { return }
+                  let state = launchEnrollment.state,
+                  !LaunchEnrollmentRoute.canOpenCare(caseStatus: state.case.status, membershipAccess: state.membership?.access) else { return }
             phase = .enrollment
         }
     }

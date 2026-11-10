@@ -616,3 +616,167 @@ struct CheckInHistoryView: View {
         }
     }
 }
+
+// MARK: - Scheduled launch care
+struct LaunchCheckInsView: View {
+    @ObservedObject var repository: LaunchCheckInRepository
+    let ticket: AccountAccess.Ticket
+    var sites: [String] = []
+    var body: some View {
+        LaunchPage(title: "Your scheduled check-ins") {
+            Text("Your clinician reads your answers alongside a fresh photo set. Your schedule comes from your care membership.")
+            if repository.loading && repository.occurrences.isEmpty { Text("Loading your schedule…") }
+            else if repository.occurrences.isEmpty { Text("No scheduled check-ins were returned. Refresh to check again.") }
+            ForEach(repository.occurrences) { occurrence in
+                NavigationLink {
+                    LaunchCheckInDetailView(repository: repository, ticket: ticket, occurrenceId: occurrence.id, sites: sites)
+                } label: {
+                    VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+                        Text(occurrence.kind == .weekly ? "Weekly check-in" : "Monthly check-in").font(Letterpress.ui(17, weight: .medium))
+                        Text("Due \(LaunchCheckInCopy.date(occurrence.dueAt))").font(Letterpress.data(12))
+                        Text(LaunchCheckInCopy.status(occurrence, draft: repository.drafts[occurrence.id])).font(Letterpress.ui(13))
+                        LetterpressRule()
+                    }.foregroundStyle(Letterpress.ink).frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(.plain)
+            }
+            if repository.page < repository.totalPages { Button("Load earlier check-ins") { Task { _ = await repository.loadMore(ticket: ticket) } }.buttonStyle(.letterpress(.outlined)).disabled(repository.loading) }
+            Button(repository.loading ? "Refreshing…" : "Refresh schedule") { Task { _ = await repository.refresh(ticket: ticket) } }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(repository.loading)
+            if let error = repository.error { Text(error).foregroundStyle(Letterpress.error) }
+        }
+        .navigationTitle("Check-ins").navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
+        .task { _ = await repository.refresh(ticket: ticket) }.refreshable { _ = await repository.refresh(ticket: ticket) }
+    }
+}
+enum LaunchCheckInCopy {
+    static func date(_ value: String) -> String { LaunchDates.instant(value).map { LetterpressFormat.dayMonthYear($0) } ?? "Date unavailable" }
+    static func status(_ occurrence: LaunchCheckIn, draft: LaunchCheckInDraft?) -> String {
+        switch occurrence.status {
+        case .due: return draft == nil ? "Due" : "Continue your saved check-in"
+        case .draft: return "Continue your check-in"
+        case .submitted: return "Submitted for clinician review"
+        case .needsChanges: return "Changes requested"
+        case .reviewed: return "Reviewed by your clinician"
+        case .superseded: return "Replaced by your current schedule · read-only"
+        }
+    }
+}
+struct LaunchCheckInDetailView: View {
+    @ObservedObject var repository: LaunchCheckInRepository
+    let ticket: AccountAccess.Ticket
+    let occurrenceId: UUID
+    var sites: [String] = []
+    @StateObject private var photos: LaunchPhotoSetRepository
+    @State private var input = LaunchFollowUpInput()
+    @State private var loaded = false
+    @State private var localError: String?
+    @State private var confirmingRestart = false
+    init(repository: LaunchCheckInRepository, ticket: AccountAccess.Ticket, occurrenceId: UUID, sites: [String] = []) {
+        self.repository = repository; self.ticket = ticket; self.occurrenceId = occurrenceId; self.sites = sites
+        _photos = StateObject(wrappedValue: repository.photoRepository())
+    }
+    private var occurrence: LaunchCheckIn? { repository.occurrences.first { $0.id == occurrenceId } }
+    private var draft: LaunchCheckInDraft? { repository.drafts[occurrenceId] }
+    var body: some View {
+        LaunchPage(title: "Your check-in") {
+            if let occurrence {
+                Text("Due \(LaunchCheckInCopy.date(occurrence.dueAt)) · \(occurrence.kind.rawValue)").font(Letterpress.data(12))
+                Text(occurrence.form.title).font(Letterpress.ui(13))
+                Text("Form version \(occurrence.form.version)").font(Letterpress.data(12))
+                Text(LaunchCheckInCopy.status(occurrence, draft: draft))
+                if let message = occurrence.patientMessage { Text(message).font(Letterpress.display(22)) }
+                if let draft, !draft.sent, repository.membership?.access == .care, repository.isCurrent(draft, occurrence: occurrence) {
+                    if !draft.frozen {
+                        fields(draft.form).disabled(repository.sending != nil)
+                        NavigationLink("Add or review photo set") {
+                            LaunchCheckInPhotosView(photos: photos, checkIns: repository, ticket: ticket, occurrence: occurrence, sites: sites)
+                        }.buttonStyle(.letterpress(.outlined, fullWidth: true))
+                        Text(draft.photoSet.map { LaunchPhotoRules.complete($0) ? "Photo set shared" : "Photo set incomplete" } ?? "A complete fresh photo set is required.").font(Letterpress.ui(13))
+                    } else { Text("Your original submission is saved on this device. Retry sends the same answers and photo-set identity.") }
+                    Button(repository.sending == occurrenceId ? "Sending…" : draft.frozen ? "Retry sending" : "Send check-in") { Task { _ = await repository.send(occurrenceId, ticket: ticket) } }
+                        .buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(repository.sending != nil || draft.input.answers == nil || draft.photoSet.map({ !LaunchPhotoRules.complete($0) }) != false)
+                } else if let answers = occurrence.answers {
+                    LaunchFollowUpSummary(answers: answers)
+                } else {
+                    Text(repository.membership?.access == .care ? "The questions or schedule changed. Refresh and review the current check-in." : "Your check-in history remains available. New submissions require current care access.")
+                }
+                if repository.membership?.access == .care, [.due, .draft, .needsChanges].contains(occurrence.status), draft == nil || draft?.frozen == true || draft.map({ !repository.isCurrent($0, occurrence: occurrence) }) == true {
+                    Button("Start again with current questions") { confirmingRestart = true }.buttonStyle(.letterpress(.outlined)).disabled(repository.sending != nil || repository.loading)
+                }
+            } else { Text("This occurrence is not in the current page. Return to your schedule and refresh.") }
+            if let error = localError ?? repository.error { Text(error).foregroundStyle(Letterpress.error) }
+            Button(repository.loading ? "Refreshing…" : "Refresh check-in") { Task { _ = await repository.refresh(ticket: ticket); begin() } }.buttonStyle(.letterpress(.underline)).disabled(repository.loading || repository.sending != nil)
+            Text("If you notice any side effect, even a small one, stop that medication and message us. Do not restart a stopped medication until your clinician replies.").font(Letterpress.ui(13))
+        }
+        .navigationTitle("Check-in").navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
+        .onAppear { begin() }
+        .onChange(of: input) { _, value in guard loaded, draft?.frozen == false else { return }; do { try repository.update(value, occurrenceId: occurrenceId, ticket: ticket) } catch { localError = "Your answers could not be saved on this device. Keep this screen open and try again." } }
+        .confirmationDialog("Replace the saved draft?", isPresented: $confirmingRestart, titleVisibility: .visible) {
+            Button("Start new draft", role: .destructive) { do { try repository.start(occurrenceId, ticket: ticket, replacing: true); input = .init(); localError = nil } catch { localError = "Current questions could not be opened. Refresh and try again." } }.disabled(repository.sending != nil || repository.loading)
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("The saved answers will be replaced. Earlier submitted responses remain in your clinical history.") }
+    }
+    @ViewBuilder private func fields(_ form: CheckInForm) -> some View {
+        if LaunchFollowUpSchema.valid(form, owner: ticket.accountID) {
+            Text(form.title + " · V\(form.version)").font(Letterpress.data(12))
+            semanticChoice(.tolerability, prompt: form.questions[0].prompt, selected: input.tolerability?.rawValue)
+            semanticChoice(.sideEffects, prompt: form.questions[1].prompt, selected: input.sideEffectsNone.map { $0 ? "none" : "details" })
+            if input.sideEffectsNone == false { detail(form.questions[2].prompt, value: $input.sideEffectsDetails) }
+            semanticChoice(.pregnancy, prompt: form.questions[3].prompt, selected: input.pregnancyStatus?.rawValue)
+            semanticChoice(.newMedicines, prompt: form.questions[4].prompt, selected: input.newMedicinesNone.map { $0 ? "none" : "details" })
+            if input.newMedicinesNone == false { detail(form.questions[5].prompt, value: $input.newMedicinesDetails) }
+            semanticChoice(.location, prompt: form.questions[6].prompt, selected: input.physicallyInNC.map { $0 ? "in_nc" : "outside_nc" })
+            if input.physicallyInNC == false { Text("Your location answer will be recorded for your clinician. Prescribing requires current North Carolina location.").font(Letterpress.ui(13)) }
+        }
+    }
+    private func semanticChoice(_ topic: LaunchFollowUpTopic, prompt: String, selected: String?) -> some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+            Text(prompt).font(Letterpress.ui(17, weight: .medium))
+            ForEach(LaunchFollowUpChoices.options(topic)) { option in
+                LetterpressRadioRow(title: option.label, selected: selected == option.id) { input.choose(topic, code: option.id) }
+            }
+            LetterpressRule()
+        }
+    }
+    private func detail(_ prompt: String, value: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
+            Text(prompt)
+            TextField(prompt, text: value, axis: .vertical).letterpressField(isEmpty: value.wrappedValue.isEmpty)
+            Text("\(value.wrappedValue.utf16.count) / 2,000").font(Letterpress.data(11))
+        }
+    }
+    private func begin() {
+        guard let occurrence, [.due, .draft, .needsChanges].contains(occurrence.status), repository.membership?.access == .care else { return }
+        do { try repository.start(occurrenceId, ticket: ticket); input = draft?.input ?? .init(); loaded = true; localError = nil }
+        catch { localError = "The check-in form is incompatible or has changed. Refresh the current questions before continuing." }
+    }
+}
+private struct LaunchCheckInPhotosView: View {
+    @ObservedObject var photos: LaunchPhotoSetRepository
+    @ObservedObject var checkIns: LaunchCheckInRepository
+    let ticket: AccountAccess.Ticket
+    let occurrence: LaunchCheckIn
+    let sites: [String]
+    @Environment(\.dismiss) private var dismiss
+    @State private var error: String?
+    var body: some View {
+        VStack(spacing: 0) {
+            if let error { Text(error).font(Letterpress.ui(13)).foregroundStyle(Letterpress.error).padding(.horizontal, Letterpress.Space.s22) }
+            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: occurrence.id, purpose: .checkIn, requiredSlots: LaunchPhotoRules.required(sites: sites), serverSet: occurrence.photoSet) { set in
+                do { try checkIns.attach(set, occurrenceId: occurrence.id, ticket: ticket); dismiss() }
+                catch { self.error = "Your photo set could not be attached. Refresh and try again." }
+            }
+        }.onAppear { do { try checkIns.clearPhotos(occurrenceId: occurrence.id, ticket: ticket) } catch { self.error = "Your check-in draft changed. Return and refresh." } }
+    }
+}
+struct LaunchFollowUpSummary: View {
+    let answers: LaunchFollowUp
+    var body: some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
+            Text("Treatment tolerability: \(answers.tolerability == .good ? "Good" : answers.tolerability == .someIrritation ? "Some irritation" : "Not tolerating")")
+            Text(answers.sideEffects.none ? "No side effects reported" : "Side effects: " + (answers.sideEffects.details ?? "Details unavailable"))
+            Text("Pregnancy status: \(answers.pregnancyStatus.rawValue.replacingOccurrences(of: "_", with: " "))")
+            Text(answers.newMedicines.none ? "No new medicines reported" : "New medicines: " + (answers.newMedicines.details ?? "Details unavailable"))
+            Text(answers.physicallyInNC ? "In North Carolina at submission" : "Not in North Carolina at submission")
+        }.font(Letterpress.ui(15))
+    }
+}

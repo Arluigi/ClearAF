@@ -36,6 +36,7 @@ struct RoutineView: View {
                         }
                     }
                     content
+                    if let ticket { LaunchPrescriptionHistoryView(repository: APIService.shared.launchPrescriptions, ticket: ticket) }
                     if LaunchFlags.adherenceCalendar {
                         LetterpressRule()
                         AdherenceStripRow(repository: repository)

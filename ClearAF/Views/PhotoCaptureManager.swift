@@ -11,6 +11,7 @@ import Combine
 import AVFoundation
 import PhotosUI
 import UniformTypeIdentifiers
+import ImageIO
 
 // MARK: - Photo Capture Manager
 
@@ -330,5 +331,33 @@ struct PhotoReviewFlow: Equatable {
             completion = .savedWithoutAttachment
         }
         return completion
+    }
+}
+
+/// Re-encoding a decoded image removes EXIF/GPS/source metadata and normalizes orientation.
+enum LaunchSkinPhotoEncoder {
+    static let imageLimit = 3_145_728
+    static let multipartLimit = 3_670_016
+    static func jpeg(_ input: Data) throws -> Data {
+        guard input.count <= 40 * 1024 * 1024,
+              let source = CGImageSourceCreateWithData(input as CFData, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 3000] as CFDictionary) else { throw LaunchFailure.invalidData }
+        let image = UIImage(cgImage: cgImage)
+        for quality in [0.92, 0.85, 0.75, 0.65] {
+            if let bytes = image.jpegData(compressionQuality: quality), bytes.count <= imageLimit { return bytes }
+        }
+        throw LaunchFailure.invalidData
+    }
+    static func multipart(_ bytes: Data, date: Date, purpose: LaunchPhotoSet.Purpose, targetId: UUID, boundary: String) throws -> Data {
+        guard !bytes.isEmpty, bytes.count <= imageLimit else { throw LaunchFailure.invalidData }
+        var data = Data()
+        func append(_ text: String) { data.append(Data(text.utf8)) }
+        for (key,value) in [("captureDate", RoutineDates.timestamp(date)), ("targetType", purpose.rawValue), ("targetId", targetId.uuidString.lowercased())] {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(key)\"\r\n\r\n\(value)\r\n")
+        }
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+        data.append(bytes); append("\r\n--\(boundary)--\r\n")
+        guard data.count <= multipartLimit else { throw LaunchFailure.invalidData }
+        return data
     }
 }

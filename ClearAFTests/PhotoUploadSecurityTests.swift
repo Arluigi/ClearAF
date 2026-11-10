@@ -65,3 +65,35 @@ struct PhotoUploadSecurityTests {
         }
     }
 }
+
+import UIKit
+import ImageIO
+import UniformTypeIdentifiers
+
+extension PhotoUploadSecurityTests {
+    @Test func launchJPEGEncodersRemoveSyntheticGPSAndEXIF() throws {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 100)).image { context in
+            UIColor.gray.setFill(); context.fill(CGRect(x: 0, y: 0, width: 80, height: 100))
+        }
+        let pixels = try #require(image.cgImage)
+        let sourceBytes = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(sourceBytes, UTType.jpeg.identifier as CFString, 1, nil))
+        let metadata: [CFString: Any] = [
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 1.0, kCGImagePropertyGPSLatitudeRef: "N", kCGImagePropertyGPSLongitude: 1.0, kCGImagePropertyGPSLongitudeRef: "E"],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: "synthetic metadata"]
+        ]
+        CGImageDestinationAddImage(destination, pixels, metadata as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        let source = try #require(CGImageSourceCreateWithData(sourceBytes, nil))
+        let sourceMetadata = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        #expect(sourceMetadata[kCGImagePropertyGPSDictionary] != nil)
+        for encoder in [LaunchSkinPhotoEncoder.jpeg, LaunchIdentityInput.jpeg] {
+            let jpeg = try encoder(sourceBytes as Data)
+            let output = try #require(CGImageSourceCreateWithData(jpeg as CFData, nil))
+            let result = try #require(CGImageSourceCopyPropertiesAtIndex(output, 0, nil) as? [CFString: Any])
+            #expect(result[kCGImagePropertyGPSDictionary] == nil)
+            let exif = result[kCGImagePropertyExifDictionary] as? [CFString: Any]
+            #expect(exif?[kCGImagePropertyExifUserComment] == nil)
+        }
+    }
+}
