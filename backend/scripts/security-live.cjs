@@ -2,14 +2,13 @@
 // Run from backend: node scripts/security-live.cjs prepare|verify|cleanup
 const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const {Client}=require('pg');const{createClient}=require('@supabase/supabase-js');
+const {removeEmptyLegacyFixtureCase}=require('./lib/legacy-fixture-case.cjs');
 const {enrollFixture,unenrollFixture}=require('./lib/enrollment-fixture.cjs');
+const {allowFixture,validateSyntheticAccount,validateFixture,validateLocalTargets}=require('./lib/unzit-live-guards.cjs');
 require('dotenv').config({quiet:true});
 const statePath=process.env.SECURITY_FIXTURE_STATE||'/tmp/clearaf-security-fixtures.json';
 const base=process.env.SECURITY_API_URL||'http://127.0.0.1:3001/api';
-for (const value of [base,process.env.SUPABASE_URL,process.env.DATABASE_URL]) {
- if (!value) throw Error('Configure explicit local test environment first');
- if (!['127.0.0.1','localhost','[::1]'].includes(new URL(value).hostname) && process.env.SECURITY_ALLOW_PRODUCTION !== 'true') throw Error('Nonlocal security tests require explicit SECURITY_ALLOW_PRODUCTION=true');
-}
+validateLocalTargets({...process.env,SECURITY_API_URL:base});
 const admin=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const publicClient=()=>createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const db=new Client({connectionString:process.env.DATABASE_URL});
@@ -18,11 +17,14 @@ async function run(){
  await db.connect();const mode=process.argv[2];
  if(mode==='prepare'){
   assert(!fs.existsSync(statePath),'Existing fixture state must be cleaned up first');
-  const s={run:crypto.randomUUID(),accounts:[],photoIds:[],paths:[]};save(s);
+  const s={run:crypto.randomUUID(),accounts:[],photoIds:[],paths:[],allowlistRows:[]};save(s);
   for(const role of ['patientA','patientB','doctorA','doctorB']){
    const account={role,email:`clearaf-security-${s.run}-${role.toLowerCase()}@example.invalid`,password:crypto.randomBytes(30).toString('base64url')};
+   validateSyntheticAccount(account,s.run,['patientA','patientB','doctorA','doctorB']);
+   const permit={id:crypto.randomUUID(),email:account.email,importBatch:s.run};s.allowlistRows.push(permit);s.accounts.push(account);save(s);await allowFixture(db,{...permit,run:s.run,role});
    const {data,error}=await admin.auth.admin.createUser({email:account.email,password:account.password,email_confirm:true,user_metadata:{name:'Synthetic Security Test'}});
-   if(error)throw error;account.id=data.user.id;s.accounts.push(account);save(s);
+   if(error)throw error;account.id=data.user.id;save(s);
+   await removeEmptyLegacyFixtureCase(db,{...account,run:s.run},{recordIntent:caseId=>{account.legacyCaseId=caseId;save(s)}});
    if(role.startsWith('doctor'))await db.query('insert into public.dermatologists (id,name,email,password,"createdAt","updatedAt") values ($1,$2,$3,$4,now(),now())',[account.id,'Synthetic Security Clinician',account.email,'UNUSED_SUPABASE_AUTH']);
    if(role.startsWith('patient')){
     const signIn=await publicClient().auth.signInWithPassword({email:account.email,password:account.password});
@@ -101,14 +103,20 @@ async function run(){
   const {data:short,error:shortError}=await admin.storage.from('patient-photos').createSignedUrl(photo.storagePath,1);assert(!shortError);await new Promise(r=>setTimeout(r,2200));assert.notEqual((await fetch(short.signedUrl)).status,200);ok('expired signed URL denied');
   const deletion=await call('/photos/'+photo.id,a,'DELETE');assert.equal(deletion.status,200);const{error:missing}=await admin.storage.from('patient-photos').info(photo.storagePath);assert(missing);ok('owner deletion removes stored object');
   const logout=await admin.auth.admin.signOut(b.token,'global');assert(!logout.error);assert.equal((await call('/users/profile',b)).status,401);ok('revoked session JWT cannot access API');
-  const extra=await admin.auth.admin.createUser({email:`clearaf-security-${s.run}-postmigration@example.invalid`,password:crypto.randomBytes(32).toString('hex'),email_confirm:true});assert(!extra.error);const profileCreated=await db.query('select exists(select 1 from public.user_profiles where id=$1) as present',[extra.data.user.id]);assert(profileCreated.rows[0].present);await admin.auth.admin.deleteUser(extra.data.user.id);await db.query('delete from public.user_profiles where id=$1',[extra.data.user.id]);ok('signup profile trigger works after permission hardening');
+  const probeEmail=`clearaf-security-${s.run}-postmigration@example.invalid`;const permit={id:crypto.randomUUID(),email:probeEmail,importBatch:s.run};s.allowlistRows.push(permit);save({...s,accounts:s.accounts.map(({token,...x})=>x)});await allowFixture(db,{...permit,run:s.run,role:'postmigration'});
+  const extra=await admin.auth.admin.createUser({email:probeEmail,password:crypto.randomBytes(32).toString('hex'),email_confirm:true});assert(!extra.error);const profileCreated=await db.query('select exists(select 1 from public.user_profiles where id=$1) as present',[extra.data.user.id]);assert(profileCreated.rows[0].present);s.probe={id:extra.data.user.id,email:probeEmail,run:s.run,role:'postmigration'};save({...s,accounts:s.accounts.map(({token,...x})=>x)});await removeEmptyLegacyFixtureCase(db,s.probe,{recordIntent:caseId=>{s.probe.caseId=caseId;save({...s,accounts:s.accounts.map(({token,...x})=>x)})}});await admin.auth.admin.deleteUser(extra.data.user.id);await db.query('delete from public.user_profiles where id=$1',[extra.data.user.id]);await db.query('delete from public.launch_allowlist where id=$1 and email=$2 and "importBatch"=$3',[permit.id,permit.email,permit.importBatch]);s.allowlistRows=s.allowlistRows.filter(r=>r.id!==permit.id);delete s.probe;save({...s,accounts:s.accounts.map(({token,...x})=>x)});ok('signup profile trigger works after permission hardening');
   fs.mkdirSync('../.local',{recursive:true});fs.writeFileSync('../.local/live-verification.json' ,JSON.stringify({date:new Date().toISOString(),api:base,passed:results},null,2));
  }else if(mode==='cleanup'){
   if(!fs.existsSync(statePath)){console.log('No fixture state to clean');return}
-  const s=JSON.parse(fs.readFileSync(statePath));assert(s.run&&s.accounts.every(a=>a.email.startsWith(`clearaf-security-${s.run}-`)),'Invalid fixture identity');
-  if(s.paths.length){const{error}=await admin.storage.from('patient-photos').remove(s.paths);if(error)throw error}
+  const s=JSON.parse(fs.readFileSync(statePath));validateFixture(s);
+  assert(!s.launch,'Immutable launch fixtures require isolated project cleanup');
+  for(const account of s.accounts)validateSyntheticAccount(account,s.run,['patientA','patientB','doctorA','doctorB']);
   for(const a of s.accounts){const{data,error}=await admin.auth.admin.getUserById(a.id);if(error||data.user.email!==a.email)throw Error('Fixture identity mismatch; cleanup stopped')}
   const ids=s.accounts.map(a=>a.id);
+  assert(s.paths.every(p=>typeof p==='string'&&!p.includes('..')&&!p.includes('\\')&&ids.some(id=>p.startsWith(id+'/'))),'Invalid fixture storage ownership');
+  assert((s.allowlistRows||[]).every(p=>p.importBatch===s.run&&s.accounts.some(a=>a.email===p.email)),'Invalid fixture allowlist ownership');
+  if(s.paths.length){const{error}=await admin.storage.from('patient-photos').remove(s.paths);if(error)throw error}
+
   await db.query('delete from public.care_routine_completions where id=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.routineCompletionIds||[],ids]);
   await db.query('delete from public.care_routine_revisions where id=any($1::uuid[]) and "userId"=any($2::uuid[])',[s.routineRevisionIds||[],ids]);
   await db.query('delete from public.user_profiles where name=$1 and not exists(select 1 from auth.users where auth.users.id=user_profiles.id)',[`clearaf-security-${s.run}-postmigration@example.invalid`]);
@@ -121,6 +129,7 @@ async function run(){
   await db.query('delete from public.user_profiles where id=any($1::uuid[])',[ids]);
   await db.query('delete from public.dermatologists where id=any($1::uuid[])',[ids]);
   for(const a of s.accounts){const{error}=await admin.auth.admin.deleteUser(a.id);if(error)throw error}
+  for(const permit of s.allowlistRows||[])await db.query('delete from public.launch_allowlist where id=$1 and email=$2 and "importBatch"=$3',[permit.id,permit.email,permit.importBatch]);
   fs.unlinkSync(statePath);console.log('Removed only this run’s synthetic accounts, rows and objects.');
  }else throw Error('Expected prepare|verify|cleanup');
 }

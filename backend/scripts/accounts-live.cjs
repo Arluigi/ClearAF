@@ -1,6 +1,9 @@
 // Local-only real signup, confirmation, onboarding, restoration and recovery.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs=require('node:fs');
+const {removeEmptyLegacyFixtureCase}=require('./lib/legacy-fixture-case.cjs');
+const {allowFixture}=require('./lib/unzit-live-guards.cjs');
 const { createClient } = require('@supabase/supabase-js');
 const { Client } = require('pg');
 require('dotenv').config({ quiet: true });
@@ -15,10 +18,14 @@ const make = () => createClient(origin, process.env.SUPABASE_ANON_KEY, { auth: {
 const admin = createClient(origin, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const db = new Client({ connectionString: process.env.DATABASE_URL });
 const ids = [], mailIDs = [];
+const mailOrigin=process.env.MAILPIT_URL||'http://127.0.0.1:54324';
+require('./recovery-drill.cjs').local(mailOrigin,['http:','https:']);
+const intentPath=(process.env.SECURITY_FIXTURE_STATE||'/tmp/clearaf-security-fixtures.json')+'.accounts';
+let permit,ownIntentCreated=false;
+function saveIntent(data){fs.writeFileSync(intentPath,JSON.stringify(data),{mode:0o600});fs.chmodSync(intentPath,0o600);ownIntentCreated=true}
 const passed = [];
 const ok = name => { passed.push(name); console.log('PASS ' + name); };
 async function mailLink(email, type) {
-  const mailOrigin = 'http://127.0.0.1:54324';
   for (let attempt = 0; attempt < 30; attempt++) {
     const list = await (await fetch(mailOrigin + '/api/v1/messages')).json();
     for (const item of list.messages || []) {
@@ -40,10 +47,12 @@ async function main() {
   await db.connect();
   try {
     const client = make();
-    const email = 'clearaf-accounts-' + crypto.randomUUID() + '@example.invalid';
+    assert(!fs.existsSync(intentPath),'Existing account fixture intent requires review');
+    const run=crypto.randomUUID();const email = 'clearaf-accounts-' + run + '@example.invalid';
+    permit={id:crypto.randomUUID(),email,importBatch:run};saveIntent({permit,ids});await allowFixture(db,{...permit,run,role:'accounts'});
     const password = crypto.randomBytes(24).toString('base64url');
     const signup = await client.auth.signUp({ email, password, options: { data: { name: 'Synthetic Patient', skinType: 'Normal', userType: 'dermatologist' } } });
-    assert.ifError(signup.error); ids.push(signup.data.user.id);
+    assert.ifError(signup.error); ids.push(signup.data.user.id);saveIntent({permit,ids});
     assert.equal(signup.data.session, null);
     assert((await make().auth.signInWithPassword({ email, password })).error);
     ok('signup requires email confirmation and cannot sign in early');
@@ -95,10 +104,14 @@ async function main() {
     ok('unsupported account deletion does not remove clinical records');
   } finally {
     for (const id of ids) {
+      const identity=await admin.auth.admin.getUserById(id);assert.ifError(identity.error);assert.equal(identity.data.user.email,permit.email,'Fixture account identity differs');
+      await removeEmptyLegacyFixtureCase(db,{id,email:permit.email,run:permit.importBatch,role:'accounts'},{recordIntent:caseId=>saveIntent({permit,ids,legacyCaseId:caseId})});
       const result = await admin.auth.admin.deleteUser(id); assert.ifError(result.error);
       await db.query('DELETE FROM public.user_profiles WHERE id=$1', [id]);
     }
-    for (const id of [...new Set(mailIDs)]) await fetch('http://127.0.0.1:54324/api/v1/messages', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ IDs: [id] }) });
+    for (const id of [...new Set(mailIDs)]) await fetch(mailOrigin+'/api/v1/messages', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ IDs: [id] }) });
+    if(permit)await db.query('DELETE FROM public.launch_allowlist WHERE id=$1 AND email=$2 AND "importBatch"=$3',[permit.id,permit.email,permit.importBatch]);
+    if(ownIntentCreated)fs.unlinkSync(intentPath);
     await db.end();
   }
   console.log(`${passed.length} account-flow groups passed; synthetic identities cleaned up.`);

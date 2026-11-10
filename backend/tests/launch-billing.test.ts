@@ -71,3 +71,44 @@ test('bounded reconciliation recovers known checkout provider truth without crea
 test('bounded reconciliation replays failed provider events without public retry routes',async()=>{const s=setup();await s.service.checkout(patient,checkout);const o=s.rows.billingOperation[0];await s.service.resolveFake(patient,'synthetic@example.invalid',o.id,'succeed');const original=s.provider.retrieve,snapshot=await original({id:'seed',type:'invoice.paid',objectId:'in',createdAt:at.toISOString()},{membership:s.rows.careMembership[0],operation:o});s.provider.retrieve=async()=>{throw Error('Synthetic outage')};await assert.rejects(s.service.processEvent({id:'evt_failed',type:'invoice.paid',objectId:'in',createdAt:at.toISOString()}));s.provider.retrieve=async()=>snapshot;const result=await s.service.reconcile(2);assert.equal(result.succeeded,1);assert.equal(s.rows.stripeEvent.find((e:any)=>e.providerEventId==='evt_failed').status,'processed')});
 test('verified unpaid checkouts back off so they cannot consume every reconciliation batch',async()=>{const s=setup();await s.service.checkout(patient,checkout);let reads=0;const retrieve=s.provider.retrieve;s.provider.retrieve=async(...args:any[])=>{reads++;return retrieve(args[0],args[1])};await s.service.reconcile(2);assert.equal(reads,2);await s.service.reconcile(2);assert.equal(reads,2);assert.ok(s.rows.billingOperation[0].nextAttemptAt>at)});
 test('billing and enrollment scopes classify covered pending-review past-due consistently',async()=>{const s=setup();await s.service.checkout(patient,checkout);await s.service.resolveFake(patient,'synthetic@example.invalid',s.rows.billingOperation[0].id,'succeed');s.rows.careMembership[0].status='past_due';s.rows.launchCase[0].status='submitted';assert.equal((await s.service.get(patient)).membership.access,'enrollment')});
+
+test('delayed Care to All-In to Care provider truth reanchors once even when the final plan matches storage',async()=>{
+ let clock=new Date(at);const s=setup({clock:()=>clock});await s.service.checkout(patient,checkout);
+ const operation=s.rows.billingOperation[0];await s.service.resolveFake(patient,'synthetic@example.invalid',operation.id,'succeed');
+ const m=s.rows.careMembership[0],approval=new Date('2026-11-10T12:00:00.000Z'),switchBack='2026-11-11T16:00:00.000Z';
+ Object.assign(s.rows.launchCase[0],{status:'approved',approvedAt:approval,destination:fixtures['PUT /enrollment/:caseId/destination'].request.destination});
+ Object.assign(m,{status:'active',activatedAt:approval,cadenceAnchor:approval});clock=new Date('2026-11-12T18:00:00.000Z');
+ const retrieve=s.provider.retrieve;s.provider.retrieve=async(event:any,context:any)=>({...await retrieve(event,context),priceId:'price_synthetic_care',planChangedAt:switchBack});
+ let reanchors=0;const update=s.db.careMembership.update;s.db.careMembership.update=async(args:any)=>{if(Object.hasOwn(args.data,'cadenceAnchor'))reanchors++;return update(args)};
+ const event={id:'evt_missed_switch_back',type:'customer.subscription.updated',objectId:m.stripeSubscriptionId,createdAt:'2026-11-10T14:00:00.000Z'},hint={membershipId:m.id,operationId:operation.id};
+ await s.service.processEvent(event,hint);
+ assert.equal(m.planId,'care');assert.equal(m.cadenceAnchor.toISOString(),switchBack);assert.equal(reanchors,1);assert.equal(m.destinationRequired,false);
+ await s.service.processEvent(event,hint);await s.service.processEvent({...event,id:'evt_repeat_final_switch_truth'},hint);
+ assert.equal(m.cadenceAnchor.toISOString(),switchBack);assert.equal(reanchors,1);assert.equal(s.rows.billingPayment.length,1);
+});
+
+test('a delayed preapproval plan change updates plan and destination without rewinding clinical cadence',async()=>{
+ let clock=new Date(at);const s=setup({clock:()=>clock});await s.service.checkout(patient,checkout);
+ const operation=s.rows.billingOperation[0];await s.service.resolveFake(patient,'synthetic@example.invalid',operation.id,'succeed');
+ const m=s.rows.careMembership[0],approval=new Date('2026-11-11T12:00:00.000Z');
+ Object.assign(s.rows.launchCase[0],{status:'approved',approvedAt:approval,destination:fixtures['PUT /enrollment/:caseId/destination'].request.destination});
+ Object.assign(m,{status:'active',activatedAt:approval,cadenceAnchor:approval});clock=new Date('2026-11-12T18:00:00.000Z');
+ const retrieve=s.provider.retrieve;s.provider.retrieve=async(event:any,context:any)=>({...await retrieve(event,context),priceId:'price_synthetic_all_in',payment:null,planChangedAt:'2026-11-10T16:00:00.000Z'});
+ const event={id:'evt_delayed_preapproval_switch',type:'invoice.paid',objectId:'in_preapproval_switch',createdAt:'2026-11-12T18:00:00.000Z'},hint={membershipId:m.id,operationId:operation.id};
+ await s.service.processEvent(event,hint);
+ assert.equal(m.planId,'all_in');assert.equal(m.amountCents,8900);assert.equal(m.destinationRequired,true);assert.equal(m.cadenceAnchor.toISOString(),approval.toISOString());assert.equal(m.activatedAt.toISOString(),approval.toISOString());
+ await s.service.processEvent({...event,id:'evt_preapproval_switch_repeat'},hint);assert.equal(m.cadenceAnchor.toISOString(),approval.toISOString());
+});
+
+test('confirmed earlier switch truth never rewinds a later applied cadence anchor or clinical activation',async()=>{
+ for(const [activatedAt,anchor,changedAt] of [
+  ['2026-11-10T12:00:00.000Z','2026-11-11T12:00:00.000Z','2026-11-11T10:00:00.000Z'],
+  ['2026-11-11T12:00:00.000Z','2026-11-10T12:00:00.000Z','2026-11-11T10:00:00.000Z'],
+ ]){
+  let clock=new Date(at);const s=setup({clock:()=>clock});await s.service.checkout(patient,checkout);const operation=s.rows.billingOperation[0];await s.service.resolveFake(patient,'synthetic@example.invalid',operation.id,'succeed');
+  const m=s.rows.careMembership[0];Object.assign(s.rows.launchCase[0],{status:'approved',approvedAt:new Date(activatedAt)});Object.assign(m,{status:'active',activatedAt:new Date(activatedAt),cadenceAnchor:new Date(anchor)});clock=new Date('2026-11-12T18:00:00.000Z');
+  const retrieve=s.provider.retrieve;s.provider.retrieve=async(event:any,context:any)=>({...await retrieve(event,context),priceId:'price_synthetic_all_in',payment:null,planChangedAt:changedAt});
+  await s.service.processEvent({id:'evt_older_verified_change',type:'customer.subscription.updated',objectId:m.stripeSubscriptionId,createdAt:clock.toISOString()},{membershipId:m.id,operationId:operation.id});
+  assert.equal(m.planId,'all_in');assert.equal(m.cadenceAnchor.toISOString(),anchor);assert.equal(m.activatedAt.toISOString(),activatedAt);
+ }
+});

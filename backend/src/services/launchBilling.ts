@@ -79,7 +79,13 @@ export function createLaunchBilling({db,provider,now=()=>new Date(),returnOrigin
      const destination=DestinationSchema.safeParse(caseRow?.destination);
      const update:any={stripeCustomerId:observed.customerId,stripeSubscriptionId:observed.subscriptionId,checkoutSessionId:m.checkoutSessionId??observed.checkoutSessionId,currentPeriodEnd:observed.currentPeriodEnd?new Date(observed.currentPeriodEnd):m.currentPeriodEnd,paidThrough,cancelAtPeriodEnd:observed.cancelAtPeriodEnd,status,providerUpdatedAt:new Date(Math.max(+now(),m.providerUpdatedAt?+new Date(m.providerUpdatedAt)+1:0))};
      if(settledPlan){update.planId=planId;update.amountCents=amount;update.settingsVersion=selected.version}
-     if(changed){update.destinationRequired=!destination.success||destination.data.planId!==planId;if(caseRow?.status==='approved')update.cadenceAnchor=new Date(observed.planChangedAt!)}
+     if(changed)update.destinationRequired=!destination.success||destination.data.planId!==planId;
+     // Delayed delivery can observe a complete switch-back with the same final plan.
+     // Only a newer, provider-confirmed change may advance the clinical cadence;
+     // preapproval changes and repeated truth must never rewind or reset it.
+     const changeAt=settledPlan&&observed.planChangedAt?new Date(observed.planChangedAt):null;
+     const cadenceFloor=maxDate(m.cadenceAnchor,m.activatedAt);
+     if(caseRow?.status==='approved'&&changeAt&&(!cadenceFloor||changeAt>cadenceFloor))update.cadenceAnchor=changeAt;
      await tx.careMembership.update({where:{id:m.id},data:update});
      if(hasPaid&&caseRow?.status==='payment')await tx.launchCase.update({where:{id:caseRow.id},data:{status:'medical_history',revision:caseRow.revision+1}});
      if(hasPaid){const operation=await tx.billingOperation.findFirst({where:{membershipId:m.id,kind:'checkout'}});if(operation)await tx.billingOperation.update({where:{id:operation.id},data:{status:'succeeded',failureCode:null}})}

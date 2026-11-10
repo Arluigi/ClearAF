@@ -10,6 +10,22 @@ function validateLaunchSeed(rows) {
  const expected={id:'00000000-0000-4000-8000-000000000039',version:1,active:true,careAmountCents:3900,allInAmountCents:8900,carePriceId:null,allInPriceId:null,clinicianId:null,contentVersion:'0.9-draft',content:{},weeklyWeeks:8,createdAt:'2026-11-09T00:00:00.000Z'};
  assert.deepEqual(JSON.parse(JSON.stringify(rows)),[expected],'Unexpected launch settings seed');
 }
+function validateContainer(name){assert(['supabase_db_clearaf-local','supabase_db_clearaf-restore','supabase_db_clearaf-unzit-evidence','supabase_db_clearaf-unzit-restore','supabase_db_clearaf-unzit-signup-evidence','supabase_db_clearaf-unzit-signup-restore','supabase_db_clearaf-unzit-signup-fake-evidence','supabase_db_clearaf-unzit-signup-fake-restore'].includes(name),'Refusing unexpected database container');}
+async function knownAuthRows(db,ids){
+ assert.equal(Number((await db.query('SELECT count(*) FROM auth.users WHERE NOT(id=ANY($1::uuid[]))',[ids])).rows[0].count),0,'Database contains accounts outside synthetic fixtures');
+ return(await db.query('SELECT id,email FROM auth.users WHERE id=ANY($1::uuid[]) ORDER BY id',[ids])).rows;
+}
+function capturedKeyColumn(table){return table==='launch_check_in_submissions'?'responseId':['photo_reviews','photo_cleanup'].includes(table)?'photoId':'id';}
+function capturedRowKey(table,row){return row[capturedKeyColumn(table)];}
+function validateCapturedRows(rows,launch){
+ assert(launch?.version===1&&launch.completed===true&&launch.tableKeys&&launch.tableDigests,'Incomplete launch fixture');
+ for(const [table,values]of Object.entries(rows)){
+  assert(Array.isArray(launch.tableKeys[table]),'Missing captured fixture table');
+  assert.deepEqual(values.map(row=>capturedRowKey(table,row)).sort(),[...launch.tableKeys[table]].sort(),'Unexpected non-fixture row');
+  assert.equal(hash(JSON.stringify(values)),launch.tableDigests[table],'Captured fixture digest differs');
+ }
+}
+async function capturedRows(db){const rows={};for(const table of tables)rows[table]=(await db.query(`SELECT * FROM public."${table}" ORDER BY "${capturedKeyColumn(table)}"`)).rows;return JSON.parse(JSON.stringify(rows));}
 let phase = 'local target and backup validation';
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 function local(value, protocol) {
@@ -66,13 +82,16 @@ async function run(mode) {
   local(process.env.SUPABASE_URL,['http:','https:']);
   assert.equal(u.username,'postgres','Local recovery requires postgres');
   if (mode.startsWith('schema-')) return schemaChain(mode);
-  if(process.env.PG_DOCKER_CONTAINER) assert(/^supabase_db_clearaf-(local|restore)$/.test(process.env.PG_DOCKER_CONTAINER),'Refusing unexpected database container');
+  if(process.env.PG_DOCKER_CONTAINER) validateContainer(process.env.PG_DOCKER_CONTAINER);
   const dir = path.resolve(process.env.RECOVERY_DIR || '../.local/recovery');
   const statePath = path.resolve(process.env.SECURITY_FIXTURE_STATE || '../.local/security-fixtures.json');
   // Validate every byte before opening a restore connection or making any mutation.
   const manifest = mode === 'restore-verify' ? validate(dir) : undefined;
   const fixture = JSON.parse(fs.readFileSync(mode === 'backup' ? statePath : path.join(dir,'fixtures.json')));
-  assert(fixture.run && fixture.accounts.length === 4 && fixture.accounts.every(a => a.email.startsWith(`clearaf-security-${fixture.run}-`) && a.email.endsWith('@example.invalid') && a.password), 'Only prepared synthetic fixtures are permitted');
+  require('./lib/unzit-live-guards.cjs').validateFixture(fixture);
+  const launch=fixture.launch;
+  if(launch)assert(launch.version===1&&launch.completed===true&&launch.run===fixture.run&&launch.accounts?.length===2&&launch.accounts.every(a=>['launchA','launchB'].includes(a.role)&&a.email===`clearaf-security-${fixture.run}-${a.role.toLowerCase()}@example.invalid`),'Invalid launch fixtures');
+  const fixtureAccounts=[...fixture.accounts,...(launch?.accounts||[])];
   const { Client } = require('pg');
   const { createClient } = require('@supabase/supabase-js');
   const db = new Client({connectionString:process.env.DATABASE_URL});
@@ -83,7 +102,7 @@ async function run(mode) {
   const pg = (tool,args) => {
     const container = process.env.PG_DOCKER_CONTAINER;
     const options = {env:pgEnv,maxBuffer:64*1024*1024,stdio:['pipe','pipe','pipe']};
-    if (container) assert(/^supabase_db_clearaf-(local|restore)$/.test(container),'Refusing unexpected database container');
+    if (container) validateContainer(container);
     const execute = (name,parameters,input) => container
       ? execFileSync('docker',['exec','-i',container,name,...parameters],{...options,input})
       : execFileSync(process.env.PG_BIN ? path.join(process.env.PG_BIN,name) : name,parameters,{...options,input});
@@ -129,22 +148,25 @@ async function run(mode) {
       phase = 'synthetic fixture and quiescence validation';
       assert.equal(process.env.RECOVERY_QUIESCENT,'1','Stop application writers and set RECOVERY_QUIESCENT=1');
       assert(!fs.existsSync(path.join(dir,'manifest.json')), 'Backup already exists; use a fresh RECOVERY_DIR');
-      const users = (await db.query('select id,email from auth.users order by id')).rows;
-      assert.deepEqual(users,fixture.accounts.map(({id,email})=>({id,email})).sort((a,b)=>a.id.localeCompare(b.id)), 'Database contains accounts outside synthetic fixtures');
+      const users = await knownAuthRows(db,fixtureAccounts.map(a=>a.id));
+      assert.deepEqual(users,fixtureAccounts.map(({id,email})=>({id,email})).sort((a,b)=>a.id.localeCompare(b.id)), 'Database contains accounts outside synthetic fixtures');
       const doctors = (await db.query('select id,email,name from public.dermatologists')).rows;
       assert(doctors.every(d=>fixture.accounts.some(a=>a.id===d.id&&a.email===d.email)&&d.name.startsWith('Synthetic')), 'Non-synthetic clinicians');
-      for (const table of tables.filter(t=>!['launch_settings','user_profiles','dermatologists','skin_photos','care_routine_revisions','care_routine_completions','eligibility_screenings','consent_acceptances'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
+      if(launch){await require('./unzit-launch-live.cjs').validateCapturedLaunch(db,fixture);validateCapturedRows(await capturedRows(db),launch);}else{
+      for (const table of tables.filter(t=>!['launch_settings','launch_allowlist','user_profiles','dermatologists','skin_photos','care_routine_revisions','care_routine_completions','eligibility_screenings','consent_acceptances'].includes(t))) assert.equal(Number((await db.query(`select count(*) from public."${table}"`)).rows[0].count),0,'Unexpected non-fixture clinical data');
       validateLaunchSeed((await db.query('select * from public.launch_settings')).rows);
+      const permits=(await db.query('select id,email,"importBatch" from public.launch_allowlist order by id')).rows;assert.deepEqual(permits,[...(fixture.allowlistRows||[])].sort((a,b)=>a.id.localeCompare(b.id)),'Unexpected allowlist fixtures');
+      }
       const revisions=(await db.query('select id,"userId","createdBy",name from public.care_routine_revisions')).rows;
       assert(revisions.length > 0 && revisions.every(r=>(fixture.routineRevisionIds||[]).includes(r.id) && fixture.accounts.some(a=>a.id===r.userId&&a.role.startsWith('patient')) && fixture.accounts.some(a=>a.id===r.createdBy&&a.role.startsWith('doctor')) && r.name.startsWith('Synthetic')), 'Non-fixture routine revision');
       const completions=(await db.query('select id,"userId","revisionId" from public.care_routine_completions')).rows;
       assert(completions.length > 0 && completions.every(c=>(fixture.routineCompletionIds||[]).includes(c.id) && revisions.some(r=>r.id===c.revisionId&&r.userId===c.userId)), 'Non-fixture routine completion');
       const profiles=(await db.query('select id,name from public.user_profiles')).rows;
-      assert(profiles.every(p=>fixture.accounts.some(a=>a.id===p.id)&&p.name?.startsWith('Synthetic')), 'Non-synthetic profiles');
+      assert(profiles.every(p=>fixtureAccounts.some(a=>a.id===p.id)&&p.name?.startsWith('Synthetic')), 'Non-synthetic profiles');
       const photos=(await db.query('select "userId",notes from public.skin_photos')).rows;
-      assert(photos.every(p=>fixture.accounts.some(a=>a.id===p.userId)&&p.notes?.startsWith('Synthetic')), 'Non-synthetic photos');
+      assert(photos.every(p=>fixtureAccounts.some(a=>a.id===p.userId)&&p.notes?.startsWith('Synthetic')), 'Non-synthetic photos');
       const enrollmentRows=(await db.query('select "userId" from public.eligibility_screenings union all select "userId" from public.consent_acceptances')).rows;
-      assert(enrollmentRows.every(r=>fixture.accounts.some(a=>a.id===r.userId)), 'Non-fixture enrollment records');
+      assert(enrollmentRows.every(r=>fixtureAccounts.some(a=>a.id===r.userId)), 'Non-fixture enrollment records');
       fs.mkdirSync(dir,{recursive:true,mode:0o700}); fs.chmodSync(dir,0o700);
       const syntheticPath = `${fixture.accounts[0].id}/recovery-${fixture.run}.txt`;
       fixture.paths = [...new Set([...(fixture.paths || []),syntheticPath])];
@@ -154,7 +176,8 @@ async function run(mode) {
       const uploaded = await admin.storage.from('patient-photos').upload(syntheticPath,Buffer.from(`Synthetic recovery ${fixture.run}`),{contentType:'text/plain',upsert:true});
       assert(!uploaded.error,'Synthetic object upload failed');
       const objects = (await db.query('select name,metadata from storage.objects where bucket_id=$1 order by name',['patient-photos'])).rows;
-      assert(objects.every(o=>fixture.accounts.some(a=>o.name.startsWith(a.id+'/'))),'Unexpected storage owner');
+      const expectedPaths=new Set([...(fixture.paths||[]),...(launch?.objects||[]).map(o=>o.path)]);
+      assert(objects.every(o=>expectedPaths.has(o.name)&&fixtureAccounts.some(a=>o.name.startsWith(a.id+'/'))),'Unexpected storage owner or fixture path');
       assert.equal(Number((await db.query("select count(*) from storage.objects where bucket_id <> 'patient-photos'")).rows[0].count),0,'Unexpected storage bucket data');
       const m = {version:1,createdAt:new Date().toISOString(),scope:'Quiescent synthetic local database/auth identities and object bytes; sessions, managed configuration and secrets excluded',ledger:await ledger(),files:{},objects:[]};
       write(dir,'fixtures.json',JSON.stringify(fixture)); write(dir,'snapshot.json',JSON.stringify(await snapshot()));
@@ -164,6 +187,7 @@ async function run(mode) {
       phase = 'storage byte export';
       for (const [i,obj] of objects.entries()) {
         const {data,error} = await admin.storage.from('patient-photos').download(obj.name); assert(!error,'Object download failed');
+        const expected=launch?.objects.find(o=>o.path===obj.name);if(expected)assert.equal(hash(Buffer.from(await data.arrayBuffer())),expected.sha256,'Launch private byte digest differs');
         const file = `object-${i}.bin`; write(dir,file,Buffer.from(await data.arrayBuffer()));
         m.objects.push({path:obj.name,file,contentType:obj.metadata?.mimetype||data.type||'application/octet-stream'});
       }
@@ -191,19 +215,27 @@ async function run(mode) {
         const denied=await publicClient().storage.from('patient-photos').download(obj.path); assert(denied.error,'Anonymous object access allowed');
       }
       phase = 'restored password and authorization checks';
-      for (const account of fixture.accounts) {
+      for (const account of fixtureAccounts) {
         const client=publicClient(); const login=await client.auth.signInWithPassword({email:account.email,password:account.password}); assert(!login.error,'Restored password login failed');
         for (const table of ['user_profiles','care_routine_revisions','care_routine_completions']) { const denied=await client.from(table).select('id').limit(0); assert(denied.error,'Direct clinical access allowed'); }
       }
       phase = 'signup trigger verification';
       const email=`clearaf-security-${fixture.run}-recovery-signup@example.invalid`;
+      const permit={id:crypto.randomUUID(),email,importBatch:fixture.run};
+      const probeState=statePath+'.recovery-probe';assert(!fs.existsSync(probeState),'Prior recovery probe needs review');write(path.dirname(probeState),path.basename(probeState),JSON.stringify({permit}));
+      const {allowFixture}=require('./lib/unzit-live-guards.cjs');await allowFixture(db,{...permit,run:fixture.run,role:'recovery-signup'});
       const created=await admin.auth.admin.createUser({email,password:crypto.randomBytes(32).toString('hex'),email_confirm:true,user_metadata:{name:'Synthetic Recovery'}}); assert(!created.error,'Recovery signup failed');
       assert.equal(Number((await db.query('select count(*) from public.user_profiles where id=$1',[created.data.user.id])).rows[0].count),1,'Signup profile trigger failed');
+      const probe={id:created.data.user.id,email,run:fixture.run,role:'recovery-signup'};write(path.dirname(probeState),path.basename(probeState),JSON.stringify({permit,probe}));
+      await require('./lib/legacy-fixture-case.cjs').removeEmptyLegacyFixtureCase(db,probe,{recordIntent:caseId=>write(path.dirname(probeState),path.basename(probeState),JSON.stringify({permit,probe,caseId}))});
       assert(!(await admin.auth.admin.deleteUser(created.data.user.id)).error,'Recovery signup cleanup failed');
+      await db.query('delete from public.user_profiles where id=$1',[created.data.user.id]);
+      await db.query('delete from public.launch_allowlist where id=$1 and email=$2 and "importBatch"=$3',[permit.id,permit.email,permit.importBatch]);
+      fs.unlinkSync(probeState);if(launch)validateCapturedRows(await capturedRows(db),launch);
       fs.mkdirSync(path.dirname(statePath),{recursive:true,mode:0o700}); fs.writeFileSync(statePath,JSON.stringify(fixture),{mode:0o600});fs.chmodSync(statePath,0o600);
       console.log('PASS fresh database/auth/storage restore, row digests, password logins, signup trigger and direct-access denial. Run full API authorization suite next.');
     }
   } finally { await db.end(); }
 }
-module.exports={local,validate,validateMigrationChain,applicationTables:tables,validateLaunchSeed};
+module.exports={knownAuthRows,capturedRowKey,validateCapturedRows,capturedRows,validateContainer,local,validate,validateMigrationChain,applicationTables:tables,validateLaunchSeed};
 if(require.main===module) run(process.argv[2]).catch(()=>{console.error(`Recovery drill failed during ${phase}; no credentials or database contents logged.`);process.exitCode=1;});
