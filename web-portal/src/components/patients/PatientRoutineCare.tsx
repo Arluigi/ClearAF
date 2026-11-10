@@ -4,6 +4,7 @@ import TemplatePicker from '@/components/care-support/TemplatePicker';
 import { Button } from '@/components/ui/button';
 import type { RoutineCareController, RoutineCareState } from '@/lib/routine-care';
 import { firstName } from '@/lib/workspace';
+import PrescriptionSentHistory from './PrescriptionSentHistory';
 import RoutineVersionHistory from './workspace/RoutineVersionHistory';
 import { RoutineSlotEditor } from './workspace/RoutineSlotEditor';
 
@@ -33,6 +34,7 @@ export default function PatientRoutineCare({ patientId, patientName, controller,
     {state.loadStatus === 'ready' && <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_16rem]">
       {SLOTS.map(slot => <RoutineSlotEditor key={slot} slot={slot} editor={state.slots[slot]} controller={controller} primary={primarySlot === slot} patientFirstName={firstName(patientName)} onReloadConflict={() => void controller.reloadConflict(slot)} onFeedback={onFeedback} />)}
       <aside aria-label="Templates and version history" className="space-y-8">
+        <p className="text-xs text-ink-secondary">Review each template’s published version and DRAFT label before copying and saving a new routine version.</p>
         <TemplatePicker
           disabled={{ morning: state.slots.morning.hasPendingSave, evening: state.slots.evening.hasPendingSave }}
           dirty={{ morning: state.slots.morning.dirty, evening: state.slots.evening.dirty }}
@@ -41,5 +43,6 @@ export default function PatientRoutineCare({ patientId, patientName, controller,
         {SLOTS.map(slot => <RoutineVersionHistory key={`${slot}-${state.slots[slot].routine?.id ?? 'none'}`} patientId={patientId} slot={slot} />)}
       </aside>
     </div>}
+    <PrescriptionSentHistory key={patientId} patientId={patientId}/>
   </section>;
 }

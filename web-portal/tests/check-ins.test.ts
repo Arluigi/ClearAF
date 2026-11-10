@@ -78,3 +78,9 @@ test('assigned form summary shows version and required count only; no schedule o
   for (const file of ['src/components/care-support/PatientCheckIns.tsx', 'src/components/care-support/CheckInViews.tsx']) assert.doesNotMatch(read(file), /response rate|schedule|sent sundays/i, file);
   assert.match(read('src/components/care-support/FormEditor.tsx'), /label=\{`Save as v\$\{\(state\.savedVersion \?\? form\?\.version \?\? 0\) \+ 1\}`\}/);
 });
+
+test('launch follow-up shows five topics and preserves out-of-NC and pregnancy answers for manual action',async()=>{
+ const {LaunchCheckInView}=await import('../src/components/care-support/CheckInViews');
+ const ci={id:'synthetic',kind:'weekly',status:'needs_changes',submittedAt:'2026-11-09T12:00:00Z',form:{version:1},answers:{tolerability:'not_tolerating',sideEffects:{none:false,details:'Synthetic irritation'},pregnancyStatus:'pregnant',newMedicines:{none:true,details:null},physicallyInNC:false},patientMessage:'Please submit a new photo set.'} as Parameters<typeof LaunchCheckInView>[0]['checkIn'];
+ const html=renderToStaticMarkup(h(LaunchCheckInView,{checkIn:ci,photos:null,actions:null}));assert.match(html,/not tolerating/);assert.match(html,/Synthetic irritation/);assert.match(html,/pregnant/);assert.match(html,/NC: No/);assert.doesNotMatch(html,/adherence|score|streak/i);
+});

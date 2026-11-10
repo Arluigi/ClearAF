@@ -166,3 +166,10 @@ test("the dialog promises no notification and says where the patient sees the de
   assert.doesNotMatch(source, /notif/i);
   assert.match(source, /The patient sees this on their Today screen\./);
 });
+
+test('launch refunds stay provider-backed while legacy decision and refund semantics remain intact',async()=>{
+ const {launchMembershipWords,readLaunchChart}=await import('../src/lib/care-decisions');
+ assert.match(launchMembershipWords(null,'approved'),/not yet confirmed active/);
+ assert.equal(canMarkRefund(decision({refundStatus:'pending'})),true);
+ await assert.rejects(readLaunchChart(async()=>{throw {status:404,code:'NOT_FOUND'};}));
+});

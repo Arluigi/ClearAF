@@ -1,3 +1,4 @@
+import { createLaunchAPI } from './launch';
 import type { Conversation, MessagePage, MessageBody, MessageRecord, ReferenceResult } from './assigned-messaging';
 import type { Template, TemplateDraft, Form, FormDraft, CheckInResponse, Month } from './care-support';
 import type { PhotoReview, ReviewQueueItem } from './photo-review';
@@ -212,6 +213,11 @@ class APIService {
       throw new Error('A verified dermatologist account is required.');
     }
     return response.user;
+  }
+
+  launch() {
+    const scoped = this.scoped();
+    return createLaunchAPI(<T>(path: string, options?: RequestInit) => scoped.request<T>(`/launch${path}`, options));
   }
 
   // Patient Management

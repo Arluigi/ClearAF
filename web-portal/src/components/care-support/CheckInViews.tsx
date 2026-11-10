@@ -137,3 +137,15 @@ export function AssignedFormSummary({ status, form, editing, onEdit, onRetry }: 
     </section>
   );
 }
+
+export function LaunchCheckInView({checkIn,photos,actions}:{checkIn:import('@/types/api').LaunchCheckIn;photos:React.ReactNode;actions:React.ReactNode}) {
+  const answers=checkIn.answers;
+  const lines=answers?[
+    ['Tolerability',answers.tolerability.replaceAll('_',' ')],
+    ['Side effects',answers.sideEffects.none?'None':answers.sideEffects.details??'Details not supplied'],
+    ['Pregnancy / breastfeeding',answers.pregnancyStatus.replaceAll('_',' ')],
+    ['New medicines',answers.newMedicines.none?'None':answers.newMedicines.details??'Details not supplied'],
+    ['Physical location',`NC: ${answers.physicallyInNC?'Yes':'No'}`],
+  ]:[];
+  return <article aria-label="Launch check-in review" className="space-y-4 border-t-2 border-ink pt-4"><header><h3 className="editorial-title text-2xl">{`${checkIn.kind} check-in · ${checkIn.status.replaceAll('_',' ')}`}</h3><p className="meta-mono">{`Submitted ${checkIn.submittedAt?stamp(checkIn.submittedAt):'Not submitted'} · Form v${checkIn.form.version}`}</p></header><dl className="divide-y divide-rule">{lines.map(([label,value])=><div className="grid gap-2 py-3 sm:grid-cols-2" key={label}><dt className="text-sm text-ink-secondary">{label}</dt><dd className="whitespace-pre-wrap break-words text-sm">{value}</dd></div>)}</dl>{checkIn.patientMessage&&<p className="whitespace-pre-wrap break-words text-sm">{checkIn.patientMessage}</p>}{photos}<p className="text-sm text-ink-secondary">Photo review records a factual review of an image. Approving this check-in is a separate clinical decision.</p>{actions}</article>;
+}

@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { useClinicalAPI } from "@/lib/auth";
 import { answerSeries, choiceQuestions } from "@/lib/care-support";
 import { firstName } from "@/lib/workspace";
-import { AnswerPlot, AssignedFormSummary, CheckInResponseView, SubmissionTable } from "./CheckInViews";
+import { AnswerPlot, AssignedFormSummary, CheckInResponseView, LaunchCheckInView, SubmissionTable } from "./CheckInViews";
+import { readLaunchChart } from '@/lib/care-decisions';
+import { LaunchPhotoSet, LaunchReviewDialog } from '@/components/patients/CareDecisionDialog';
 import FormEditor from "./FormEditor";
 import { LoadState, Pages, useRead } from "./shared";
 
-export default function PatientCheckIns({ patientId, patientName, onReply }: { patientId: string; patientName: string; onReply: () => void }) {
+function LegacyPatientCheckIns({ patientId, patientName, onReply }: { patientId: string; patientName: string; onReply: () => void }) {
   const api = useClinicalAPI();
   const formFetch = useCallback(() => api.getPatientForm(patientId), [api, patientId]);
   const form = useRead(formFetch);
@@ -65,4 +67,20 @@ export default function PatientCheckIns({ patientId, patientName, onReply }: { p
       </aside>
     </section>
   );
+}
+
+export default function PatientCheckIns(props:{patientId:string;patientName:string;onReply:()=>void;targetId?:string|null}) {
+  const api=useClinicalAPI();const [page,setPage]=useState(1);const [selected,setSelected]=useState<string|null>(props.targetId??null);const [reviewing,setReviewing]=useState(false);
+  const fetch=useCallback(()=>readLaunchChart(()=>api.launch().chart(props.patientId,page)),[api,props.patientId,page]);const chart=useRead(fetch);
+  useEffect(()=>{setSelected(props.targetId??null);setPage(1);setReviewing(false);},[props.targetId]);
+  useEffect(()=>{if(props.targetId&&selected===props.targetId&&chart.data&&!chart.data.checkIns.data.some(row=>row.id===props.targetId)&&page<chart.data.checkIns.pagination.totalPages)setPage(page+1);},[props.targetId,selected,chart.data,page]);
+  if(chart.status==='ready'&&chart.data===null)return <LegacyPatientCheckIns {...props}/>;
+  const rows=chart.data?.checkIns.data??[];const current=rows.find(row=>row.id===selected)??(!selected?rows[0]:null);
+  return <section aria-label="Patient launch check-ins" className="space-y-4"><div className="flex flex-wrap gap-3"><h2 className="editorial-title text-2xl">Check-in reviews</h2><Button variant="outline" onClick={chart.retry}>Refresh check-ins</Button></div><LoadState {...chart} loading="Loading launch check-ins"/>
+    {chart.data&&<>{!rows.length&&<p>No check-ins on this page.</p>}<ul className="flex flex-wrap gap-3">{rows.map(row=><li key={row.id}><Button variant="outline" aria-pressed={row.id===current?.id} onClick={()=>{setSelected(row.id);setReviewing(false);}}>{row.kind} · {row.status.replaceAll('_',' ')} · {row.submittedAt??row.dueAt}</Button></li>)}</ul>
+      {selected&&!current&&<p role="alert">This check-in is not on this page or is unavailable. Browse prior pages or refresh the worklist.</p>}
+      {current&&<LaunchCheckInView checkIn={current} photos={<LaunchPhotoSet key={current.id} patientId={props.patientId} photoSet={current.photoSet}/>} actions={<div className="flex flex-wrap gap-3"><Button variant="outline" disabled={current.status!=='submitted'} onClick={()=>setReviewing(true)}>Review check-in</Button><Button variant="outline" onClick={props.onReply}>Reply to patient</Button><LaunchReviewDialog patientId={props.patientId} enrollment={chart.data.enrollment} checkIn={current} open={reviewing} onClose={()=>setReviewing(false)} onChanged={chart.retry}/></div>}/>}
+      <Pages page={page} totalPages={chart.data.checkIns.pagination.totalPages} onPage={next=>{setPage(next);setSelected(null);setReviewing(false);}}/>
+    </>}
+  </section>;
 }
