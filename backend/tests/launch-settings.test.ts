@@ -30,3 +30,22 @@ test('catalog prices come from DB; unavailable content returns sanitized 503',as
 test('metered, tiered or transformed prices cannot publish a false monthly total',async()=>{
  for(const patch of [{billing_scheme:'tiered'},{transform_quantity:{divide_by:10,round:'up'}},{custom_unit_amount:{}},{recurring:{interval:'month',interval_count:1,usage_type:'metered'}}])await assert.rejects(validateSettings(valid,async(id:string)=>({...price(id.endsWith('care')?3900:8900),...patch}),async()=>true));
 });
+const {publishSettings}=require('../scripts/set-launch-settings.cjs');
+function publicationDB(history:any[]){
+ const statements:string[]=[];
+ const db={query:async(sql:string)=>{statements.push(sql);if(sql.includes('max(version)'))return {rows:[{version:2}]};if(sql.includes('where active'))return {rows:[{contentVersion:'0.9-draft',content:{}}]};if(sql.startsWith('SELECT')||sql.startsWith('select'))return {rows:history};return {rows:[],rowCount:1}}};
+ return {db,statements};
+}
+test('publication forbids reusing any historical price for the opposite plan',async()=>{
+ for(const changed of [{...valid,allInPriceId:'price_previous_care'},{...valid,carePriceId:'price_previous_all_in'}]){
+  const {db,statements}=publicationDB([{carePriceId:'price_previous_care',allInPriceId:'price_previous_all_in'},{carePriceId:'price_other_care',allInPriceId:'price_other_all_in'}]);
+  await assert.rejects(publishSettings(db,changed),/another plan/);
+  assert.equal(statements.at(-1),'ROLLBACK');
+  assert.equal(statements.some(x=>x.startsWith('update public.launch_settings')),false);
+ }
+});
+test('publication preserves same-plan price identities across settings versions',async()=>{
+ const {db,statements}=publicationDB([{carePriceId:valid.carePriceId,allInPriceId:valid.allInPriceId},{carePriceId:null,allInPriceId:null}]);
+ assert.deepEqual(await publishSettings(db,valid),{published:1,version:3});
+ assert.equal(statements[1],'LOCK TABLE public.launch_settings IN EXCLUSIVE MODE');assert.equal(statements.at(-1),'COMMIT');
+});

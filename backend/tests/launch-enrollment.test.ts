@@ -35,7 +35,7 @@ test('paid-only medical history, revision conflict, immutable submitted package 
  const again=await s.service.submit(A,id,{expectedRevision:e.case.revision-1,photoSetId:setId});assert.equal(again.created,false);assert.equal(again.response.case.revision,e.case.revision);
  await assert.rejects(s.service.medical(A,id,randomUUID(),{expectedRevision:e.case.revision,questionnaireVersion:'0.9-draft',answers:medical}),{code:'LAUNCH_STEP_REQUIRED'});
 });
-test('photo sets require distinct complete owned angles and deterministic capture identities',async()=>{const s=setup();let e=await begin(s);const id=e.case.id;s.rows.launchCase[0].status='photos';s.rows.careMembership.push({id:randomUUID(),caseId:id,patientId:A,status:'paid_pending_review',planId:'care'});const photoId=randomUUID();s.rows.skinPhoto.push({id:photoId,userId:B});await assert.rejects(s.service.photoSet(A,randomUUID(),{purpose:'enrollment',targetId:id,items:[{slot:'front',photoId,captureId:randomUUID()}]}));assert.equal((await s.service.photoSet(A,randomUUID(),{purpose:'enrollment',targetId:id,items:[]})).photoSet.items.length,0)});
+test('photo sets require distinct complete owned angles and deterministic capture identities',async()=>{const s=setup();let e=await begin(s);const id=e.case.id;s.rows.launchCase[0].status='photos';s.rows.careMembership.push({id:randomUUID(),caseId:id,patientId:A,status:'paid_pending_review',planId:'care',paidThrough:new Date('2026-12-09T18:00:00Z')});const photoId=randomUUID();s.rows.skinPhoto.push({id:photoId,userId:B});await assert.rejects(s.service.photoSet(A,randomUUID(),{purpose:'enrollment',targetId:id,items:[{slot:'front',photoId,captureId:randomUUID()}]}));assert.equal((await s.service.photoSet(A,randomUUID(),{purpose:'enrollment',targetId:id,items:[]})).photoSet.items.length,0)});
 import {assertLegacyPhotoWriter,assertMutableLaunchPhoto} from '../src/services/clinicalPhotoSets';
 test('legacy upload/mutation lanes cannot bypass launch orchestration; submitted associations freeze photos',async()=>{
 
@@ -45,7 +45,7 @@ test('legacy upload/mutation lanes cannot bypass launch orchestration; submitted
  await assert.rejects(assertMutableLaunchPhoto(frozen,'synthetic'),{code:'OPERATION_CONFLICT'});
 });
 test('draft sets allow partial/empty retakes; legacy and foreign-target captures never satisfy launch slots',async()=>{
- const s=setup();const e=await begin(s),id=e.case.id;const row=s.rows.launchCase[0];row.status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',status:'paid_pending_review'});
+ const s=setup();const e=await begin(s),id=e.case.id;const row=s.rows.launchCase[0];row.status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',paidThrough:new Date('2026-12-09T18:00:00Z'),status:'paid_pending_review'});
  const setId=randomUUID();assert.deepEqual((await s.service.photoSet(A,setId,{purpose:'enrollment',targetId:id,items:[]})).photoSet.items,[]);
  const bytes=await jpeg(),captureId=randomUUID();const captured=await s.service.capture(A,captureId,{targetType:'enrollment',targetId:id,captureDate:'2026-11-09T17:00:00.000Z',photo:bytes});
  await s.service.photoSet(A,setId,{purpose:'enrollment',targetId:id,items:[{slot:'front',photoId:captured.capture.id,captureId}]});assert.equal((await s.service.photoSet(A,setId,{purpose:'enrollment',targetId:id,items:[]})).photoSet.items.length,0);
@@ -53,12 +53,12 @@ test('draft sets allow partial/empty retakes; legacy and foreign-target captures
  photo.launchTargetId=id;photo.launchRequestHash=null;await assert.rejects(s.service.photoSet(A,setId,{purpose:'enrollment',targetId:id,items:[{slot:'front',photoId:photo.id,captureId}]}),{code:'OPERATION_CONFLICT'});
 });
 test('capture retry compares exact bytes and target, not only date and notes',async()=>{
- const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',status:'paid_pending_review'});
+ const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',paidThrough:new Date('2026-12-09T18:00:00Z'),status:'paid_pending_review'});
  const captureId=randomUUID(),input={targetType:'enrollment',targetId:id,captureDate:'2026-11-09T17:00:00.000Z',photo:await jpeg()};const first=await s.service.capture(A,captureId,input);assert.equal((await s.service.capture(A,captureId,input)).created,false);
  const changed=await sharp({create:{width:100,height:100,channels:3,background:'blue'}}).jpeg().toBuffer();await assert.rejects(s.service.capture(A,captureId,{...input,photo:changed}),{code:'OPERATION_CONFLICT'});assert.equal(s.rows.skinPhoto.length,1);
 });
 test('failed metadata transaction cleans uploaded bytes before capture retry',async()=>{
- const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',status:'paid_pending_review'});
+ const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',paidThrough:new Date('2026-12-09T18:00:00Z'),status:'paid_pending_review'});
  const create=s.db.skinPhoto.create;let fail=true;s.db.skinPhoto.create=async(args:any)=>{if(fail){fail=false;throw Error('synthetic metadata failure')}return create(args)};
  const input={targetType:'enrollment',targetId:id,captureDate:'2026-11-09T17:00:00.000Z',photo:await jpeg()},captureId=randomUUID();
  await assert.rejects(s.service.capture(A,captureId,input));assert.equal(s.objects.size,0);assert.equal((await s.service.capture(A,captureId,input)).created,true);assert.equal(s.objects.size,1);
@@ -68,7 +68,7 @@ test('identity metadata failure compensates both distinct image objects',async()
  await assert.rejects(s.service.identity(A,e.case.id,randomUUID(),{expectedRevision:String(e.case.revision),fullName:'Synthetic Example',dateOfBirth:'1990-01-01',physicallyInNC:'true',idPhoto:bytes,selfie:bytes}));assert.equal(s.objects.size,0);assert.equal(s.rows.photoCleanup.length,0);
 });
 test('incomplete medical drafts resume history and edited sites refresh draft required slots',async()=>{
- const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='medical_history';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',status:'paid_pending_review'});
+ const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='medical_history';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',paidThrough:new Date('2026-12-09T18:00:00Z'),status:'paid_pending_review'});
  const draft=await s.service.medical(A,id,randomUUID(),{expectedRevision:e.case.revision,questionnaireVersion:'0.9-draft',answers:{M1:'male'}});assert.equal(draft.response.case.status,'medical_history');
  s.rows.launchCase[0].status='photos';const setId=randomUUID();await s.service.photoSet(A,setId,{purpose:'enrollment',targetId:id,items:[]});s.rows.intakeRevision[0].answers={...s.rows.intakeRevision[0].answers,M6:['chest','back']};const changed=await s.service.photoSet(A,setId,{purpose:'enrollment',targetId:id,items:[]});assert.deepEqual(changed.photoSet.requiredSlots,['front','left','right','chest','back']);
 });
@@ -79,13 +79,13 @@ test('pending identity or skin cleanup quarantines its deterministic path withou
  s.rows.photoCleanup.push({photoId:path.split('/')[1].slice(0,36),userId:A,photoUrl:path});s.objects.set(path,bytes);
  await assert.rejects(s.service.identity(A,e.case.id,identityId,{expectedRevision:String(e.case.revision),fullName:'Synthetic Example',dateOfBirth:'1990-01-01',physicallyInNC:'true',idPhoto:bytes,selfie:bytes}),{code:'OPERATION_CONFLICT'});
  assert.equal(s.objects.size,1);assert.equal(s.rows.photoCleanup.length,1);assert.equal(s.rows.identityVerification.length,0);
- s.rows.launchCase[0].status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:e.case.id,patientId:A,planId:'care',status:'paid_pending_review'});
+ s.rows.launchCase[0].status='photos';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:e.case.id,patientId:A,planId:'care',paidThrough:new Date('2026-12-09T18:00:00Z'),status:'paid_pending_review'});
  const captureId=randomUUID(),skin=captureIdentity(A,captureId);s.rows.photoCleanup.push({photoId:skin.id,userId:A,photoUrl:skin.storagePath});s.objects.set(skin.storagePath,bytes);
  await assert.rejects(s.service.capture(A,captureId,{targetType:'enrollment',targetId:e.case.id,captureDate:'2026-11-09T17:00:00.000Z',photo:bytes}),{code:'OPERATION_CONFLICT'});
  assert.equal(s.objects.size,2);assert.equal(s.rows.photoCleanup.length,2);assert.equal(s.rows.skinPhoto.length,0);
 });
 test('paid editable cases reconsent to rotated documents without resetting their stage or membership',async()=>{
- const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='photos';const membership={...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',status:'paid_pending_review'};s.rows.careMembership.push(membership);
+ const s=setup();const e=await begin(s),id=e.case.id;s.rows.launchCase[0].status='photos';const membership={...fixtures['GET /billing'].response.membership,id:randomUUID(),caseId:id,patientId:A,planId:'care',paidThrough:new Date('2026-12-09T18:00:00Z'),status:'paid_pending_review'};s.rows.careMembership.push(membership);
  const updated=structuredClone(catalog);for(const d of updated.consents){d.version=2;d.body='DRAFT rotated '+d.key;d.sha256=createHash('sha256').update(d.body).digest('hex')};s.rows.launchSettings[0].active=false;s.rows.launchSettings.push({id:randomUUID(),version:2,active:true,contentVersion:'0.9-draft',content:updated,clinicianId:clinician});
  const r=await s.service.consents(A,id,{expectedRevision:e.case.revision,acceptances:updated.consents.map(({key,version,sha256}:any)=>({key,version,sha256}))},'127.0.0.1');assert.equal(r.response.case.status,'photos');assert.equal(r.response.membership.id,membership.id);assert.equal(r.response.consents.every((d:any)=>d.version===2&&d.acceptedAt),true);assert.equal(s.rows.consentAcceptance.length,8);
 });
@@ -95,3 +95,4 @@ test('historical frozen cases retain their accepted publication through active c
  let r=await s.service.get(A);assert.equal(r.response.consents.every((d:any)=>d.version===1&&d.acceptedAt),true);assert.equal(r.response.consents[0].body,catalog.consents[0].body);
  s.rows.launchSettings[1].content={};for(const status of ['submitted','approved','rejected']){row.status=status;r=await s.service.get(A);assert.equal(r.response.consents.every((d:any)=>d.version===1&&d.acceptedAt),true)}
 });
+test('expired pending-review payment cannot write intake or clinical captures',async()=>{const s=setup();const e=await begin(s);s.rows.launchCase[0].status='medical_history';s.rows.careMembership.push({...fixtures['GET /billing'].response.membership,id:randomUUID(),patientId:A,caseId:e.case.id,status:'paid_pending_review',paidThrough:new Date('2026-11-09T18:00:00Z')});await assert.rejects(s.service.medical(A,e.case.id,randomUUID(),{expectedRevision:e.case.revision,questionnaireVersion:'0.9-draft',answers:fixtures['PUT /enrollment/:caseId/medical/:revisionId'].request.answers}),{code:'CARE_ACCESS_REQUIRED'})});

@@ -1,3 +1,5 @@
+import {careAccess} from './careAccess';
+import {createBillingLifecycle} from './billingLifecycle';
 import {randomUUID,createHash} from 'node:crypto';
 import {prisma} from '../config/database';
 import {MembershipSchema,BillingResponseSchema,UUIDSchema,DestinationSchema} from '../contracts/unzitLaunch';
@@ -21,8 +23,8 @@ export function createLaunchBilling({db,provider,now=()=>new Date(),returnOrigin
  const priceId=(settings:any,planId:string)=>settings[planId==='care'?'carePriceId':'allInPriceId']??(provider.kind==='fake'?`price_fake_${planId}_${settings.version}`:null);
  async function memberDTO(tx:any,m:any){
   if(!m)return null;
-  const c=await tx.launchCase.findUnique({where:{id:m.caseId}}),covered=m.paidThrough&&new Date(m.paidThrough)>now(),rejected=m.status==='rejected';
-  const access=!rejected&&c?.status==='approved'&&['active','past_due'].includes(m.status)&&covered?'care':rejected||m.status==='ended'||['active','past_due'].includes(m.status)&&!covered?'read_only':'enrollment';
+  const c=await tx.launchCase.findUnique({where:{id:m.caseId}});
+  const access=careAccess(c,m,now())??'enrollment';
   return MembershipSchema.parse({id:m.id,planId:m.planId,status:m.status,amountCents:m.amountCents,currency:m.currency??'usd',activatedAt:iso(m.activatedAt),currentPeriodEnd:iso(m.currentPeriodEnd),paidThrough:iso(m.paidThrough),cancelAtPeriodEnd:m.cancelAtPeriodEnd??false,cadenceAnchor:iso(m.cadenceAnchor),destinationRequired:m.destinationRequired??false,refundStatus:m.refundStatus??'not_applicable',access});
  }
  const response=async(tx:any,m:any,action:any=null)=>BillingResponseSchema.parse({membership:await memberDTO(tx,m),action});
@@ -71,12 +73,13 @@ export function createLaunchBilling({db,provider,now=()=>new Date(),returnOrigin
      }
      const paidThrough=maxDate(m.paidThrough,observed.paidThrough),hasPaid=!!paidThrough;
      const settledPlan=observed.paidThrough!==null,changed=settledPlan&&m.planId!==planId;
+     if(changed&&(!observed.planChangedAt||!Number.isFinite(Date.parse(observed.planChangedAt))))throw unavailable();
      let status=m.status;
      if(m.status!=='rejected')status=observed.status==='canceled'?'ended':observed.status==='past_due'?'past_due':hasPaid?(caseRow?.status==='approved'?'active':'paid_pending_review'):'awaiting_payment';
      const destination=DestinationSchema.safeParse(caseRow?.destination);
      const update:any={stripeCustomerId:observed.customerId,stripeSubscriptionId:observed.subscriptionId,checkoutSessionId:m.checkoutSessionId??observed.checkoutSessionId,currentPeriodEnd:observed.currentPeriodEnd?new Date(observed.currentPeriodEnd):m.currentPeriodEnd,paidThrough,cancelAtPeriodEnd:observed.cancelAtPeriodEnd,status,providerUpdatedAt:new Date(Math.max(+now(),m.providerUpdatedAt?+new Date(m.providerUpdatedAt)+1:0))};
      if(settledPlan){update.planId=planId;update.amountCents=amount;update.settingsVersion=selected.version}
-     if(changed){update.destinationRequired=!destination.success||destination.data.planId!==planId;if(caseRow?.status==='approved')update.cadenceAnchor=new Date(observed.payment?.confirmedAt??event.createdAt)}
+     if(changed){update.destinationRequired=!destination.success||destination.data.planId!==planId;if(caseRow?.status==='approved')update.cadenceAnchor=new Date(observed.planChangedAt!)}
      await tx.careMembership.update({where:{id:m.id},data:update});
      if(hasPaid&&caseRow?.status==='payment')await tx.launchCase.update({where:{id:caseRow.id},data:{status:'medical_history',revision:caseRow.revision+1}});
      if(hasPaid){const operation=await tx.billingOperation.findFirst({where:{membershipId:m.id,kind:'checkout'}});if(operation)await tx.billingOperation.update({where:{id:operation.id},data:{status:'succeeded',failureCode:null}})}
@@ -130,6 +133,15 @@ export function createLaunchBilling({db,provider,now=()=>new Date(),returnOrigin
   async portal(patientId:string,input:unknown){const a=portalInput.parse(input);const context=await db.$transaction(async(tx:any)=>{await lock(tx,patientId);const m=await tx.careMembership.findUnique({where:{id:a.membershipId}});if(!m||m.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');if(!m.stripeCustomerId)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');return {m,settings:await activeLaunchSettings(tx)}});try{return await provider.portal({customerId:context.m.stripeCustomerId,membershipId:context.m.id,settings:context.settings,returnUrl})}catch{throw unavailable()}},
   async webhook(raw:Buffer,signature:string){let event:BillingEvent;try{event=provider.verifyWebhook(raw,signature)}catch{throw enrollmentError(400,'VALIDATION_ERROR')}return processEvent(event)},
   processEvent,
+  async reconcile(limit=25){const counts=await createBillingLifecycle({db,provider,now,reconcileCheckout:async op=>{
+   const context=await contextFor(op.membershipId,op.id);if(!context.membership.checkoutSessionId)return 'quarantined';
+   await processEvent({id:'reconcile_'+op.id+'_'+now().getTime(),type:'checkout.session.completed',objectId:context.membership.checkoutSessionId,createdAt:now().toISOString()},{membershipId:op.membershipId,operationId:op.id});
+   const current=await contextFor(op.membershipId,op.id);return current.operation.status==='succeeded'?'succeeded':'pending';
+  }}).reconcile(limit>1?Math.ceil(limit/2):limit);
+   const remaining=limit-counts.examined;
+   if(remaining>0){const events=await db.stripeEvent.findMany({where:{status:{in:['pending','failed']}},orderBy:[{createdAt:'asc'},{id:'asc'}],take:remaining});for(const event of events.slice(0,remaining)){counts.examined++;try{await processEvent({id:event.providerEventId,type:event.type,objectId:event.objectId,createdAt:iso(event.providerCreatedAt)!});counts.succeeded++}catch{counts.failed++}}}
+   return counts;
+  },
   async resolveFake(patientId:string,email:string,operationId:string,outcome:'succeed'|'decline'|'requires_action'){
    if(provider.kind!=='fake'||!email.endsWith('@example.invalid'))throw enrollmentError(403,'INSUFFICIENT_PERMISSIONS');UUIDSchema.parse(operationId);fakeResolutionInput.parse({outcome});
    const context=await db.$transaction(async(tx:any)=>{await lock(tx,patientId);const o=await tx.billingOperation.findUnique({where:{id:operationId}});if(!o||o.patientId!==patientId||o.kind!=='checkout')throw enrollmentError(404,'NOT_FOUND');const m=await tx.careMembership.findUnique({where:{id:o.membershipId}});if(!m||m.patientId!==patientId)throw enrollmentError(404,'NOT_FOUND');if(o.result?.fakeOutcome==='succeed'&&outcome!=='succeed')throw enrollmentError(409,'OPERATION_CONFLICT');const result={...(o.result??{}),fakeOutcome:outcome,...(outcome==='succeed'?{confirmedAt:o.result?.confirmedAt??now().toISOString()}: {})};const saved=await tx.billingOperation.update({where:{id:o.id},data:{status:outcome==='succeed'?o.status:outcome==='decline'?'failed':'requires_action',failureCode:outcome==='decline'?'provider_declined':null,result}});return {membership:m,operation:saved}});

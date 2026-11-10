@@ -6,7 +6,7 @@ export type BillingConfig={kind:'fake'|'stripe_test';returnOrigin:string;secretK
 export type CheckoutInput={membershipId:string;operationId:string;providerKey:string;priceId:string;amountCents:number;planId:'care'|'all_in';returnUrl:string};
 export type ProviderCheckout={id:string;url:string;expiresAt:string};
 export type BillingEvent={id:string;type:string;objectId:string;createdAt:string};
-export type ProviderSnapshot={membershipId:string;customerId:string;subscriptionId:string;checkoutSessionId:string|null;priceId:string;status:'incomplete'|'active'|'past_due'|'canceled';currentPeriodEnd:string|null;paidThrough:string|null;cancelAtPeriodEnd:boolean;observedAt:string;payment:null|{id:string;invoiceId:string;amountCents:number;confirmedAt:string};additionalPayments?:{id:string;invoiceId:string;amountCents:number;confirmedAt:string}[]};
+export type ProviderSnapshot={membershipId:string;customerId:string;subscriptionId:string;checkoutSessionId:string|null;priceId:string;status:'incomplete'|'active'|'past_due'|'canceled';currentPeriodEnd:string|null;paidThrough:string|null;cancelAtPeriodEnd:boolean;observedAt:string;planChangedAt?:string|null;payment:null|{id:string;invoiceId:string;amountCents:number;confirmedAt:string};additionalPayments?:{id:string;invoiceId:string;amountCents:number;confirmedAt:string}[]};
 export type ProviderContext={membership:any;operation?:any};
 export interface BillingProvider{
  kind:'fake'|'stripe_test';
@@ -15,7 +15,9 @@ export interface BillingProvider{
  portal(input:{customerId:string;membershipId:string;settings:any;returnUrl:string}):Promise<{url:string;expiresAt:string}>;
  verifyWebhook(raw:Buffer,signature:string):BillingEvent;
  retrieve(event:BillingEvent,context?:ProviderContext):Promise<ProviderSnapshot|null>;
- refundLatestInvoice?(input:{subscriptionId:string;providerKey:string}):Promise<{refundId:string;paymentId:string;invoiceId:string;amountCents:number;status:'pending'|'succeeded'|'failed'}>;
+ refundLatestInvoice?(input:{subscriptionId:string;providerKey:string;paymentId?:string;invoiceId?:string;amountCents?:number}):Promise<{refundId:string;paymentId:string;invoiceId:string;amountCents:number;status:'pending'|'succeeded'|'failed'}>;
+ resolveRefundTarget?(input:{subscriptionId:string;paymentId:string;invoiceId:string;amountCents:number}):Promise<{paymentId:string;invoiceId:string;amountCents:number;confirmedAt:string}>;
+ retrieveRefund?(input:{refundId:string;paymentId:string;invoiceId:string;amountCents:number}):Promise<{refundId:string;paymentId:string;invoiceId:string;amountCents:number;status:'pending'|'succeeded'|'failed'}>;
  cancelImmediately?(subscriptionId:string,providerKey:string):Promise<void>;
 }
 const unavailable=()=>enrollmentError(503,'BILLING_UNAVAILABLE');

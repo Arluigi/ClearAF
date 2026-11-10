@@ -36,7 +36,7 @@ const model=(rows:()=>any[])=>({
  updateMany:async({data}:any)=>{writes.push(data);return {count:0}},
  upsert:async({where,update,create}:any)=>{const r=rows().find(r=>matches(r,where));writes.push(r?update:create);return r?Object.assign(r,update):create}
 });
-const db:any={$transaction:async(fn:any)=>{transactionActive=true;try{return await fn(db)}finally{transactionActive=false}},$queryRaw:async()=>[{active:true}],user:model(()=>users),dermatologist:model(()=>[{id:D,email:'doctor@test.invalid'},{id:E,email:'dr.amitom@clearaf.com'}]),skinPhoto:model(()=>photos),photoReview:model(()=>reviews),photoCleanup:model(()=>cleanups),careDecision:model(()=>careDecisions),prescription:model(()=>[{id:P,patientId:B,dermatologistId:D}]),message:model(()=>[]),appointment:model(()=>appointments)};
+const db:any={launchCase:{findUnique:async()=>null},clinicalPhotoSetItem:{findFirst:async()=>null},$transaction:async(fn:any)=>{transactionActive=true;try{return await fn(db)}finally{transactionActive=false}},$queryRaw:async()=>[{active:true}],user:model(()=>users),dermatologist:model(()=>[{id:D,email:'doctor@test.invalid'},{id:E,email:'dr.amitom@clearaf.com'}]),skinPhoto:model(()=>photos),photoReview:model(()=>reviews),photoCleanup:model(()=>cleanups),careDecision:model(()=>careDecisions),prescription:model(()=>[{id:P,patientId:B,dermatologistId:D}]),message:model(()=>[]),appointment:model(()=>appointments)};
 const originalLoad=(Module as any)._load;
 (Module as any)._load=function(name:string,...args:any[]){if(name==='@prisma/client')return {PrismaClient:class{constructor(){return db}}};return originalLoad.call(this,name,...args)};
 const config=require('../src/config/supabase');

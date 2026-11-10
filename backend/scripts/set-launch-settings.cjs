@@ -13,6 +13,8 @@ async function validateSettings(input,retrievePrice,clinicianExists){
 async function publishSettings(db,settings){
  await db.query('BEGIN');try{
  await db.query('LOCK TABLE public.launch_settings IN EXCLUSIVE MODE');
+ const history=(await db.query('SELECT "carePriceId","allInPriceId" FROM public.launch_settings')).rows;
+ if(history.some(row=>row.carePriceId===settings.allInPriceId||row.allInPriceId===settings.carePriceId))throw Error('Price belongs to another plan');
  const {rows:[previous]}=await db.query('select * from public.launch_settings where active FOR UPDATE');
  if(!previous)throw Error('Missing settings');
  // Content can only be switched to an existing immutable publication.

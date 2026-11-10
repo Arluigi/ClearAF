@@ -6,6 +6,8 @@ export function createFakeBilling({now=()=>new Date()}:{now?:()=>Date}={}):Billi
  return {
   kind:'fake',
   async checkout(input:CheckoutInput){return {id:'cs_test_fake_'+input.providerKey,url:input.returnUrl+'?fakeOperation='+input.operationId+'&attempt='+encodeURIComponent(input.providerKey),expiresAt:new Date(now().getTime()+30*60_000).toISOString()}},
+  async cancelImmediately(){},
+  async refundLatestInvoice(input){if(!input.paymentId||!input.invoiceId||!input.amountCents)throw enrollmentError(503,'BILLING_UNAVAILABLE');return {refundId:'re_fake_'+input.providerKey,paymentId:input.paymentId,invoiceId:input.invoiceId,amountCents:input.amountCents,status:'succeeded'}},
   async expireCheckout(){/* Fake payment truth exists only in the durable, owner-scoped resolution operation. */},
   async portal(input){return {url:'http://127.0.0.1/UNZIT-fake-portal/'+input.membershipId,expiresAt:new Date(now().getTime()+30*60_000).toISOString()}},
   verifyWebhook(){throw enrollmentError(400,'VALIDATION_ERROR')},

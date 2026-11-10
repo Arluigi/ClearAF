@@ -25,9 +25,17 @@ export function createStripeBilling(config:BillingConfig,client?:any,{now=()=>ne
   const invoice=s.latest_invoice?testObject(typeof s.latest_invoice==='string'?await stripe.invoices.retrieve(s.latest_invoice):s.latest_invoice):null;
   const paid=invoice?.status==='paid'&&invoice.amount_remaining===0;
   const payment=paid?await invoicePayment(invoice):null;
+  let planChangedAt=paid&&invoice?.billing_reason==='subscription_update'?iso(invoice.status_transitions?.paid_at??invoice.created):null;
+  // A delayed event may observe a later renewal. Recover the latest settled change
+  // for the current price from bounded provider history, never the event timestamp.
+  if(paid&&!planChangedAt&&stripe.invoices?.list){
+   const history=await stripe.invoices.list({subscription:s.id,status:'paid',limit:100});
+   const changes=history.data.map(testObject).filter((i:any)=>i.status==='paid'&&i.amount_remaining===0&&i.currency==='usd'&&i.billing_reason==='subscription_update'&&i.lines?.has_more===false&&i.lines.data.some((line:any)=>line.amount>=0&&objectId(line.pricing?.price_details?.price??line.price)===price.id));
+   changes.sort((a:any,b:any)=>b.created-a.created);if(changes[0])planChangedAt=iso(changes[0].status_transitions?.paid_at??changes[0].created);
+  }
   const periodEnd=iso(item.current_period_end);
   if(!s.metadata?.membershipId||!objectId(s.customer)||!periodEnd)throw unavailable();
-  return {membershipId:s.metadata.membershipId,customerId:objectId(s.customer)!,subscriptionId:s.id,checkoutSessionId,priceId:price.id,status:s.status==='active'?'active':['past_due','unpaid'].includes(s.status)?'past_due':['canceled','incomplete_expired'].includes(s.status)?'canceled':'incomplete',currentPeriodEnd:periodEnd,paidThrough:paid?periodEnd:null,cancelAtPeriodEnd:s.cancel_at_period_end===true,observedAt:now().toISOString(),payment};
+  return {membershipId:s.metadata.membershipId,customerId:objectId(s.customer)!,subscriptionId:s.id,checkoutSessionId,priceId:price.id,status:s.status==='active'?'active':['past_due','unpaid'].includes(s.status)?'past_due':['canceled','incomplete_expired'].includes(s.status)?'canceled':'incomplete',currentPeriodEnd:periodEnd,paidThrough:paid?periodEnd:null,cancelAtPeriodEnd:s.cancel_at_period_end===true,observedAt:now().toISOString(),planChangedAt,payment};
  }
  return {
   kind:'stripe_test',
@@ -67,13 +75,36 @@ export function createStripeBilling(config:BillingConfig,client?:any,{now=()=>ne
    if(event.type.startsWith('invoice.')){const invoice=testObject(await stripe.invoices.retrieve(event.objectId));const id=objectId(invoice.parent?.subscription_details?.subscription);if(!id)return null;const snapshot=await subscription(id);const payment=await invoicePayment(invoice);return {...snapshot,additionalPayments:payment?[payment]:[]}}
    return null;
   },
+  async resolveRefundTarget(input){
+   const subscription=testObject(await stripe.subscriptions.retrieve(input.subscriptionId));
+   const invoices=await stripe.invoices.list({subscription:subscription.id,status:'paid',limit:100});
+   for(const invoice of invoices.data){testObject(invoice);if(invoice.status!=='paid'||invoice.currency!=='usd')throw unavailable();if(invoice.amount_paid===0)continue;const payment=await invoicePayment(invoice);if(!payment)throw unavailable();return {paymentId:payment.id,invoiceId:payment.invoiceId,amountCents:payment.amountCents,confirmedAt:payment.confirmedAt}}
+   throw unavailable();
+  },
   async refundLatestInvoice(input){
    const s=testObject(await stripe.subscriptions.retrieve(input.subscriptionId));
-   const invoices=await stripe.invoices.list({subscription:s.id,status:'paid',limit:1});if(!invoices.data.length)throw unavailable();const invoice=testObject(invoices.data[0]),payment=await invoicePayment(invoice);if(!payment)throw unavailable();
-   const refund=await stripe.refunds.create({...payment.id.startsWith('pi_')?{payment_intent:payment.id}:{charge:payment.id},amount:payment.amountCents},{idempotencyKey:input.providerKey});
+   const invoice=input.invoiceId?testObject(await stripe.invoices.retrieve(input.invoiceId)):testObject((await stripe.invoices.list({subscription:s.id,status:'paid',limit:1})).data[0]);if(input.invoiceId&&objectId(invoice.parent?.subscription_details?.subscription)!==s.id)throw unavailable();const payment=await invoicePayment(invoice);if(!payment)throw unavailable();
+   if(input.invoiceId&&input.invoiceId!==payment.invoiceId||input.paymentId&&input.paymentId!==payment.id||input.amountCents!==undefined&&input.amountCents!==payment.amountCents)throw unavailable();
+   const previous=await stripe.refunds.list({...payment.id.startsWith('pi_')?{payment_intent:payment.id}:{charge:payment.id},limit:100});
+   if(previous.has_more)throw unavailable();
+   const usable=previous.data.filter((r:any)=>{
+    if(objectId(r.payment_intent)!==payment.id&&objectId(r.charge)!==payment.id||r.amount!==payment.amountCents||!['pending','requires_action','succeeded','failed','canceled'].includes(r.status))throw unavailable();
+    return ['pending','requires_action','succeeded'].includes(r.status);
+   });
+   if(usable.length>1)throw unavailable();
+   const refund=usable[0]??await stripe.refunds.create({...payment.id.startsWith('pi_')?{payment_intent:payment.id}:{charge:payment.id},amount:payment.amountCents},{idempotencyKey:input.providerKey});
+   if(!['pending','requires_action','succeeded','failed','canceled'].includes(refund.status))throw unavailable();
    if(objectId(refund.payment_intent)!==payment.id&&objectId(refund.charge)!==payment.id||refund.amount!==payment.amountCents||!refund.id)throw unavailable();
-   return {refundId:refund.id,paymentId:payment.id,invoiceId:payment.invoiceId,amountCents:refund.amount,status:refund.status==='succeeded'?'succeeded':refund.status==='pending'?'pending':'failed'};
+   return {refundId:refund.id,paymentId:payment.id,invoiceId:payment.invoiceId,amountCents:refund.amount,status:refund.status==='succeeded'?'succeeded':['pending','requires_action'].includes(refund.status)?'pending':'failed'};
   },
-  async cancelImmediately(id,key){testObject(await stripe.subscriptions.cancel(id,{invoice_now:false,prorate:false},{idempotencyKey:key}))}
+  async retrieveRefund(input){
+   const invoice=testObject(await stripe.invoices.retrieve(input.invoiceId)),payment=await invoicePayment(invoice);
+   if(!payment||payment.id!==input.paymentId||payment.amountCents!==input.amountCents)throw unavailable();
+   const refund=await stripe.refunds.retrieve(input.refundId);
+   if(!['pending','requires_action','succeeded','failed','canceled'].includes(refund.status))throw unavailable();
+   if(refund.id!==input.refundId||objectId(refund.payment_intent)!==payment.id&&objectId(refund.charge)!==payment.id||refund.amount!==payment.amountCents)throw unavailable();
+   return {refundId:refund.id,paymentId:payment.id,invoiceId:payment.invoiceId,amountCents:refund.amount,status:refund.status==='succeeded'?'succeeded':['pending','requires_action'].includes(refund.status)?'pending':'failed'};
+  },
+  async cancelImmediately(id,key){const current=testObject(await stripe.subscriptions.retrieve(id));if(current.status==='canceled')return;const saved=testObject(await stripe.subscriptions.cancel(id,{invoice_now:false,prorate:false},{idempotencyKey:key}));if(saved.status!=='canceled')throw unavailable()}
  };
 }

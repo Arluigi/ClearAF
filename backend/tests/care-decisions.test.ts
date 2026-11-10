@@ -5,7 +5,7 @@ import Module from 'node:module';
 import {randomUUID} from 'node:crypto';
 process.env.SUPABASE_URL='https://care-decisions-test.supabase.co';process.env.SUPABASE_ANON_KEY='synthetic';process.env.SUPABASE_SERVICE_ROLE_KEY='synthetic';
 const A=randomUUID(),B=randomUUID(),C=randomUUID(),D=randomUUID();
-let decisions:any[]=[],photos:any[]=[],assigned=C,afterLock:(()=>void)|undefined,queue=Promise.resolve(),seq=0;
+let launchCase:any=null,membership:any=null,decisions:any[]=[],photos:any[]=[],assigned=C,afterLock:(()=>void)|undefined,queue=Promise.resolve(),seq=0;
 const matches=(r:any,w:any={}):boolean=>Object.entries(w).every(([k,v]:any)=>v&&typeof v==='object'&&!(v instanceof Date)?matches(r,v):r[k]===v);
 const withClinician=(row:any)=>row?{...row,clinician:{name:row.clinicianId===C?'Clinician C':'Clinician D'}}:row;
 const sortDesc=(rows:any[])=>rows.slice().sort((a,b)=>(b.createdAt as Date).getTime()-(a.createdAt as Date).getTime()||(a.id<b.id?1:-1));
@@ -19,6 +19,9 @@ const careDecision={
 };
 const skinPhoto={findFirst:async({where}:any)=>photos.find(p=>matches(p,where))??null};
 const db:any={careDecision,skinPhoto,
+ careMembership:{findUnique:async()=>membership},
+ billingOperation:{findFirst:async()=>membership?{id:'operation',result:{decisionIds:[decisions[0]?.id]}}:null},
+ launchCase:{findUnique:async()=>launchCase},
  user:{findUnique:async({where}:any)=>where.id===A?{id:A,dermatologistId:assigned}:where.id===B?{id:B,dermatologistId:D}:null},
  $queryRaw:async()=>{afterLock?.();afterLock=undefined;return[]},
  $transaction:async(fn:any)=>{const prior=queue;let release!:()=>void;queue=new Promise<void>(r=>release=r);await prior;try{return await fn(db)}finally{release()}}};
@@ -28,7 +31,7 @@ app.use('/decisions',require('../src/routes/care-decisions').default);app.use(re
 let server:any,base:string;
 before(async()=>{server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/decisions`});
 after(()=>new Promise<void>(r=>server.close(r)));
-beforeEach(()=>{decisions=[];photos=[];assigned=C;afterLock=undefined});
+beforeEach(()=>{launchCase=null;membership=null;decisions=[];photos=[];assigned=C;afterLock=undefined});
 async function call(path:string,who:string=A,method='GET',body?:any){const r=await fetch(base+path,{method,headers:{'x-identity':who,'content-type':'application/json'},body:body===undefined||method==='GET'?undefined:JSON.stringify(body)});return {status:r.status,body:await r.json().catch(()=>({})) as any}}
 const record=(id=randomUUID(),body:any={decision:'refer_out',patientMessage:'Please see an in-person dermatologist.',photoId:null},who=C,patient=A)=>call(`/patients/${patient}/decisions/${id}`,who,'PUT',body);
 test('roles are enforced',async()=>{
@@ -83,3 +86,7 @@ test('strict validation',async()=>{
  assert.equal((await call(`/patients/${A}?limit=51`,C)).status,400);
  assert.equal((await call(`/patients/${A}/decisions/${randomUUID()}/refund`,C,'PUT',{refundStatus:'pending'})).status,400);
 });
+
+test('payment backed rejection cannot be manually marked issued',async()=>{const id=randomUUID();await record(id);membership={id:'member',patientId:A,status:'rejected'};const r=await call(`/patients/${A}/decisions/${id}/refund`,C,'PUT',{refundStatus:'issued'});assert.equal(r.status,409);assert.equal(decisions[0].refundStatus,'pending')});
+
+test('new launch decisions require authoritative review but old legacy replay remains valid',async()=>{const id=randomUUID();await record(id);launchCase={id:'case',patientId:A};assert.equal((await record()).status,403);assert.equal((await record(id)).status,200)});

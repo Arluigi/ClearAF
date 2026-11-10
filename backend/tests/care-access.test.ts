@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {careAccess,assertCareAccess} from '../src/services/careAccess';
+const now=new Date('2026-11-09T18:00:00Z');
+const c={status:'approved'};const m={status:'active',paidThrough:'2026-11-10T18:00:00Z',cancelAtPeriodEnd:true};
+test('covered approved active and past_due memberships retain care through period-end cancellation',()=>{for(const status of ['active','past_due'])assert.equal(careAccess(c,{...m,status},now),'care')});
+test('expiry boundary and rejection retain read-only history',()=>{assert.equal(careAccess(c,{...m,paidThrough:now},now),'read_only');assert.equal(careAccess(c,{...m,status:'rejected'},now),'read_only');assert.equal(careAccess(c,{...m,status:'ended'},now),'read_only')});
+test('pending review permits assigned clarification only on submitted correction cases',()=>{for(const status of ['submitted','needs_changes'])assert.doesNotThrow(()=>assertCareAccess({status},{...m,status:'paid_pending_review'},'clarification',now));assert.throws(()=>assertCareAccess({status:'medical_history'},{...m,status:'paid_pending_review'},'clarification',now),{code:'LAUNCH_STEP_REQUIRED'})});
+test('history account recovery cancellation urgent and enrollment remain available outside paid care',()=>{for(const scope of ['history','account','recovery','cancellation','urgent','enrollment'] as const)assert.doesNotThrow(()=>assertCareAccess(c,{...m,status:'rejected'},scope,now));assert.throws(()=>assertCareAccess(c,{...m,paidThrough:now},'clinical_write',now),{code:'CARE_ACCESS_REQUIRED'})});
+test('legacy accounts have no launch override and NC false blocks clinical approval and prescriptions',()=>{assert.equal(careAccess(null,null,now),null);assert.doesNotThrow(()=>assertCareAccess(null,null,'clinical_write',now));for(const scope of ['approval','prescription'] as const){assert.throws(()=>assertCareAccess(c,m,scope,now,false),{code:'LAUNCH_STEP_REQUIRED'});assert.doesNotThrow(()=>assertCareAccess(c,m,scope,now,true))}});
+
+test('unpaid malformed correction cases never unlock assigned clarification',()=>{for(const status of ['awaiting_payment','paid_pending_review'])assert.throws(()=>assertCareAccess({status:'submitted'},{status,paidThrough:null},'clarification',now),{code:'LAUNCH_STEP_REQUIRED'})});
+test('covered preapproval past-due cases retain enrollment and assigned clarification',()=>{const pending={status:'submitted'},membership={...m,status:'past_due'};assert.equal(careAccess(pending,membership,now),'enrollment');assert.doesNotThrow(()=>assertCareAccess(pending,membership,'clarification',now));assert.throws(()=>assertCareAccess(pending,membership,'clinical_write',now),{code:'CARE_ACCESS_REQUIRED'})});

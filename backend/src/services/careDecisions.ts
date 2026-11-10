@@ -26,6 +26,7 @@ export async function record(patientId:string,clinicianId:string,id:string,input
   if(existing.clinicianId!==clinicianId||existing.decision!==input.decision||existing.patientMessage!==input.patientMessage||existing.photoId!==input.photoId)throw decisionError(409,'DECISION_CONFLICT');
   return {decision:decisionDTO(existing),created:false};
  }
+ if(await db.launchCase.findUnique({where:{patientId}}))throw decisionError(403,'LAUNCH_STEP_REQUIRED');
  if(input.photoId&&!await db.skinPhoto.findFirst({where:{id:input.photoId,userId:patientId},select:{id:true}}))throw decisionError(404,'NOT_FOUND');
  const row=await db.careDecision.create({data:{id,patientId,clinicianId,decision:input.decision,patientMessage:input.patientMessage,photoId:input.photoId,refundStatus:input.decision==='async_care'?'not_applicable':'pending'},include}) as Row;
  return {decision:decisionDTO(row),created:true};
@@ -34,6 +35,9 @@ export async function markRefundIssued(patientId:string,clinicianId:string,id:st
  await lock(db,patientId,true);await authorize(db,patientId,clinicianId);
  const row=await db.careDecision.findFirst({where:{id,patientId},include}) as Row|null;
  if(!row)throw decisionError(404,'NOT_FOUND');
+ const membership=await db.careMembership.findUnique({where:{patientId}});
+ const refund=membership?await db.billingOperation.findFirst({where:{membershipId:membership.id,kind:'refund'}}):null;
+ if((refund?.result as any)?.decisionIds?.includes(id))throw decisionError(409,'REFUND_PROVIDER_REQUIRED');
  if(row.refundStatus==='issued')return {decision:decisionDTO(row)};
  if(row.refundStatus!=='pending')throw decisionError(409,'REFUND_NOT_PENDING');
  const saved=await db.careDecision.update({where:{id},data:{refundStatus:'issued',refundUpdatedAt:new Date()},include}) as Row;
