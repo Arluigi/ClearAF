@@ -654,3 +654,17 @@ model LaunchCheckInSubmission {
   @@index([checkInId, submittedAt, responseId])
   @@map("launch_check_in_submissions")
 }
+
+// Append-only full enrollment packages; SQL owns composite FKs and bounds.
+model LaunchCaseSubmission {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId String @db.Uuid
+  patientId String @db.Uuid
+  caseRevision Int
+  settingsVersion Int
+  submittedAt DateTime @db.Timestamp(3)
+  snapshot Json
+  @@unique([caseId,caseRevision], map: "launch_case_submissions_case_revision_key")
+  @@index([patientId,submittedAt,id], map: "launch_case_submissions_patient_history_idx")
+  @@map("launch_case_submissions")
+}

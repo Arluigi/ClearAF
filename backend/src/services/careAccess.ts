@@ -1,4 +1,5 @@
 import {enrollmentError} from './enrollment';
+import {DestinationSchema} from '../contracts/unzitLaunch';
 export type CareScope='clinical_write'|'clarification'|'history'|'account'|'recovery'|'cancellation'|'urgent'|'enrollment'|'approval'|'prescription';
 // Null means a legacy account: callers preserve the existing legacy enrollment policy.
 export function careAccess(caseRow:any,membership:any,now=new Date()):'care'|'enrollment'|'read_only'|null{
@@ -21,4 +22,23 @@ export async function requirePatientCareScope(db:any,patientId:string,scope:Care
  const caseRow=await db.launchCase.findUnique({where:{patientId}});
  const membership=caseRow?await db.careMembership.findUnique({where:{patientId}}):null;
  assertCareAccess(caseRow,membership,scope,now,affirmativeNC);return {caseRow,membership,access:careAccess(caseRow,membership,now)};
+}
+
+// Latest immutable submission wins, including a negative attestation. Corrections append.
+export async function currentNCEvidence(db:any,patientId:string,identity:any):Promise<boolean>{
+ const latest=await db.launchCheckInSubmission.findFirst({where:{patientId},orderBy:[{submittedAt:'desc'},{responseId:'desc'}]});
+ return latest?latest.answers?.physicallyInNC===true:identity?.attestedInNC===true;
+}
+export async function authorizeAssignedPatient(tx:any,patientId:string,clinicianId:string){
+ await tx.$queryRaw`SELECT id FROM public.user_profiles WHERE id=${patientId}::uuid FOR UPDATE`;
+ const patient=await tx.user.findUnique({where:{id:patientId}});
+ if(!patient||patient.dermatologistId!==clinicianId||!await tx.dermatologist.findUnique({where:{id:clinicianId}}))throw enrollmentError(404,'NOT_FOUND');return patient;
+}
+export async function assertLaunchPrescriptionAccess(tx:any,patientId:string,now=new Date()){
+ const row=await tx.launchCase.findUnique({where:{patientId}});if(!row)return null;
+ const membership=await tx.careMembership.findUnique({where:{patientId}}),identity=row.identityId?await tx.identityVerification.findUnique({where:{id:row.identityId}}):null;
+ assertCareAccess(row,membership,'prescription',now,await currentNCEvidence(tx,patientId,identity));
+ if(row.status!=='approved'||!identity||identity.patientId!==patientId||identity.caseId!==row.id||identity.status!=='approved')throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');
+ const destination=DestinationSchema.safeParse(row.destination);
+ if(membership.destinationRequired||!destination.success||destination.data.planId!==membership.planId)throw enrollmentError(403,'LAUNCH_STEP_REQUIRED');return row;
 }

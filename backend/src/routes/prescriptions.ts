@@ -2,6 +2,8 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/database';
 import { requireDermatologist, requirePatient } from '../middleware/auth';
+import {authorizeAssignedPatient,assertLaunchPrescriptionAccess} from '../services/careAccess';
+import {enrollmentError} from '../services/enrollment';
 
 const router = express.Router();
 
@@ -22,10 +24,10 @@ router.post('/', requireDermatologist, async (req, res, next) => {
 
     const validatedData = createSchema.parse(req.body);
 
-    const patient = await prisma.user.findUnique({ where: { id: validatedData.patientId, dermatologistId: req.user!.id } });
-    if (!patient) return res.status(404).json({ error: 'Patient not found or not assigned to you', code: 'PATIENT_NOT_FOUND' });
-
-    const prescription = await prisma.prescription.create({
+    const prescription = await prisma.$transaction(async tx=>{
+    await authorizeAssignedPatient(tx,validatedData.patientId,req.user!.id);
+    await assertLaunchPrescriptionAccess(tx,validatedData.patientId);
+    return tx.prescription.create({
       data: {
         patientId: validatedData.patientId,
         medicationName: validatedData.medicationName,
@@ -50,6 +52,7 @@ router.post('/', requireDermatologist, async (req, res, next) => {
       }
     });
 
+    });
     res.status(201).json({
       message: 'Prescription created successfully',
       prescription
@@ -137,7 +140,13 @@ router.patch('/:id', requireDermatologist, async (req, res, next) => {
     const validatedData = updateSchema.parse(req.body);
     const { id } = req.params;
 
-    const prescription = await prisma.prescription.update({
+    const prescription = await prisma.$transaction(async tx=>{
+    const existing=await tx.prescription.findUnique({where:{id}});
+    if(!existing)throw enrollmentError(404,'NOT_FOUND');
+    await authorizeAssignedPatient(tx,existing.patientId,req.user!.id);
+    await assertLaunchPrescriptionAccess(tx,existing.patientId);
+    if(existing.source==='treatrx_external'||existing.launchCaseId)throw enrollmentError(409,'OPERATION_CONFLICT');
+    return tx.prescription.update({
       where: {
         id,
         dermatologistId: req.user!.id,
@@ -157,6 +166,7 @@ router.patch('/:id', requireDermatologist, async (req, res, next) => {
       }
     });
 
+    });
     res.json({
       message: 'Prescription updated successfully',
       prescription

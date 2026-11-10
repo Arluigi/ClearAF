@@ -25,6 +25,7 @@ import worklistRoutes from './routes/worklist';
 import dashboardRoutes from './routes/dashboard';
 import launchEnrollmentRoutes from './routes/launch-enrollment';
 import launchCheckInRoutes from './routes/launch-check-ins';
+import launchReviewRoutes from './routes/launch-review';
 import launchBillingRoutes,{launchBillingWebhook,launchBillingReturn} from './routes/launch-billing';
 
 // Import middleware
@@ -75,7 +76,7 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 app.use('/api/auth', authRoutes);
-app.use('/api/launch',authenticateToken,launchBillingRoutes,launchEnrollmentRoutes,launchCheckInRoutes);
+app.use('/api/launch',authenticateToken,launchBillingRoutes,launchEnrollmentRoutes,launchCheckInRoutes,launchReviewRoutes);
 app.use('/api/users', authenticateToken, userRoutes);
 app.use('/api/appointments', authenticateToken, appointmentRoutes);
 app.use('/api/messages', authenticateToken, messageRoutes);

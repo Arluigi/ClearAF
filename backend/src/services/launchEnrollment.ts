@@ -60,6 +60,7 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
  const update=async(tx:any,row:any,data:any)=>tx.launchCase.update({where:{id:row.id},data:{...data,revision:row.revision+1}});
  const reply=async(tx:any,row:any,created:boolean)=>({response:await dto(tx,row),created});
  return {
+  readDTO:dto,
   async get(patientId:string){return db.$transaction(async(tx:any)=>{await lock(tx,patientId);let row=await tx.launchCase.findUnique({where:{patientId}});if(!row){await publication(tx);row=await tx.launchCase.create({data:{patientId,revision:0,status:'consents',flags:[],createdAt:now()}})}return reply(tx,row,false)})},
   async consents(patientId:string,caseId:string,input:unknown,observedIp:string){return db.$transaction(async(tx:any)=>{
    await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['PUT /enrollment/:caseId/consents'].request.parse(input),{docs}=await publication(tx);
@@ -83,10 +84,11 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
   })},
   async eligibility(patientId:string,caseId:string,input:unknown){return db.$transaction(async(tx:any)=>{
    await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));const a=contracts['PUT /enrollment/:caseId/eligibility'].request.parse(input);
-   if(row.eligibility&&launchFingerprint(row.eligibility.answers)===launchFingerprint(a.answers))return reply(tx,row,false);
+   if(row.status!=='eligibility'&&row.eligibility&&launchFingerprint(row.eligibility.answers)===launchFingerprint(a.answers))return reply(tx,row,false);
    mutable(row);version(row,a.expectedRevision);if(!['eligibility','needs_changes'].includes(row.status)||!row.identityId)noStep();
    const id=await tx.identityVerification.findUnique({where:{id:row.identityId}});if(!id||id.patientId!==patientId)noStep();const result=evaluateLaunchEligibility(a.answers,{dateOfBirth:new Date(id.dateOfBirth).toISOString().slice(0,10),attestedInNC:id.attestedInNC},now().toISOString().slice(0,10));
-   row=await update(tx,row,{eligibility:{answers:a.answers,...result},rulesVersion:result.rulesVersion,flags:result.flags,status:result.eligible?'payment':'ineligible'});return reply(tx,row,true);
+   const m=await tx.careMembership.findUnique({where:{patientId}}),covered=m&&['paid_pending_review','active','past_due'].includes(m.status)&&m.paidThrough&&new Date(m.paidThrough)>now();
+   row=await update(tx,row,{eligibility:{answers:a.answers,...result},rulesVersion:result.rulesVersion,flags:result.flags,status:result.eligible?(covered?'medical_history':'payment'):'ineligible'});return reply(tx,row,true);
   })},
   async medical(patientId:string,caseId:string,revisionId:string,input:unknown){return db.$transaction(async(tx:any)=>{
    await lock(tx,patientId);let row=await owned(tx,patientId,UUIDSchema.parse(caseId));UUIDSchema.parse(revisionId);const a=contracts['PUT /enrollment/:caseId/medical/:revisionId'].request.parse(input),answers=normalizeMedicalDraft(a.answers),hash=launchFingerprint({questionnaireVersion:a.questionnaireVersion,answers}),existing=await tx.intakeRevision.findUnique({where:{id:revisionId}});
@@ -133,10 +135,14 @@ export function createLaunchEnrollment(deps:{db:any;store:(path:string,bytes:Buf
    const id=row.identityId?await tx.identityVerification.findUnique({where:{id:row.identityId}}):null,intake=row.intakeId?await tx.intakeRevision.findUnique({where:{id:row.intakeId}}):null;
    if(!id||id.patientId!==patientId||!id.attestedInNC||['rejected','needs_changes'].includes(id.status)||!row.eligibility?.eligible||!intake||intake.questionnaireVersion!==settings.contentVersion||!(await currentReceipts(tx,patientId,docs)).every(d=>d.acceptedAt))throw enrollmentError(409,'INCOMPLETE_CASE');
    let history:any,destination:any;try{history=completeMedicalHistory(intake.answers);destination=DestinationSchema.parse(row.destination)}catch{throw enrollmentError(409,'INCOMPLETE_CASE')};if(destination.planId!==m.planId)throw enrollmentError(409,'INCOMPLETE_CASE');
-   const set=await tx.clinicalPhotoSet.findUnique({where:{id:a.photoSetId}});if(!set||set.patientId!==patientId||set.caseId!==caseId||set.status!=='draft')throw enrollmentError(409,'INCOMPLETE_PHOTO_SET');const items=(await setDTO(tx,set)).items;await validateClinicalPhotoItems(tx,patientId,set.id,items,requiredClinicalSlots(history),{purpose:'enrollment',id:caseId});
+   const set=await tx.clinicalPhotoSet.findUnique({where:{id:a.photoSetId}});if(!set||set.patientId!==patientId||set.caseId!==caseId||!(set.status==='draft'||set.status==='submitted'&&row.submittedAt&&row.photoSetId===set.id))throw enrollmentError(409,'INCOMPLETE_PHOTO_SET');const items=(await setDTO(tx,set)).items;await validateClinicalPhotoItems(tx,patientId,set.id,items,requiredClinicalSlots(history),{purpose:'enrollment',id:caseId});
    const patient=await tx.user.findUnique({where:{id:patientId}});if(!patient.dermatologistId){if(!settings.clinicianId||!await tx.dermatologist.findUnique({where:{id:settings.clinicianId}}))throw enrollmentError(409,'INCOMPLETE_CASE');await tx.user.update({where:{id:patientId},data:{dermatologistId:settings.clinicianId}})}
-   await tx.intakeRevision.update({where:{id:intake.id},data:{answers:history,submittedAt:now(),attestedAt:now()}});await tx.clinicalPhotoSet.update({where:{id:set.id},data:{status:'submitted',requiredSlots:requiredClinicalSlots(history)}});
-   row=await update(tx,row,{status:'submitted',submittedAt:now(),photoSetId:set.id,planId:m.planId,settingsVersion:settings.version});return reply(tx,row,true);
+   if(!intake.submittedAt)await tx.intakeRevision.update({where:{id:intake.id},data:{answers:history,submittedAt:now(),attestedAt:now()}});
+   if(set.status==='draft')await tx.clinicalPhotoSet.update({where:{id:set.id},data:{status:'submitted',requiredSlots:requiredClinicalSlots(history)}});
+   row=await update(tx,row,{status:'submitted',submittedAt:now(),photoSetId:set.id,planId:m.planId,settingsVersion:settings.version});
+   const response=await dto(tx,row);
+   await tx.launchCaseSubmission.create({data:{id:randomUUID(),caseId:row.id,patientId,caseRevision:row.revision,settingsVersion:settings.version,submittedAt:row.submittedAt,snapshot:{formatVersion:1,source:'submission',references:{identityId:row.identityId,intakeId:row.intakeId,photoSetId:row.photoSetId},case:response.case,consents:response.consents}}});
+   return {response,created:true};
   })}
  };
 }

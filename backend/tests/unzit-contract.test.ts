@@ -25,3 +25,4 @@ test('medical contract preserves explicit null branches and requires active sele
  assert.equal(MedicalHistorySchema.safeParse({...valid,M13:['none','lithium']}).success,false);
  assert.equal(MedicalHistorySchema.safeParse({...valid,M22:false}).success,false);
 });
+test('consent bodies preserve exact published bytes for the recorded SHA-256',async()=>{const {ConsentSchema}=await import('../src/contracts/unzitLaunch');const {createHash}=await import('node:crypto');const body='  DRAFT Synthetic original legal text.\n';const doc={...fixtures['GET /catalog'].response.consents[0],body,sha256:createHash('sha256').update(body).digest('hex')};const parsed=ConsentSchema.parse(doc);assert.equal(parsed.body,body);assert.equal(createHash('sha256').update(parsed.body).digest('hex'),parsed.sha256)});

@@ -1,0 +1,14 @@
+import express from 'express';
+import {requireDermatologist,requirePatient} from '../middleware/auth';
+import {launchReview} from '../services/launchReview';
+import {prescriptionRecords} from '../services/prescriptionRecords';
+import {contracts} from '../contracts/unzitLaunch';
+const router=express.Router();
+const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,res,next)=>{try{res.set('Cache-Control','no-store');await handler(req,res,next)}catch(error){next(error)}};
+router.get('/review-queue',requireDermatologist,route(async(req,res)=>{res.json(await launchReview.queue(req.user!.id,req.query))}));
+router.get('/patients/:patientId/chart',requireDermatologist,route(async(req,res)=>{res.json(await launchReview.chart(req.params.patientId,req.user!.id,req.query))}));
+router.get('/patients/:patientId/identity/:identityId/images',requireDermatologist,route(async(req,res)=>{contracts['GET /catalog'].request.parse(req.query);res.json(await launchReview.images(req.params.patientId,req.user!.id,req.params.identityId))}));
+router.put('/patients/:patientId/reviews/:reviewId',requireDermatologist,route(async(req,res)=>{contracts['GET /catalog'].request.parse(req.query);const {created,...response}=await launchReview.review(req.params.patientId,req.user!.id,req.params.reviewId,req.body);res.status(created?201:200).json(response)}));
+router.put('/patients/:patientId/prescriptions-sent/:recordId',requireDermatologist,route(async(req,res)=>{contracts['GET /catalog'].request.parse(req.query);const {created,prescription}=await prescriptionRecords.record(req.params.patientId,req.user!.id,req.params.recordId,req.body);res.status(created?201:200).json({prescription})}));
+router.get('/prescriptions-sent',requirePatient,route(async(req,res)=>{const q=contracts['GET /prescriptions-sent'].request.parse(req.query);res.json(await prescriptionRecords.list(req.user!.id,q.page,q.limit))}));
+export default router;
