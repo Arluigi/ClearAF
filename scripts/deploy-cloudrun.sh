@@ -44,7 +44,7 @@ gcloud builds submit "$repo_dir/backend" --project="$CLOUDRUN_PROJECT" --region=
 gcloud run deploy "$CLOUDRUN_SERVICE" --project="$CLOUDRUN_PROJECT" --region="$CLOUDRUN_REGION" \
   --image="$image" --service-account="$runtime_account" --set-secrets="$secret_csv" \
   --set-env-vars=NODE_ENV=production,TRUST_PROXY_HOPS=1 --port=8080 --min-instances=0 --max-instances=3 \
-  --cpu=1 --memory=512Mi --timeout=60s --allow-unauthenticated
+  --cpu=1 --memory=512Mi --timeout=60s --no-invoker-iam-check
 
 service_url="$(gcloud run services describe "$CLOUDRUN_SERVICE" --project="$CLOUDRUN_PROJECT" \
   --region="$CLOUDRUN_REGION" --format='value(status.url)')"
