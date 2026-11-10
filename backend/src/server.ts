@@ -41,6 +41,11 @@ dotenv.config();
 for (const line of enrollmentStartupLog()) console[line.level](line.text);
 
 const app = express();
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? '0');
+if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0) {
+  throw new Error('TRUST_PROXY_HOPS must be a non-negative integer');
+}
+app.set('trust proxy', trustProxyHops);
 const PORT = process.env.PORT || 3000;
 
 // Create HTTP server for WebSocket

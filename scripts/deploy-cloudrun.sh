@@ -43,7 +43,7 @@ gcloud builds submit "$repo_dir/backend" --project="$CLOUDRUN_PROJECT" --region=
   --ignore-file="$repo_dir/backend/.dockerignore" --tag="$image"
 gcloud run deploy "$CLOUDRUN_SERVICE" --project="$CLOUDRUN_PROJECT" --region="$CLOUDRUN_REGION" \
   --image="$image" --service-account="$runtime_account" --set-secrets="$secret_csv" \
-  --set-env-vars=NODE_ENV=production --port=8080 --min-instances=0 --max-instances=3 \
+  --set-env-vars=NODE_ENV=production,TRUST_PROXY_HOPS=1 --port=8080 --min-instances=0 --max-instances=3 \
   --cpu=1 --memory=512Mi --timeout=60s --allow-unauthenticated
 
 service_url="$(gcloud run services describe "$CLOUDRUN_SERVICE" --project="$CLOUDRUN_PROJECT" \

@@ -11,7 +11,7 @@ const route=(handler:express.RequestHandler):express.RequestHandler=>async(req,r
 const respond=(res:express.Response,result:any)=>res.status(result.created?201:200).json(result.response);
 router.get('/catalog',route(async(req,res)=>{res.json(await launchCatalog())}));
 router.get('/enrollment',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.get(req.user!.id))}));
-router.put('/enrollment/:caseId/consents',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.consents(req.user!.id,req.params.caseId,req.body,req.socket.remoteAddress!))}));
+router.put('/enrollment/:caseId/consents',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.consents(req.user!.id,req.params.caseId,req.body,req.ip!))}));
 router.put('/enrollment/:caseId/identity/:identityId',requirePatient,route(async(req,res)=>{const input=await readLaunchMultipart(req,'identity');respond(res,await launchEnrollment.identity(req.user!.id,req.params.caseId,req.params.identityId,input))}));
 router.put('/enrollment/:caseId/eligibility',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.eligibility(req.user!.id,req.params.caseId,req.body))}));
 router.put('/enrollment/:caseId/medical/:revisionId',requirePatient,route(async(req,res)=>{respond(res,await launchEnrollment.medical(req.user!.id,req.params.caseId,req.params.revisionId,req.body))}));
