@@ -15,7 +15,7 @@ export type Consent = {key:ConsentKey;version:number;versionLabel:string;title:s
   sha256:string;effectiveAt:Instant;acceptedAt:Instant|null};
 export type Catalog = {contractVersion:1;settingsVersion:number;plans:Plan[];consents:Consent[];
   reviewCopy:'Review within 1 to 2 business days.';questionnaireVersion:string;
-  eligibilityQuestions:Question[];medicalQuestions:Question[];photoGuidance?:unknown;identityGuidance?:unknown;intakeV2?:unknown};
+  eligibilityQuestions:Question[];medicalQuestions:Question[];photoGuidance?:PhotoGuidance;identityGuidance?:IdentityGuidance;intakeV2?:unknown};
 export type Question = {id:string;prompt:string;kind:'choice'|'multi_choice'|'text'|'repeat'|'attestation';
   required:boolean;options:{id:string;label:string}[];fields:Question[];
   showWhen:{questionId:string;operator:'in'|'not_in';values:string[]}[]};
@@ -97,7 +97,21 @@ export const PlanIdSchema=z.enum(['care','all_in']), ConsentKeySchema=z.enum(['t
 export const PlanSchema=obj({id:PlanIdSchema,name:str,amountCents:z.number().int().positive(),currency:z.literal('usd'),interval:z.literal('month'),includesPartnerRx:z.boolean(),cadence:obj({weeklyWeeks:integer,then:z.literal('monthly')})});
 export const ConsentSchema=obj({key:ConsentKeySchema,version:z.number().int().positive(),versionLabel:str,title:str,body:z.string().min(1).max(20000).refine(value=>value.trim().length>0),sha256:z.string().regex(/^[a-f0-9]{64}$/),effectiveAt:InstantSchema,acceptedAt:InstantSchema.nullable()});
 export const QuestionSchema:z.ZodType<any>=obj({id:str,prompt:str,kind:z.enum(['choice','multi_choice','text','repeat','attestation']),required:z.boolean(),options:z.array(obj({id:str,label:str})),fields:z.lazy(()=>z.array(QuestionSchema)),showWhen:z.array(obj({questionId:str,operator:z.enum(['in','not_in']),values:z.array(str)}))});
-export const CatalogSchema=obj({contractVersion:z.literal(1),settingsVersion:z.number().int().positive(),plans:z.array(PlanSchema).length(2),consents:z.array(ConsentSchema).length(4),reviewCopy:z.literal('Review within 1 to 2 business days.'),questionnaireVersion:str,eligibilityQuestions:z.array(QuestionSchema),medicalQuestions:z.array(QuestionSchema),photoGuidance:z.unknown().optional(),identityGuidance:z.unknown().optional(),intakeV2:z.unknown().optional()});
+// Capture copy is additive; historical catalogs omit `copy`, and existing clients ignore it.
+const captureText=z.string().trim().min(1).max(2000);
+export const PhotoCaptureCopySchema=obj({setReviewHint:captureText,completionHint:captureText,reviewAdvice:captureText,zoomLabel:captureText,afterSave:captureText,discardMessage:captureText,prepareFailure:captureText,safetyTitle:captureText,safetyMessage:captureText});
+export const IdentityCaptureCopySchema=obj({fullNameLabel:captureText,dateOfBirthLabel:captureText,birthConfirmation:captureText,idTitle:captureText,selfieTitle:captureText,idInstructions:captureText,selfieInstructions:captureText,ncWarning:captureText,completionHint:captureText,idPreviewLabel:captureText,selfiePreviewLabel:captureText,prepareFailure:captureText,safetyTitle:captureText,safetyMessage:captureText});
+export const PhotoGuidanceSchema=obj({title:captureText,instructions:z.array(captureText).min(1).max(20),slots:z.array(obj({id:PhotoSlotSchema,label:captureText,required:z.boolean(),requiredWhen:obj({questionId:z.enum(['M6','B8']),value:z.enum(['chest','back'])}).nullable()})).length(6),copy:PhotoCaptureCopySchema.optional()}).superRefine((v,ctx)=>{
+ if(new Set(v.slots.map(s=>s.id)).size!==6||v.slots.some(s=>s.required!==['front','left','right'].includes(s.id)||(['chest','back'].includes(s.id)?s.requiredWhen?.value!==s.id:s.requiredWhen!==null)))ctx.addIssue({code:'custom',message:'Invalid required photo slots'});
+});
+export const IdentityGuidanceSchema=obj({title:captureText,prompt:captureText.optional(),attestation:captureText.optional(),items:z.array(obj({id:z.enum(['government_id','selfie','nc_attestation']),required:z.literal(true),instructions:captureText})).length(3),copy:IdentityCaptureCopySchema.optional()}).refine(v=>new Set(v.items.map(i=>i.id)).size===3,'Invalid identity guidance');
+export type PhotoGuidance=z.infer<typeof PhotoGuidanceSchema>;
+export type IdentityGuidance=z.infer<typeof IdentityGuidanceSchema>;
+export const CatalogSchema=obj({contractVersion:z.literal(1),settingsVersion:z.number().int().positive(),plans:z.array(PlanSchema).length(2),consents:z.array(ConsentSchema).length(4),reviewCopy:z.literal('Review within 1 to 2 business days.'),questionnaireVersion:str,eligibilityQuestions:z.array(QuestionSchema),medicalQuestions:z.array(QuestionSchema),photoGuidance:PhotoGuidanceSchema.optional(),identityGuidance:IdentityGuidanceSchema.optional(),intakeV2:z.unknown().optional()}).superRefine((value,ctx)=>{
+ if(value.questionnaireVersion==='2.1-pending-review'){
+  for(const key of ['photoGuidance','identityGuidance'] as const)if(!value[key]?.copy)ctx.addIssue({code:'custom',path:[key,'copy'],message:'Complete capture copy required for this publication'});
+ }
+});
 export const PharmacySchema=obj({name:str.max(160),addressLine1:str.max(200),addressLine2:str.max(200).nullable(),city:str,state:z.string().regex(/^(AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)$/),postalCode:z.string().regex(/^\d{5}(-\d{4})?$/),phone:z.string().regex(/^\+?[\d(). -]{10,25}$/)});
 export const AddressSchema=obj({recipient:str.max(160),line1:str.max(200),line2:str.max(200).nullable(),city:str,state:z.literal('NC'),postalCode:z.string().regex(/^\d{5}(-\d{4})?$/)});
 export const DestinationSchema=z.discriminatedUnion('planId',[obj({planId:z.literal('care'),pharmacy:PharmacySchema}),obj({planId:z.literal('all_in'),pharmacy:z.literal('vida'),shippingAddress:AddressSchema})]);

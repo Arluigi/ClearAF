@@ -72,33 +72,42 @@ struct IdentityCaptureView: View {
     }
 #endif
     var body: some View {
-        LaunchPage(title: repository.catalog?.identityGuidance?.title ?? "Verify your identity") {
+        Group {
+            if repository.catalog != nil { form }
+            else {
+                ProgressView()
+                Button("Retry") { Task { await repository.loadCatalog(ticket: ticket) } }
+            }
+        }
+    }
+    private var form: some View {
+        LaunchPage(title: repository.catalog?.identityGuidance?.title ?? "Verify your identity", safetyTitle: copy("safetyTitle", "Something's wrong?"), safetyMessage: copy("safetyMessage", "Tell your care team about a reaction or sudden change")) {
             if let guidance = repository.catalog?.identityGuidance {
                 if let prompt = guidance.prompt { Text(prompt) }
                 else { ForEach(guidance.items.filter { $0.id != "nc_attestation" }, id: \.id) { Text($0.instructions) } }
             } else { Text("Adults 18+ physically in North Carolina. A clinician compares your government photo ID and live selfie. This is a manual review.") }
-            TextField("Full legal name", text: $fullName).textContentType(.name).letterpressField(isEmpty: fullName.isEmpty)
-            DatePicker("Date of birth", selection: $dateOfBirth, in: ScreeningDates.earliestBirthDate...Date.now, displayedComponents: .date)
+            TextField(copy("fullNameLabel", "Full legal name"), text: $fullName).textContentType(.name).letterpressField(isEmpty: fullName.isEmpty)
+            DatePicker(copy("dateOfBirthLabel", "Date of birth"), selection: $dateOfBirth, in: ScreeningDates.earliestBirthDate...Date.now, displayedComponents: .date)
                 .onChange(of: dateOfBirth) { _, _ in birthSelected = true }
-            Toggle("I confirm this is my date of birth.", isOn: $birthSelected).toggleStyle(.letterpressCheck)
-            identityImage(idPhoto, title: "Government photo ID")
+            Toggle(copy("birthConfirmation", "I confirm this is my date of birth."), isOn: $birthSelected).toggleStyle(.letterpressCheck)
+            identityImage(idPhoto, title: copy("idTitle", "Government photo ID"), previewLabel: copy("idPreviewLabel", "Government photo ID preview. Check that it is readable."))
             HStack {
                 Button(idPhoto == nil ? "Choose ID photo" : "Replace ID photo") { showingIDLibrary = true }.buttonStyle(.letterpress(.outlined))
                 Button("Photograph ID") { requestCamera(.id) }.buttonStyle(.letterpress(.underline))
             }
-            Text("Keep the full name, date of birth and face readable. Your ID is kept separately from your skin photos.").font(Letterpress.ui(13))
+            Text(copy("idInstructions", "Keep the full name, date of birth and face readable. Your ID is kept separately from your skin photos.")).font(Letterpress.ui(13))
             LetterpressRule()
-            identityImage(selfie, title: "Live selfie")
+            identityImage(selfie, title: copy("selfieTitle", "Live selfie"), previewLabel: copy("selfiePreviewLabel", "Live selfie preview. Check that it is readable."))
             Button(selfie == nil ? "Take a live selfie" : "Retake selfie") { requestCamera(.selfie) }.buttonStyle(.letterpress(.outlined, fullWidth: true))
-            Text("Use the camera now, with your face clearly visible. A saved library image cannot be used as your selfie.").font(Letterpress.ui(13))
+            Text(copy("selfieInstructions", "Use the camera now, with your face clearly visible. A saved library image cannot be used as your selfie.")).font(Letterpress.ui(13))
             Toggle(repository.catalog?.identityGuidance?.attestation ?? "I can read my name and date of birth, and both photos clearly show my face.", isOn: $readable).toggleStyle(.letterpressCheck)
-            Toggle("I am physically in North Carolina right now.", isOn: $inNC).toggleStyle(.letterpressCheck)
-            if !inNC { Text("You must be physically in North Carolina for this care. If you are elsewhere, seek local care.").font(Letterpress.ui(13)) }
+            Toggle(repository.catalog?.identityGuidance?.item("nc_attestation", legacy: "I am physically in North Carolina right now.") ?? "I am physically in North Carolina right now.", isOn: $inNC).toggleStyle(.letterpressCheck)
+            if !inNC { Text(copy("ncWarning", "You must be physically in North Carolina for this care. If you are elsewhere, seek local care.")).font(Letterpress.ui(13)) }
             if let error { Text(error).foregroundStyle(Letterpress.error) }
             if processing { Text("Preparing your photo…") }
             Button(repository.saving ? "Uploading…" : "Upload and continue", action: submit)
                 .buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!canSubmit || repository.saving || processing)
-            if !canSubmit { Text("Add both readable photos, confirm your date of birth, and attest your current location to continue. UNZIT is for adults 18+.").font(Letterpress.ui(13)) }
+            if !canSubmit { Text(copy("completionHint", "Add both readable photos, confirm your date of birth, and attest your current location to continue. UNZIT is for adults 18+.")).font(Letterpress.ui(13)) }
             Button("Open camera settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.buttonStyle(.letterpress(.underline))
         }
         .sheet(isPresented: $showingIDLibrary) { PhotoLibraryPicker { receive($0, kind: .id) } }
@@ -110,12 +119,13 @@ struct IdentityCaptureView: View {
         // Identity bytes exist only in this account-bound view state; removal/signout releases them.
         // Do not purge on camera presentation: a full-screen picker may make its presenter disappear.
     }
+    private func copy(_ key: String, _ legacy: String) -> String { repository.catalog?.identityGuidance?.text(key, legacy: legacy) ?? legacy }
     private var birthString: String { ScreeningDates.string(from: dateOfBirth) }
     private var canSubmit: Bool { birthSelected && LaunchIdentityInput.valid(fullName: fullName, dateOfBirth: birthString, physicallyInNC: inNC, readable: readable, idPhoto: idPhoto, selfie: selfie) }
-    @ViewBuilder private func identityImage(_ bytes: Data?, title: String) -> some View {
+    @ViewBuilder private func identityImage(_ bytes: Data?, title: String, previewLabel: String) -> some View {
         Text(title).font(Letterpress.ui(17, weight: .medium))
         if let bytes, let image = UIImage(data: bytes) {
-            Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 280).accessibilityLabel("\(title) preview. Check that it is readable.")
+            Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 280).accessibilityLabel(previewLabel)
         } else { Text("No photo added").font(Letterpress.ui(13)) }
     }
     private func requestCamera(_ kind: IdentityCameraKind) {
@@ -138,7 +148,7 @@ struct IdentityCaptureView: View {
             let bytes = await Task.detached(priority: .userInitiated) { try? LaunchIdentityInput.jpeg(input) }.value
             processing = false
             guard APIService.shared.access.snapshot() == ticket else { return }
-            guard let bytes else { error = "The photo could not be prepared within the upload limit. Retake it in good light and check the text and face are sharp."; return }
+            guard let bytes else { error = copy("prepareFailure", "The photo could not be prepared within the upload limit. Retake it in good light and check the text and face are sharp."); return }
             attemptID = UUID()
             if kind == .id { idPhoto = bytes } else { selfie = bytes }
             error = nil

@@ -5,6 +5,25 @@ file; never overwrite a previous publication or accepted consent identity. Both
 publications below remain drafts pending clinical and legal review. Import does
 not establish approval for clinical use or distribution.
 
+## 2.1-pending-review
+
+`2.1-pending-review.json` adds capture, review and retake copy to the API guidance
+for identity and all six clinical photo slots, shared by enrollment and check-in.
+The intake v2 A7 and F source wording retains precedence over the older corrected
+non-intake Part B text. All existing intake questions, slot conditions and guidance
+wording are unchanged. Optional typed `copy` fields preserve older client decoding.
+
+Instructions absent from the supplied v2 sources use the preexisting Swift wording
+verbatim and are individually marked **needs clinician wording** in
+`docs/features/capture-catalog-verification.md`. This publication remains a draft,
+not clinical approval. `2.0-pending-review.json` stays byte-for-byte immutable.
+
+Consent bodies and SHA256 digests are unchanged. Their numeric versions advance
+to 4 because their publication labels change to 2.1; existing version 3 acceptance
+identities retain their original labels and text. New versions do not reuse old
+acceptances. The follow-up form label advances while its question IDs remain stable.
+No hosted publication or deployment is performed by this change.
+
 ## 2.0-pending-review
 
 `2.0-pending-review.json` transcribes the complete owner-provided November 9, 2026

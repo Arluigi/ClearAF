@@ -761,11 +761,17 @@ private struct LaunchCheckInPhotosView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let error { Text(error).font(Letterpress.ui(13)).foregroundStyle(Letterpress.error).padding(.horizontal, Letterpress.Space.s22) }
-            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: occurrence.id, purpose: .checkIn, requiredSlots: LaunchPhotoRules.required(sites: sites), serverSet: occurrence.photoSet) { set in
+            if checkIns.photoCatalogLoaded {
+            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: occurrence.id, purpose: .checkIn, requiredSlots: LaunchPhotoRules.required(sites: sites), serverSet: occurrence.photoSet, guidance: checkIns.photoGuidance) { set in
                 do { try checkIns.attach(set, occurrenceId: occurrence.id, ticket: ticket); dismiss() }
                 catch { self.error = "Your photo set could not be attached. Refresh and try again." }
             }
+            } else if let message = checkIns.photoCatalogError {
+                Text(message)
+                Button("Retry") { Task { await checkIns.loadPhotoGuidance(ticket: ticket) } }
+            } else { ProgressView() }
         }.onAppear { do { try checkIns.clearPhotos(occurrenceId: occurrence.id, ticket: ticket) } catch { self.error = "Your check-in draft changed. Return and refresh." } }
+            .task { await checkIns.loadPhotoGuidance(ticket: ticket) }
     }
 }
 struct LaunchFollowUpSummary: View {

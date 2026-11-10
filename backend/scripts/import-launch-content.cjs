@@ -9,17 +9,16 @@ function enumValues(schema){const d=schema._def;if(d.schema)return enumValues(d.
 function fixedChoices(questions,shape){for(const [id,schema]of Object.entries(shape)){const expected=enumValues(schema);if(!expected)continue;const q=questions.find(q=>q.id===id);if(!q||q.kind!==(expected.multi?'multi_choice':'choice')||q.options.length!==expected.values.length||expected.values.some(id=>!q.options.some(o=>o.id===id)))throw Error('Invalid source machine choices')}}
 function validateLaunchContent(input,validators=builtValidators()){
  const copy=z.string().trim().min(1).max(2000);
- const photoGuidance=z.object({title:copy,instructions:z.array(copy).min(1),slots:z.array(z.object({id:z.enum(['front','left','right','chest','back','close_up']),label:copy,required:z.boolean(),requiredWhen:z.object({questionId:z.enum(['M6','B8']),value:z.enum(['chest','back'])}).strict().nullable()}).strict()).length(6)}).strict().superRefine((v,ctx)=>{
-  if(new Set(v.slots.map(s=>s.id)).size!==6||v.slots.some(s=>s.required!==['front','left','right'].includes(s.id)||(['chest','back'].includes(s.id)?s.requiredWhen?.value!==s.id:s.requiredWhen!==null)))ctx.addIssue({code:'custom',message:'Invalid required photo slots'});
- });
- const identityGuidance=z.object({title:copy,prompt:copy.optional(),attestation:copy.optional(),items:z.array(z.object({id:z.enum(['government_id','selfie','nc_attestation']),required:z.literal(true),instructions:copy}).strict()).length(3)}).strict().refine(v=>new Set(v.items.map(i=>i.id)).size===3,'Invalid identity guidance');
+ const photoGuidance=validators.contract.PhotoGuidanceSchema;
+ const identityGuidance=validators.contract.IdentityGuidanceSchema;
  const envelope=z.object({status:z.enum(['draft','approved']),versionLabel:z.string().min(1).max(80),approvalReference:z.string().min(1).max(160).nullable(),clinicianId:z.string().uuid(),consents:z.array(z.unknown()),eligibilityQuestions:z.array(z.unknown()),medicalQuestions:z.array(z.unknown()),checkInForm:z.unknown(),photoGuidance:photoGuidance.optional(),identityGuidance:identityGuidance.optional(),intakeV2:z.object({sections:z.array(z.object({id:copy,title:copy,intro:z.string().max(2000),questionIds:z.array(copy)}).strict()),exitPages:z.record(copy),holdNotice:copy,attestationIntro:copy,dateQuestionIds:z.array(copy),photoQuestion:z.object({id:copy,prompt:copy}).strict(),answerShape:copy,acknowledgmentLabels:z.record(copy).optional()}).strict().optional(),templates:z.array(z.object({key:z.string().regex(/^[a-z][a-z0-9_]{0,59}$/),name:z.string().min(1).max(120),steps:z.array(z.unknown()).min(1).max(20)}).strict()).length(6)}).strict().parse(input);
+ if(envelope.versionLabel==='2.1-pending-review'&&(!envelope.photoGuidance?.copy||!envelope.identityGuidance?.copy))throw Error('Capture copy required');
  const pending=label=>label==='0.9-draft'||/^\d+\.\d+-pending-review$/.test(label);
  if(envelope.status==='draft'&&!pending(envelope.versionLabel)||envelope.status==='approved'&&(!envelope.approvalReference||pending(envelope.versionLabel)))throw Error('Clinical publication approval reference required');
  const docs=validators.validateLaunchDocuments(envelope.consents);
  if(docs.some(d=>d.acceptedAt!==null)||envelope.status==='draft'&&docs.some(d=>d.versionLabel!==envelope.versionLabel||!d.body.includes('DRAFT'))||envelope.status==='approved'&&docs.some(d=>/draft|pending-review/.test(d.versionLabel)))throw Error('Invalid publication document state');
  let eligibility,medical;
- if(envelope.versionLabel==='2.0-pending-review'){
+ if(['2.0-pending-review','2.1-pending-review'].includes(envelope.versionLabel)){
   if(!envelope.intakeV2)throw Error('V2 section metadata required');
   const parsed=validators.validateIntakeV2Catalog(envelope.eligibilityQuestions,envelope.medicalQuestions);eligibility=parsed.eligibilityQuestions;medical=parsed.medicalQuestions;
  }else{

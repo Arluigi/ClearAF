@@ -56,7 +56,7 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         let current = epoch; loading = true
         defer { if current == epoch { loading = false } }
         do {
-            let data = try await transport.send(LaunchRequest(path: "/enrollment", questionnaireVersion: "2.0-pending-review"), ticket: ticket)
+            let data = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/enrollment", questionnaireVersion: "2.1-pending-review"), ticket: ticket)
             try require(ticket, epoch: current)
             let next = try JSONDecoder().decode(LaunchEnrollmentResponse.self, from: data)
             try apply(next)
@@ -83,10 +83,10 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         do { try resume(ticket: ticket) } catch { return }
         let current = epoch
         do {
-            let bytes = try await transport.send(LaunchRequest(path: "/catalog", questionnaireVersion: state?.case.questionnaireVersion ?? "2.0-pending-review"), ticket: ticket)
+            let bytes = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/catalog", questionnaireVersion: state?.case.questionnaireVersion ?? "2.1-pending-review"), ticket: ticket)
             try require(ticket, epoch: current)
             let next = try JSONDecoder().decode(LaunchCatalog.self, from: bytes)
-            guard next.contractVersion == 1 else { throw LaunchFailure.invalidData }
+            guard next.contractVersion == 1, next.hasCompatibleCaptureGuidance else { throw LaunchFailure.invalidData }
             catalog = next
         } catch { if (try? require(ticket, epoch: current)) != nil { self.error = error.localizedDescription } }
     }
@@ -119,7 +119,7 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         intakeV2Draft = answers; intakeV2DraftRevision = revision
     }
     @discardableResult func saveIntakeV2(_ answers: [String: IntakeValue], ticket: AccountAccess.Ticket, reapply: Bool = false) async -> Bool {
-        guard let current = state, current.case.questionnaireVersion == "2.0-pending-review" else { return false }
+        guard let current = state, IntakeV2Routing.isV2(current.case.questionnaireVersion) else { return false }
         guard reapply || intakeV2DraftRevision == nil || intakeV2DraftRevision == current.case.revision else { return false }
         struct Body: Encodable { let expectedRevision: Int; let questionnaireVersion: String; let answers: [String: IntakeValue] }
         do {

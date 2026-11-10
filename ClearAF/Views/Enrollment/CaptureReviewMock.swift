@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Offline inspection of the actual capture components. No camera, account, or upload is fabricated as successful.
 enum CaptureReviewMockContent {
-    // Exact snapshot of backend/src/content/catalogs/2.0-pending-review.json capture fields.
+    // Exact snapshot of backend/src/content/catalogs/2.1-pending-review.json capture fields.
     // Kept in Swift so the fixture is compiled out of Release, including its content.
     static let guidance = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
     static let json = #"""
@@ -58,7 +58,18 @@ enum CaptureReviewMockContent {
         "required": false,
         "requiredWhen": null
       }
-    ]
+    ],
+    "copy": {
+      "setReviewHint": "Zoom in and check it is sharp. These photos are shared with your clinician as a set.",
+      "completionHint": "Share every required angle before continuing. A photo saved only on this device is not yet part of your clinical photo set.",
+      "reviewAdvice": "Check the angle, lighting and focus before sharing. Retake a blurred photo.",
+      "zoomLabel": "Zoom in and check that each photo is sharp.",
+      "afterSave": "Saved privately on this device, then shared with this clinical photo set. Continue only after sharing is confirmed.",
+      "discardMessage": "It hasn't been saved to your record.",
+      "prepareFailure": "The photo could not be prepared within the upload limit. Retake it in good light, using a different photo for each angle.",
+      "safetyTitle": "Something's wrong?",
+      "safetyMessage": "Tell your care team about a reaction or sudden change"
+    }
   },
   "identityGuidance": {
     "title": "Verify your identity",
@@ -80,7 +91,23 @@ enum CaptureReviewMockContent {
       }
     ],
     "prompt": "Verify your identity. Upload a government photo ID (driver license, state ID, or passport). Your name and date of birth must match your account. Then take a live selfie. Your selfie must match the photo on your ID. Dr. Om checks your identity himself before any treatment.",
-    "attestation": "This ID is mine, and the selfie is really me."
+    "attestation": "This ID is mine, and the selfie is really me.",
+    "copy": {
+      "fullNameLabel": "Full legal name",
+      "dateOfBirthLabel": "Date of birth",
+      "birthConfirmation": "I confirm this is my date of birth.",
+      "idTitle": "Government photo ID",
+      "selfieTitle": "Live selfie",
+      "idInstructions": "Keep the full name, date of birth and face readable. Your ID is kept separately from your skin photos.",
+      "selfieInstructions": "Use the camera now, with your face clearly visible. A saved library image cannot be used as your selfie.",
+      "ncWarning": "You must be physically in North Carolina for this care. If you are elsewhere, seek local care.",
+      "completionHint": "Add both readable photos, confirm your date of birth, and attest your current location to continue. UNZIT is for adults 18+.",
+      "idPreviewLabel": "Government photo ID preview. Check that it is readable.",
+      "selfiePreviewLabel": "Live selfie preview. Check that it is readable.",
+      "prepareFailure": "The photo could not be prepared within the upload limit. Retake it in good light and check the text and face are sharp.",
+      "safetyTitle": "Something's wrong?",
+      "safetyMessage": "Tell your care team about a reaction or sudden change"
+    }
   }
 }
 """#
@@ -107,18 +134,18 @@ struct CaptureReviewMockScreen: View {
             IdentityCaptureView(repository: session.enrollment, ticket: session.ticket, mockReview: route == .captureIdentityReview)
         } else if let slot = route.captureSlot {
             if route.rawValue.hasPrefix("review-") && !retaking {
-                PhotoReviewSheet(draft: $draft, saving: false, onRetake: { retaking = true }, onDiscard: {}, onSave: {}, launchSlot: slot, mockAccess: session.access)
+                PhotoReviewSheet(draft: $draft, saving: false, onRetake: { retaking = true }, onDiscard: {}, onSave: {}, launchSlot: slot, guidance: session.enrollment.catalog?.photoGuidance, mockAccess: session.access)
             } else {
-                PhotoCaptureView(title: slot.title + " photo", subtitle: "Use daylight and check that the image is sharp.") { bytes in
+                PhotoCaptureView(title: session.enrollment.catalog?.photoGuidance?.captureTitle(slot) ?? slot.title + " photo", subtitle: session.enrollment.catalog?.photoGuidance?.captureInstructions ?? "Use daylight and check that the image is sharp.") { bytes in
                     draft = .init(bytes: bytes, capturedAt: .now)
                     retaking = false
                 }
             }
         } else {
-            // Check-in deliberately matches LaunchCheckInPhotosView, which currently supplies no guidance.
+            // Same catalog-backed shared component as enrollment and check-in.
             ClinicalPhotoSetView(repository: session.photos, ticket: session.ticket, targetId: session.enrollment.state!.case.id,
                 purpose: route == .captureCheckIn ? .checkIn : .enrollment, requiredSlots: slots,
-                guidance: route == .captureCheckIn ? nil : session.enrollment.catalog?.photoGuidance)
+                guidance: session.enrollment.catalog?.photoGuidance)
                 .task {
                     if route == .captureRetake {
                         do {

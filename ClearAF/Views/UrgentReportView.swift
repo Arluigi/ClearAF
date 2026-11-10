@@ -23,15 +23,17 @@ enum UrgentReportCopy {
 struct UrgentReportEntry: View {
     /// 22 on Today; 0 where the row sits inside a padded container.
     var horizontalPadding: CGFloat = Letterpress.Space.s22
+    var title = "Something's wrong?"
+    var message = "Tell your care team about a reaction or sudden change"
     @State private var showing = false
     var body: some View {
         Button { showing = true } label: {
             HStack(spacing: Letterpress.Space.s14) {
                 VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                    Text("Something's wrong?")
+                    Text(title)
                         .font(Letterpress.ui(16, weight: .medium, relativeTo: .headline))
                         .foregroundStyle(Letterpress.ink)
-                    Text("Tell your care team about a reaction or sudden change")
+                    Text(message)
                         .font(Letterpress.ui(13, relativeTo: .footnote))
                         .foregroundStyle(Letterpress.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)

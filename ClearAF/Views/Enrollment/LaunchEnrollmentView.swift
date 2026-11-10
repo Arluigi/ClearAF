@@ -80,11 +80,13 @@ struct LaunchEnrollmentView: View {
 
 struct LaunchPage<Content: View>: View {
     let title: String
+    var safetyTitle = "Something's wrong?"
+    var safetyMessage = "Tell your care team about a reaction or sudden change"
     @ViewBuilder let content: Content
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
-                UrgentReportEntry(horizontalPadding: 0)
+                UrgentReportEntry(horizontalPadding: 0, title: safetyTitle, message: safetyMessage)
                 Text(title).font(Letterpress.display(34, relativeTo: .largeTitle)).accessibilityAddTraits(.isHeader)
                 LetterpressRule(weight: .major)
                 content

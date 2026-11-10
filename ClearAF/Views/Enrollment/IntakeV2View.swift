@@ -65,7 +65,7 @@ struct IntakeV2View: View {
     }
     private var questionnaire: some View {
         LaunchPage(title: active?.title ?? (visible.first?.id == "W1" ? "Welcome and how UNZIT works" : "Safety gates")) {
-            Text("DRAFT · Version 2.0-pending-review").font(Letterpress.data(12))
+            Text("DRAFT · Version \(repository.catalog?.questionnaireVersion ?? "")").font(Letterpress.data(12))
             if repository.state?.case.status == .needsChanges {
                 Text(repository.state?.case.patientMessage ?? "Your clinician requested an update.")
                 NavigationLink("Update identity") { IdentityCaptureView(repository: repository, ticket: ticket) }.buttonStyle(.letterpress(.outlined, fullWidth: true))

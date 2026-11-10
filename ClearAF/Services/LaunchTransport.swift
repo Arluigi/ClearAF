@@ -25,6 +25,15 @@ struct LaunchRequest {
 @MainActor protocol LaunchTransport {
     func send(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data
 }
+extension LaunchTransport {
+    /// Retry only an unavailable publication, never a network or authorization failure.
+    @MainActor func sendCaptureCatalogRequest(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data {
+        do { return try await send(request, ticket: ticket) }
+        catch LaunchFailure.server(status: 503, code: "BILLING_UNAVAILABLE") where request.questionnaireVersion == "2.1-pending-review" {
+            return try await send(LaunchRequest(path: request.path, questionnaireVersion: "2.0-pending-review"), ticket: ticket)
+        }
+    }
+}
 extension APIService: LaunchTransport {
     @MainActor func send(_ launch: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data {
         try access.require(ticket)

@@ -38,3 +38,12 @@ test('v2 catalog opt-in and structured personal screening decisions stay additiv
  assert.equal(body.screeningDecisions.ibd.priorCDifficile,false);
  assert.equal(body.screeningDecisions.marksAcneRelated,true);
 });
+test('catalog preserves both supported v2 publication headers and legacy calls stay unversioned',async()=>{
+ const calls:{path:string;options?:RequestInit}[]=[];
+ const api=createLaunchAPI(async <T>(path:string,options?:RequestInit)=>{calls.push({path,options});return {} as T;});
+ for(const version of ['2.0-pending-review','2.1-pending-review',undefined,'1.0-pending-review','2.2-pending-review'])await api.catalog(version);
+ assert.deepEqual(calls.map(call=>call.path),Array(5).fill('/catalog'));
+ assert.deepEqual(calls[0].options?.headers,{'X-UNZIT-Questionnaire':'2.0-pending-review'});
+ assert.deepEqual(calls[1].options?.headers,{'X-UNZIT-Questionnaire':'2.1-pending-review'});
+ for(const call of calls.slice(2))assert.equal(call.options,undefined);
+});

@@ -86,3 +86,37 @@ final class IntakeV2Tests: XCTestCase {
         else { XCTFail("Treatment row missing") }
     }
 }
+
+final class CaptureCatalogTests: XCTestCase {
+    func testNewCopyDecodesAndTakesPrecedenceWhileOldCatalogStillDecodes() throws {
+        let bytes = Data(#"{"title":"Photos","instructions":["Published instruction"],"slots":[{"id":"front","label":"Published front"}],"copy":{"completionHint":"Published completion"}}"#.utf8)
+        let guidance = try JSONDecoder().decode(LaunchPhotoGuidance.self, from: bytes)
+        XCTAssertEqual(guidance.text("completionHint", legacy: "Legacy"), "Published completion")
+        XCTAssertEqual(guidance.captureTitle(.front), "Published front")
+        XCTAssertEqual(guidance.captureInstructions, "Published instruction")
+        let old = try JSONDecoder().decode(LaunchPhotoGuidance.self, from: Data(#"{"title":"Old","instructions":["Old advice"],"slots":[]}"#.utf8))
+        XCTAssertEqual(old.text("completionHint", legacy: "Legacy"), "Legacy")
+    }
+    func testIdentityCopyAndAttestationUsePublishedFields() throws {
+        let guidance = try JSONDecoder().decode(LaunchIdentityGuidance.self, from: Data(#"{"title":"ID","items":[{"id":"nc_attestation","instructions":"Published NC"}],"copy":{"birthConfirmation":"Published DOB"}}"#.utf8))
+        XCTAssertEqual(guidance.text("birthConfirmation", legacy: "Legacy"), "Published DOB")
+        XCTAssertEqual(guidance.item("nc_attestation", legacy: "Legacy"), "Published NC")
+    }
+    func testCurrentCatalogCannotEnableLegacyCaptureFallbacks() {
+        var catalog = LaunchCatalog(contractVersion: 1, settingsVersion: 1, plans: [], consents: [], reviewCopy: "", questionnaireVersion: "2.1-pending-review", eligibilityQuestions: [], medicalQuestions: [])
+        XCTAssertFalse(catalog.hasCompatibleCaptureGuidance)
+        catalog = LaunchCatalog(contractVersion: 1, settingsVersion: 1, plans: [], consents: [], reviewCopy: "", questionnaireVersion: "2.0-pending-review", eligibilityQuestions: [], medicalQuestions: [])
+        XCTAssertTrue(catalog.hasCompatibleCaptureGuidance)
+    }
+    func testBothKnownV2CatalogsRouteThroughV2() {
+        XCTAssertTrue(IntakeV2Routing.isV2("2.0-pending-review"))
+        XCTAssertTrue(IntakeV2Routing.isV2("2.1-pending-review"))
+        XCTAssertFalse(IntakeV2Routing.isV2("1.0-pending-review"))
+    }
+#if DEBUG
+    func testScreenshotBadgeRequiresExplicitLaunchArgument() {
+        XCTAssertFalse(LaunchMockRoute.hidesReviewBadge(arguments: []))
+        XCTAssertTrue(LaunchMockRoute.hidesReviewBadge(arguments: ["App", "-UNZITHideReviewBadge"]))
+    }
+#endif
+}

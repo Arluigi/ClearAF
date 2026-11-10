@@ -1,12 +1,13 @@
 import Foundation
 
 enum IntakeV2Routing {
+    static func isV2(_ version: String) -> Bool { ["2.0-pending-review", "2.1-pending-review"].contains(version) }
     static func canInitialize(_ state: LaunchEnrollmentResponse?, catalog: LaunchCatalog?) -> Bool {
         guard let state, let catalog else { return false }
-        return state.case.questionnaireVersion == "2.0-pending-review" && catalog.questionnaireVersion == state.case.questionnaireVersion && catalog.intakeV2 != nil
+        return isV2(state.case.questionnaireVersion) && catalog.questionnaireVersion == state.case.questionnaireVersion && catalog.intakeV2 != nil
     }
     static func usesQuestionnaire(_ state: LaunchEnrollmentResponse) -> Bool {
-        guard state.case.questionnaireVersion == "2.0-pending-review", ![.payment, .submitted, .approved, .rejected].contains(state.case.status) else { return false }
+        guard isV2(state.case.questionnaireVersion), ![.payment, .submitted, .approved, .rejected].contains(state.case.status) else { return false }
         return state.case.status != .consents || (state.consents.count == 4 && state.consents.allSatisfy { $0.acceptedAt != nil })
     }
     static func showsFinalReview(_ state: LaunchEnrollmentResponse) -> Bool {
@@ -96,10 +97,35 @@ extension ScreeningDates {
 struct LaunchPhotoGuidance: Codable, Equatable {
     struct Slot: Codable, Equatable { let id: String; let label: String }
     let title: String; let instructions: [String]; let slots: [Slot]
+    var copy: [String: String]? = nil
+    // Legacy text is used only when the older publication lacks this additive field.
+    func text(_ key: String, legacy: String) -> String { copy?[key] ?? legacy }
+    func captureTitle(_ slot: LaunchPhotoSlot) -> String { slots.first { $0.id == slot.rawValue }?.label ?? slot.title + " photo" }
+    var captureInstructions: String { instructions.joined(separator: "\n\n") }
 }
 struct LaunchIdentityGuidance: Codable, Equatable {
     struct Item: Codable, Equatable { let id: String; let instructions: String }
     let title: String; let items: [Item]; var prompt: String?; var attestation: String?
+    var copy: [String: String]? = nil
+    func text(_ key: String, legacy: String) -> String { copy?[key] ?? legacy }
+    func item(_ id: String, legacy: String) -> String { items.first { $0.id == id }?.instructions ?? legacy }
+}
+extension LaunchCatalog {
+    /// A current publication must never silently substitute older Swift instructions.
+    var hasCompatibleCaptureGuidance: Bool {
+        guard questionnaireVersion == "2.1-pending-review" else { return true }
+        let photoKeys: Set<String> = ["setReviewHint", "completionHint", "reviewAdvice", "zoomLabel", "afterSave", "discardMessage", "prepareFailure", "safetyTitle", "safetyMessage"]
+        let identityKeys: Set<String> = ["fullNameLabel", "dateOfBirthLabel", "birthConfirmation", "idTitle", "selfieTitle", "idInstructions", "selfieInstructions", "ncWarning", "completionHint", "idPreviewLabel", "selfiePreviewLabel", "prepareFailure", "safetyTitle", "safetyMessage"]
+        guard let photoGuidance, let identityGuidance,
+              let photoCopy = photoGuidance.copy, let identityCopy = identityGuidance.copy,
+              photoKeys.allSatisfy({ !(photoCopy[$0]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) }),
+              identityKeys.allSatisfy({ !(identityCopy[$0]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) }),
+              !photoGuidance.instructions.isEmpty,
+              Set(photoGuidance.slots.map(\.id)).isSuperset(of: LaunchPhotoSlot.allCases.map(\.rawValue)),
+              Set(identityGuidance.items.map(\.id)).isSuperset(of: ["government_id", "selfie", "nc_attestation"]),
+              identityGuidance.prompt?.isEmpty == false, identityGuidance.attestation?.isEmpty == false else { return false }
+        return true
+    }
 }
 struct IntakeV2Catalog: Codable, Equatable {
     struct Section: Codable, Equatable, Identifiable { let id: String; let title: String; let intro: String; let questionIds: [String] }

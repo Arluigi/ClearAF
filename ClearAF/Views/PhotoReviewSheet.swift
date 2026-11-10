@@ -34,6 +34,7 @@ struct PhotoReviewSheet: View {
     let onDiscard: () -> Void
     let onSave: () -> Void
     var launchSlot: LaunchPhotoSlot? = nil
+    var guidance: LaunchPhotoGuidance? = nil
     @State private var zooming = false
     @State private var images = PhotoImageLoader()
     @State private var image: UIImage?
@@ -43,13 +44,14 @@ struct PhotoReviewSheet: View {
     /// The offline capture inspector owns a separate synthetic account; preserve the loader's account guard.
     init(draft: Binding<PhotoReviewDraft>, saving: Bool, onRetake: @escaping () -> Void,
          onDiscard: @escaping () -> Void, onSave: @escaping () -> Void,
-         launchSlot: LaunchPhotoSlot? = nil, mockAccess: AccountAccess? = nil) {
+         launchSlot: LaunchPhotoSlot? = nil, guidance: LaunchPhotoGuidance? = nil, mockAccess: AccountAccess? = nil) {
         _draft = draft
         self.saving = saving
         self.onRetake = onRetake
         self.onDiscard = onDiscard
         self.onSave = onSave
         self.launchSlot = launchSlot
+        self.guidance = guidance
         _images = State(initialValue: PhotoImageLoader(access: mockAccess ?? APIService.shared.access))
     }
 #endif
@@ -68,8 +70,12 @@ struct PhotoReviewSheet: View {
                     }
                     preview
                     if launchSlot != nil {
-                        Button("Zoom in and check it is sharp") { zooming = true }.buttonStyle(.letterpress(.underline))
-                        Text("Check the angle, lighting and focus before sharing. Retake a blurred photo.").font(Letterpress.ui(13))
+                        if let guidance {
+                            if let launchSlot { Text(guidance.captureTitle(launchSlot)).font(Letterpress.ui(17, weight: .medium)) }
+                            ForEach(guidance.instructions, id: \.self) { Text($0).font(Letterpress.ui(13)) }
+                        }
+                        Button(guidance?.text("zoomLabel", legacy: "Zoom in and check it is sharp") ?? "Zoom in and check it is sharp") { zooming = true }.buttonStyle(.letterpress(.underline))
+                        Text(guidance?.text("reviewAdvice", legacy: "Check the angle, lighting and focus before sharing. Retake a blurred photo.") ?? "Check the angle, lighting and focus before sharing. Retake a blurred photo.").font(Letterpress.ui(13))
                     }
                     if launchSlot == nil {
                     VStack(alignment: .leading, spacing: Letterpress.Space.s6) {
@@ -91,7 +97,7 @@ struct PhotoReviewSheet: View {
                         .buttonStyle(.letterpress(.filled, fullWidth: true))
                         .disabled(saving || !draft.canSave)
                         .accessibilityIdentifier("photoReviewSave")
-                    Text(launchSlot == nil ? PhotoReviewCopy.afterSave : "Saved privately on this device, then shared with this clinical photo set. Continue only after sharing is confirmed.")
+                    Text(launchSlot == nil ? PhotoReviewCopy.afterSave : (guidance?.text("afterSave", legacy: "Saved privately on this device, then shared with this clinical photo set. Continue only after sharing is confirmed.") ?? "Saved privately on this device, then shared with this clinical photo set. Continue only after sharing is confirmed."))
                         .font(Letterpress.ui(13, relativeTo: .footnote))
                         .foregroundStyle(Letterpress.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -109,7 +115,7 @@ struct PhotoReviewSheet: View {
                 Button("Discard photo", role: .destructive, action: onDiscard)
                 Button("Keep reviewing", role: .cancel) {}
             } message: {
-                Text("It hasn't been saved to your record.")
+                Text(guidance?.text("discardMessage", legacy: "It hasn't been saved to your record.") ?? "It hasn't been saved to your record.")
             }
             .onDisappear { images.clear() }
             .sheet(isPresented: $zooming) {

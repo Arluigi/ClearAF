@@ -144,3 +144,63 @@ import XCTest
         return try JSONSerialization.data(withJSONObject:["data":data,"pagination":["page":requested,"limit":20,"total":1,"totalPages":secondPage ? 2 : 1]])
     }
 }
+
+@MainActor final class CaptureCheckInCatalogTests: XCTestCase {
+    func testCheckInLoadsAPIGuidanceAndClearsItOnAccountChange() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = CaptureCatalogTransport()
+        let repo = LaunchCheckInRepository(access: access, transport: transport)
+        let loaded = await repo.loadPhotoGuidance(ticket: ticket)
+        XCTAssertTrue(loaded)
+        XCTAssertEqual(repo.photoGuidance?.instructions, ["Published check-in guidance"])
+        XCTAssertEqual(transport.requests.first?.questionnaireVersion, "2.1-pending-review")
+        repo.cancel()
+        XCTAssertNil(repo.photoGuidance)
+    }
+    func testUnavailableNewCatalogFallsBackButNetworkFailureDoesNot() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = CaptureCatalogTransport()
+        let repo = LaunchCheckInRepository(access: access, transport: transport)
+        transport.oldCatalogOnly = true
+        let loaded = await repo.loadPhotoGuidance(ticket: ticket)
+        XCTAssertTrue(loaded)
+        XCTAssertEqual(transport.requests.map(\.questionnaireVersion), ["2.1-pending-review", "2.0-pending-review"])
+        repo.cancel(); transport.requests = []; transport.offline = true
+        let offline = await repo.loadPhotoGuidance(ticket: ticket)
+        XCTAssertFalse(offline)
+        XCTAssertNil(repo.photoGuidance)
+        XCTAssertEqual(transport.requests.count, 1)
+    }
+    func testLateCatalogCannotCrossAccountBoundary() async {
+        let access = AccountAccess(), ticket = access.activate(UUID()), transport = CaptureCatalogTransport()
+        let repo = LaunchCheckInRepository(access: access, transport: transport)
+        transport.pause = true
+        let task = Task { await repo.loadPhotoGuidance(ticket: ticket) }
+        while transport.continuation == nil { await Task.yield() }
+        _ = access.activate(UUID()); repo.cancel()
+        transport.continuation?.resume(returning: transport.catalog)
+        let loaded = await task.value
+        XCTAssertFalse(loaded)
+        XCTAssertNil(repo.photoGuidance)
+    }
+}
+@MainActor private final class CaptureCatalogTransport: LaunchTransport {
+    var requests: [LaunchRequest] = []
+    var oldCatalogOnly = false
+    var offline = false
+    var pause = false
+    var continuation: CheckedContinuation<Data, Error>?
+    var catalog: Data {
+        var envelope: [String: Any] = ["contractVersion": 1, "settingsVersion": 1, "plans": [], "consents": [], "reviewCopy": "Review", "questionnaireVersion": oldCatalogOnly ? "2.0-pending-review" : "2.1-pending-review", "eligibilityQuestions": [], "medicalQuestions": []]
+        for (key, value) in CaptureReviewMockContent.guidance { envelope[key] = value }
+        var photo = envelope["photoGuidance"] as! [String: Any]
+        photo["instructions"] = ["Published check-in guidance"]
+        envelope["photoGuidance"] = photo
+        return try! JSONSerialization.data(withJSONObject: envelope)
+    }
+    func send(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data {
+        requests.append(request)
+        if offline { throw URLError(.notConnectedToInternet) }
+        if oldCatalogOnly && request.questionnaireVersion == "2.1-pending-review" { throw LaunchFailure.server(status: 503, code: "BILLING_UNAVAILABLE") }
+        if pause { return try await withCheckedThrowingContinuation { continuation = $0 } }
+        return catalog
+    }
+}

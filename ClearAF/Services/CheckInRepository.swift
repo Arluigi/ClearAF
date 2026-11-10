@@ -85,6 +85,9 @@ import Combine
 
 // MARK: - Scheduled launch check-ins. Legacy clinician forms above retain their own drafts.
 @MainActor final class LaunchCheckInRepository: ObservableObject {
+    @Published private(set) var photoGuidance: LaunchPhotoGuidance?
+    @Published private(set) var photoCatalogLoaded = false
+    @Published private(set) var photoCatalogError: String?
     @Published private(set) var occurrences: [LaunchCheckIn] = []
     @Published private(set) var drafts: [UUID: LaunchCheckInDraft] = [:]
     @Published private(set) var membership: LaunchMembership?
@@ -97,7 +100,22 @@ import Combine
     private var ticket: AccountAccess.Ticket?; private var epoch = UUID(); private var file: URL?
     init(access: AccountAccess, transport: any LaunchTransport, directory: URL? = nil) { self.access = access; self.transport = transport; self.directory = directory }
     func photoRepository() -> LaunchPhotoSetRepository { LaunchPhotoSetRepository(access: access, transport: transport, directory: directory) }
-    func cancel() { epoch = UUID(); ticket = nil; file = nil; occurrences = []; drafts = [:]; membership = nil; loading = false; sending = nil; error = nil; page = 0; totalPages = 0 }
+    func cancel() { epoch = UUID(); ticket = nil; file = nil; occurrences = []; drafts = [:]; membership = nil; loading = false; sending = nil; error = nil; page = 0; totalPages = 0; photoGuidance = nil; photoCatalogLoaded = false; photoCatalogError = nil }
+    @discardableResult func loadPhotoGuidance(ticket: AccountAccess.Ticket) async -> Bool {
+        do { try resume(ticket: ticket) } catch { return false }
+        let current = epoch
+        do {
+            let bytes = try await transport.sendCaptureCatalogRequest(LaunchRequest(path: "/catalog", questionnaireVersion: "2.1-pending-review"), ticket: ticket)
+            try require(ticket, current)
+            let catalog = try JSONDecoder().decode(LaunchCatalog.self, from: bytes)
+            guard catalog.contractVersion == 1, catalog.hasCompatibleCaptureGuidance else { throw LaunchFailure.invalidData }
+            photoGuidance = catalog.photoGuidance; photoCatalogLoaded = true; photoCatalogError = nil
+            return true
+        } catch {
+            if (try? require(ticket, current)) != nil { photoCatalogError = "The photo guidance could not be loaded. Refresh and try again." }
+            return false
+        }
+    }
     func resume(ticket: AccountAccess.Ticket) throws {
         try access.require(ticket); guard self.ticket != ticket else { return }
         cancel(); self.ticket = ticket

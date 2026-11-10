@@ -22,13 +22,13 @@ struct ClinicalPhotoSetView: View {
     @State private var localError: String?
     @State private var preparing = false
     var body: some View {
-        LaunchPage(title: guidance?.title ?? "Your clinical photos") {
+        LaunchPage(title: guidance?.title ?? "Your clinical photos", safetyTitle: guidance?.text("safetyTitle", legacy: "Something's wrong?") ?? "Something's wrong?", safetyMessage: guidance?.text("safetyMessage", legacy: "Tell your care team about a reaction or sudden change") ?? "Tell your care team about a reaction or sudden change") {
             if let guidance { ForEach(guidance.instructions, id: \.self) { Text($0) } }
             else { Text("Use daylight, no filters and no makeup. Move hair away from your face. Take a front view, then each side in the same light.") }
             if guidance == nil && (repository.requiredSlots.contains(.chest) || repository.requiredSlots.contains(.back)) {
                 Text("Include the affected chest or back. Chest photos should show the area above the breasts. You may cover private areas or crop the photo before choosing it.")
             }
-            Text("Zoom in and check it is sharp. These photos are shared with your clinician as a set.").font(Letterpress.ui(13))
+            Text(guidance?.text("setReviewHint", legacy: "Zoom in and check it is sharp. These photos are shared with your clinician as a set.") ?? "Zoom in and check it is sharp. These photos are shared with your clinician as a set.").font(Letterpress.ui(13))
             ForEach(LaunchPhotoSlot.allCases.filter { repository.requiredSlots.contains($0) || $0 == .closeUp }) { slot in
                 VStack(alignment: .leading, spacing: Letterpress.Space.s10) {
                     HStack {
@@ -57,7 +57,7 @@ struct ClinicalPhotoSetView: View {
             }
             Button(repository.saving ? "Sharing…" : "Continue") { if let set = repository.photoSet { onContinue(set) } }
                 .buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!repository.isComplete || repository.saving)
-            if !repository.isComplete { Text("Share every required angle before continuing. A photo saved only on this device is not yet part of your clinical photo set.").font(Letterpress.ui(13)) }
+            if !repository.isComplete { Text(guidance?.text("completionHint", legacy: "Share every required angle before continuing. A photo saved only on this device is not yet part of your clinical photo set.") ?? "Share every required angle before continuing. A photo saved only on this device is not yet part of your clinical photo set.").font(Letterpress.ui(13)) }
             if let error = localError ?? repository.error { Text(error).foregroundStyle(Letterpress.error) }
             if repository.error != nil || repository.associationNeedsRetry, !repository.isReadOnly {
                 Button("Retry photo set update") { Task { _ = await repository.retryAssociation(ticket: ticket) } }.buttonStyle(.letterpress(.outlined, fullWidth: true)).disabled(repository.saving)
@@ -69,9 +69,9 @@ struct ClinicalPhotoSetView: View {
         .sheet(item: $capturing, onDismiss: { review = nil }) { slot in
             Group {
                 if review != nil {
-                    PhotoReviewSheet(draft: Binding(get: { review ?? .init(bytes: Data(), capturedAt: .now) }, set: { review = $0 }), saving: preparing || repository.saving, onRetake: { review = nil }, onDiscard: { review = nil; capturing = nil }, onSave: { share(slot) }, launchSlot: slot)
+                    PhotoReviewSheet(draft: Binding(get: { review ?? .init(bytes: Data(), capturedAt: .now) }, set: { review = $0 }), saving: preparing || repository.saving, onRetake: { review = nil }, onDiscard: { review = nil; capturing = nil }, onSave: { share(slot) }, launchSlot: slot, guidance: guidance)
                 } else {
-                    PhotoCaptureView(title: slot.title + " photo", subtitle: "Use daylight and check that the image is sharp.") { bytes in review = .init(bytes: bytes, capturedAt: .now) }
+                    PhotoCaptureView(title: guidance?.captureTitle(slot) ?? slot.title + " photo", subtitle: guidance?.captureInstructions ?? "Use daylight and check that the image is sharp.") { bytes in review = .init(bytes: bytes, capturedAt: .now) }
                 }
             }.interactiveDismissDisabled(review != nil || repository.saving).letterpressSheetBackground()
                 .safeAreaInset(edge: .bottom) { if let localError { Text(localError).font(Letterpress.ui(13)).foregroundStyle(Letterpress.error).padding().background(Letterpress.canvas) } }
@@ -85,7 +85,7 @@ struct ClinicalPhotoSetView: View {
         guard let review, !preparing else { return }
         preparing = true
         do { try repository.stage(review.bytes, slot: slot, date: review.capturedAt, ticket: ticket) }
-        catch { localError = "The photo could not be prepared within the upload limit. Retake it in good light, using a different photo for each angle."; preparing = false; return }
+        catch { localError = guidance?.text("prepareFailure", legacy: "The photo could not be prepared within the upload limit. Retake it in good light, using a different photo for each angle.") ?? "The photo could not be prepared within the upload limit. Retake it in good light, using a different photo for each angle."; preparing = false; return }
         localError = nil
         Task {
             _ = await repository.upload(slot, ticket: ticket)
@@ -103,10 +103,13 @@ struct EnrollmentClinicalPhotosView: View {
         _photos = StateObject(wrappedValue: LaunchPhotoSetRepository(access: APIService.shared.access, transport: APIService.shared))
     }
     var body: some View {
-        if let state = enrollment.state {
-            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: state.case.id, purpose: .enrollment, requiredSlots: state.case.intakeV2?.evaluation.requiredPhotoSlots ?? LaunchPhotoRules.required(sites: state.case.medicalHistory.M6 ?? []), serverSet: correctionSet(state), guidance: enrollment.catalog?.photoGuidance) { _ in
+        if let state = enrollment.state, let catalog = enrollment.catalog {
+            ClinicalPhotoSetView(repository: photos, ticket: ticket, targetId: state.case.id, purpose: .enrollment, requiredSlots: state.case.intakeV2?.evaluation.requiredPhotoSlots ?? LaunchPhotoRules.required(sites: state.case.medicalHistory.M6 ?? []), serverSet: correctionSet(state), guidance: catalog.photoGuidance) { _ in
                 Task { _ = await enrollment.refresh(ticket: ticket) }
             }
+        } else {
+            ProgressView()
+            Button("Retry") { Task { await enrollment.loadCatalog(ticket: ticket) } }
         }
     }
     private func correctionSet(_ state: LaunchEnrollmentResponse) -> LaunchPhotoSet? {

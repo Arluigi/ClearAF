@@ -196,8 +196,8 @@ export type LaunchCatalog = {contractVersion:1;settingsVersion:number;plans:Laun
   reviewCopy:'Review within 1 to 2 business days.';questionnaireVersion:string;
   eligibilityQuestions:LaunchQuestion[];medicalQuestions:LaunchQuestion[];
   intakeV2?:{sections:{id:string;title:string;intro:string;questionIds:string[]}[];exitPages:Record<string,string>;holdNotice:string;attestationIntro:string};
-  photoGuidance?:{title:string;instructions:string[];slots:{id:string;label:string}[]};
-  identityGuidance?:{title:string;prompt?:string;attestation?:string;items:{id:string;instructions:string}[]}};
+  photoGuidance?:{title:string;instructions:string[];slots:{id:string;label:string}[];copy?:Record<string,string>};
+  identityGuidance?:{title:string;prompt?:string;attestation?:string;items:{id:string;instructions:string}[];copy?:Record<string,string>}};
 export type LaunchQuestion = {id:string;prompt:string;kind:'choice'|'multi_choice'|'text'|'repeat'|'attestation';
   required:boolean;options:{id:string;label:string}[];fields:LaunchQuestion[];
   showWhen:{questionId:string;operator:'in'|'not_in';values:string[]}[]};

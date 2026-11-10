@@ -43,7 +43,7 @@ export function createLaunchReview({db,now=()=>new Date(),enrollmentDTO=launchEn
     FROM public.launch_cases c JOIN assigned p ON p.id=c."patientId"
     LEFT JOIN public.identity_verifications i ON i.id=c."identityId" AND i.status='uploaded'
     CROSS JOIN LATERAL (SELECT c.id,'enrollment'::text AS kind UNION ALL SELECT i.id,'identity' WHERE i.id IS NOT NULL) v
-    WHERE (c.status='submitted' AND c."submittedAt" IS NOT NULL) OR (c.status='ineligible' AND c.eligibility->>'rulesVersion'='2.0-pending-review' AND c.eligibility->'reasons' ? 'A')
+    WHERE (c.status='submitted' AND c."submittedAt" IS NOT NULL) OR (c.status='ineligible' AND c.eligibility->>'rulesVersion' IN ('2.0-pending-review','2.1-pending-review') AND c.eligibility->'reasons' ? 'A')
     UNION ALL
     SELECT c.id,c."patientId",p.name,'check_in',c.id,COALESCE(c."submittedAt",TIMESTAMP '1970-01-01') AT TIME ZONE 'UTC',
      to_jsonb(array_remove(ARRAY[
