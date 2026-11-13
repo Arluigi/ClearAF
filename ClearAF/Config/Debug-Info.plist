@@ -13,16 +13,18 @@
 			</array>
 		</dict>
 	</array>
-	<key>ClearAFLocalSupabaseAnonKey</key>
-	<string>$(CLEARAF_LOCAL_SUPABASE_ANON_KEY)</string>
 	<key>ClearAFLocalDeviceHost</key>
 	<string>$(CLEARAF_LOCAL_DEVICE_HOST)</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to the development server on your Mac for local testing.</string>
+	<key>ClearAFLocalSupabaseAnonKey</key>
+	<string>$(CLEARAF_LOCAL_SUPABASE_ANON_KEY)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the development server on your Mac for local testing.</string>
 </dict>
 </plist>
