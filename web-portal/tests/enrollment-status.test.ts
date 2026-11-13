@@ -1,6 +1,10 @@
+import './env';
 import test from "node:test";
 import assert from "node:assert/strict";
-import { enrollmentLines } from "../src/lib/enrollment";
+import { createElement as h } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { enrollmentLines, readEnrollmentHeader } from "../src/lib/enrollment";
+import { EnrollmentStatusDetails } from '../src/components/patients/EnrollmentStatus';
 import type { EnrollmentSummary } from "../src/lib/enrollment";
 const s = (o: Partial<EnrollmentSummary>): EnrollmentSummary => ({
   status: "enrolled",
@@ -29,6 +33,41 @@ test("summaries become factual labels", () => {
       s({ screening: { eligible: true, reasons: [], flags: ["trying_to_conceive"], stateCode: "IL", submittedAt: "2026-09-15T00:00:00.000Z" } }),
     ).some((l) => l.text === "Reported trying to conceive"),
   );
+});
+
+test('launch patients never read or display legacy eligibility and consent warnings', async () => {
+  let legacyReads = 0;
+  const result = await readEnrollmentHeader(async () => ({ careModel: 'launch' }), async () => {
+    legacyReads++;
+    return s({ status: 'screening_required', screening: null, consent: { version: 1, acceptedAt: null } });
+  });
+  assert.deepEqual(result, { careModel: 'launch' });
+  assert.equal(legacyReads, 0);
+  const html = renderToStaticMarkup(h(EnrollmentStatusDetails, { data: result, onOpenReview: () => {} }));
+  assert.match(html, /Enrollment review/);
+  assert.match(html, /<button/);
+  assert.doesNotMatch(html, /Eligibility not screened|Consent v1 not accepted|Eligible \(|Consent v\d accepted/);
+});
+
+test('confirmed legacy patients retain their factual screening and consent labels', async () => {
+  let legacyReads = 0;
+  const summary = s({ status: 'screening_required', screening: null, consent: { version: 1, acceptedAt: null } });
+  const result = await readEnrollmentHeader(async () => ({ careModel: 'legacy' }), async () => { legacyReads++; return summary; });
+  assert.deepEqual(result, { careModel: 'legacy', summary });
+  assert.equal(legacyReads, 1);
+  const html = renderToStaticMarkup(h(EnrollmentStatusDetails, { data: result, onOpenReview: () => {} }));
+  assert.match(html, /Eligibility not screened/);
+  assert.match(html, /Consent v1 not accepted/);
+  assert.doesNotMatch(html, /Enrollment review/);
+});
+
+test('failed or unknown care model never falls back to legacy clinical assertions', async () => {
+  let legacyReads = 0;
+  const legacy = async () => { legacyReads++; return s({}); };
+  const denied = Object.assign(new Error('Assignment required'), { status: 403 });
+  await assert.rejects(readEnrollmentHeader(async () => { throw denied; }, legacy), denied);
+  await assert.rejects(readEnrollmentHeader(async () => ({ careModel: 'unknown' as never }), legacy), /Care model not confirmed/);
+  assert.equal(legacyReads, 0);
 });
 
 test('launch consent receipt mapping does not substitute a missing document with another acceptance',async()=>{

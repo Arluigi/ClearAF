@@ -1,9 +1,24 @@
+import type { LaunchChartResponse } from '../types/api';
+
 export type EnrollmentSummary = {
   status: 'screening_required' | 'ineligible' | 'consent_required' | 'enrolled';
   screening: { eligible: boolean; reasons: string[]; flags: string[]; stateCode: string; submittedAt: string } | null;
   screeningCount: number;
   consent: { version: number; acceptedAt: string | null };
 };
+export type EnrollmentHeader = { careModel: 'launch' } | { careModel: 'legacy'; summary: EnrollmentSummary };
+
+/** Legacy records are meaningful only after the authorized chart confirms that care model. */
+export async function readEnrollmentHeader(
+  readChart: () => Promise<Pick<LaunchChartResponse, 'careModel'>>,
+  readLegacy: () => Promise<EnrollmentSummary>,
+): Promise<EnrollmentHeader> {
+  const chart = await readChart();
+  if (chart.careModel === 'launch') return { careModel: 'launch' };
+  if (chart.careModel !== 'legacy') throw new Error('Care model not confirmed. Refresh the chart.');
+  return { careModel: 'legacy', summary: await readLegacy() };
+}
+
 export type StatusLine = { text: string; tone: 'neutral' | 'alert' };
 const reasonText: Record<string, string> = { state: 'outside licensed states', age: 'under minimum age', pregnancy: 'pregnant', breastfeeding: 'breastfeeding' };
 const acceptedOn = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });

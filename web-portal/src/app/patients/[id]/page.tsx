@@ -69,7 +69,7 @@ function Workspace() {
     {failed ? <div role="alert" className="space-y-3"><h1 className="editorial-title text-[32px]">Patient unavailable</h1><p className="max-w-prose text-ink-secondary">This patient could not be opened. Check your connection and current assignment.</p><Button variant="outline" onClick={() => setAttempt(value => value + 1)}>Try again</Button></div>
       : !patient ? <p role="status" className="text-sm text-ink-secondary">Opening patient</p>
       : <>
-        <WorkspaceHeader name={patient.name} since={sinceLabel(patient.joinDate ?? patient.createdAt)} onMessage={() => openTab('messages')}><EnrollmentStatus patientId={id} /></WorkspaceHeader>
+        <WorkspaceHeader name={patient.name} since={sinceLabel(patient.joinDate ?? patient.createdAt)} onMessage={() => openTab('messages')}><EnrollmentStatus patientId={id} onOpenReview={() => openTab('photos', { reviewKind: 'enrollment' })} /></WorkspaceHeader>
         <PatientUrgentReports key={'urgent-' + id} patientId={id} />
         <Tabs value={tab} onValueChange={value => openTab(value as WorkspaceTab)} activationMode="manual">
           <TabsList variant="underline" aria-label="Patient record">{WORKSPACE_TABS.map(value => <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>)}</TabsList>
