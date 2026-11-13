@@ -29,7 +29,9 @@ export class ProtectedIdentityImages {
       const pair=await this.authorize(abort.signal);if(generation!==this.generation)return;
       const expiresAt=Math.min(Date.parse(pair.idPhoto.expiresAt),Date.parse(pair.selfie.expiresAt));
       if(!Number.isFinite(expiresAt)||expiresAt<=this.now())throw new Error('Expired');
-      const blobs=await Promise.all([pair.idPhoto,pair.selfie].map(async image=>{const response=await this.fetchBytes(image.url,{signal:abort.signal,cache:'no-store',referrerPolicy:'no-referrer',credentials:'omit'});if(!response.ok)throw new Error('Unavailable');return response.blob();}));
+      // Browser fetch rejects the image owner as its receiver. Invoke it as a function.
+      const fetchBytes=this.fetchBytes;
+      const blobs=await Promise.all([pair.idPhoto,pair.selfie].map(async image=>{const response=await fetchBytes(image.url,{signal:abort.signal,cache:'no-store',referrerPolicy:'no-referrer',credentials:'omit'});if(!response.ok)throw new Error('Unavailable');return response.blob();}));
       if(generation!==this.generation||abort.signal.aborted)return;
       if(expiresAt<=this.now())throw new Error('Expired during transfer');
       this.publish({status:'ready',data:{idPhoto:this.urls.createObjectURL(blobs[0]),selfie:this.urls.createObjectURL(blobs[1]),expiresAt}});

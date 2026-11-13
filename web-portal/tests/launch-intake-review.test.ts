@@ -23,6 +23,18 @@ test('identity bytes are no-store, refreshed through authorization and revoked o
  await images.load();assert.equal(images.snapshot().status,'ready');await images.load();assert.equal(authorizations,2);assert.deepEqual(revoked,['blob:1','blob:2']);images.dispose();assert.deepEqual(revoked,['blob:1','blob:2','blob:3','blob:4']);assert.equal(images.snapshot().data,null);
  now=Date.parse('2026-11-09T12:06:00Z');await images.load();assert.equal(images.snapshot().status,'error');
 });
+test('protected identity fetch uses the browser fetch receiver instead of the image owner',async()=>{
+ let transfers=0,creates=0;
+ const browserFetch:typeof fetch=async function(this:unknown,_input,options){
+  if(this!==undefined&&this!==globalThis)throw new TypeError('Illegal invocation');
+  transfers++;assert.equal(options?.cache,'no-store');assert.equal(options?.credentials,'omit');
+  assert.equal(options?.referrerPolicy,'no-referrer');assert.ok(options?.signal);
+  return new Response(new Blob(['synthetic identity']));
+ };
+ const images=new ProtectedIdentityImages(async()=>({idPhoto:{url:'https://example.invalid/id',expiresAt:'2099-01-01'},selfie:{url:'https://example.invalid/selfie',expiresAt:'2099-01-01'}}),browserFetch,{createObjectURL:()=>`blob:${++creates}`,revokeObjectURL:()=>{}});
+ await images.load();assert.equal(images.snapshot().status,'ready');assert.equal(transfers,2);assert.equal(creates,2);
+ images.dispose();assert.equal(images.snapshot().data,null);
+});
 test('closing identity while authorization is pending cannot publish images',async()=>{
  let finish!:(x:never)=>void;const images=new ProtectedIdentityImages(()=>new Promise(resolve=>{finish=resolve;}));const pending=images.load();images.dispose();finish({idPhoto:{},selfie:{}} as never);await pending;assert.equal(images.snapshot().data,null);
 });
