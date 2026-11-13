@@ -2,6 +2,42 @@ import XCTest
 @testable import ClearAF
 
 @MainActor final class LaunchEnrollmentRepositoryTests: XCTestCase {
+    func testDispatchedMutationCannotRestoreStateAfterAccountSwitch() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID()), fake = LaunchEnrollmentFake()
+        let repo = LaunchEnrollmentRepository(access: access, transport: fake)
+        _ = await repo.refresh(ticket: ticket)
+        fake.pause = true
+        let save = Task { await repo.mutate(LaunchRequest(path: "/enrollment/test/progress", method: "PUT"), ticket: ticket) }
+        while fake.continuation == nil { await Task.yield() }
+        save.cancel()
+        repo.cancel()
+        _ = access.activate(UUID())
+        fake.continuation?.resume(returning: LaunchContractTests.enrollment)
+        let accepted = await save.value
+        XCTAssertFalse(accepted)
+        XCTAssertNil(repo.state)
+        XCTAssertFalse(repo.saving)
+    }
+    func testCancelledAutosaveStillAcknowledgesCommittedRevisionBeforeNextSave() async throws {
+        let access = AccountAccess(), ticket = access.activate(UUID())
+        let transport = CancellableEnrollmentTransport()
+        let repo = LaunchEnrollmentRepository(access: access, transport: transport)
+        let loaded = await repo.refresh(ticket: ticket)
+        XCTAssertTrue(loaded)
+        let save = Task { await repo.saveProgress(step: "eligibility", topicId: "quick_eligibility", eligibilityDraft: ["E1": "acne"], ticket: ticket) }
+        while !transport.committed { await Task.yield() }
+        // SwiftUI cancels .task(id: answers) when the next answer changes, even
+        // though the API has already committed the previous answer.
+        save.cancel()
+        let acknowledged = await save.value
+        XCTAssertTrue(acknowledged)
+        XCTAssertEqual(repo.state?.case.revision, 1)
+        XCTAssertNil(repo.error)
+        XCTAssertFalse(repo.saving)
+        let next = await repo.saveProgress(step: "eligibility", topicId: "quick_eligibility", eligibilityDraft: ["E1": "acne", "E2": "no"], ticket: ticket)
+        XCTAssertTrue(next)
+        XCTAssertEqual(transport.expectedRevisions, [0, 1])
+    }
     func testRefreshUsesServerStepAndDropsLateAccountResponse() async throws {
         let access = AccountAccess(), ticket = access.activate(UUID()), fake = LaunchEnrollmentFake()
         let repo = LaunchEnrollmentRepository(access: access, transport: fake, directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
@@ -70,6 +106,27 @@ import XCTest
         XCTAssertFalse(loaded)
         XCTAssertNil(repo.state)
         XCTAssertNotNil(repo.error)
+    }
+}
+@MainActor private final class CancellableEnrollmentTransport: LaunchTransport {
+    var committed = false
+    var expectedRevisions: [Int] = []
+    private var revision = 0
+    func send(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data {
+        if request.method == "PUT" {
+            let body = try JSONSerialization.jsonObject(with: XCTUnwrap(request.body)) as! [String: Any]
+            let expected = body["expectedRevision"] as! Int
+            expectedRevisions.append(expected)
+            guard expected == revision else { throw LaunchFailure.server(status: 409, code: "REVISION_CONFLICT") }
+            revision += 1
+            committed = true
+            try await Task.sleep(for: .milliseconds(40))
+        }
+        var envelope = try JSONSerialization.jsonObject(with: LaunchContractTests.enrollment) as! [String: Any]
+        var record = envelope["case"] as! [String: Any]
+        record["revision"] = revision; record["status"] = "eligibility"; record["questionnaireVersion"] = "2.2-pending-review"
+        envelope["case"] = record
+        return try JSONSerialization.data(withJSONObject: envelope)
     }
 }
 @MainActor final class LaunchEnrollmentFake: LaunchTransport {

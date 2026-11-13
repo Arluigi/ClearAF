@@ -95,7 +95,11 @@ struct LaunchEnrollmentDraft: Codable, Equatable {
         let current = epoch; let priorRevision = state?.case.revision; saving = true; error = nil
         defer { if epoch == current { saving = false } }
         do {
-            let bytes = try await transport.send(request, ticket: ticket)
+            // Once dispatched, a write can commit even if SwiftUI cancels its
+            // debounce task after the next edit. Finish receiving that write's
+            // acknowledgement so the next save uses the committed revision.
+            // Account/epoch checks below still reject a late account response.
+            let bytes = try await Task { try await transport.send(request, ticket: ticket) }.value
             try require(ticket, epoch: current)
             try apply(JSONDecoder().decode(LaunchEnrollmentResponse.self, from: bytes))
             if intakeV2DraftRevision == priorRevision { intakeV2DraftRevision = state?.case.revision; if let intakeV2Draft { try stageIntakeV2(intakeV2Draft, ticket: ticket) } }
