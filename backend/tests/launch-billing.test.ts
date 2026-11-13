@@ -28,6 +28,19 @@ test('provider success followed by interrupted DB save reuses the same durable p
  await assert.rejects(s.service.checkout(patient,checkout),{code:'BILLING_UNAVAILABLE'});const recovered=await s.service.checkout(patient,checkout);assert.ok(recovered.action);assert.equal(calls.length,2);assert.equal(calls[0],calls[1]);assert.equal(s.rows.billingOperation.length,1);assert.equal(s.rows.billingPayment.length,0);
 });
 test('confirmed initial payment advances server resume to medical history only once',async()=>{const s=setup();await s.service.checkout(patient,checkout);await s.service.resolveFake(patient,'synthetic@example.invalid',s.rows.billingOperation[0].id,'succeed');assert.equal(s.rows.launchCase[0].status,'medical_history');assert.equal(s.rows.launchCase[0].revision,4);await s.service.resolveFake(patient,'synthetic@example.invalid',s.rows.billingOperation[0].id,'succeed');assert.equal(s.rows.launchCase[0].revision,4)});
+test('legacy unpinned case settles checkout using its membership publication without a null unique lookup',async()=>{
+ const s=setup();assert.equal(s.rows.launchCase[0].settingsVersion,null);
+ const findUnique=s.db.launchSettings.findUnique;
+ s.db.launchSettings.findUnique=async(args:any)=>{assert.notEqual(args.where.version,null,'Prisma rejects a null unique settings version');return findUnique(args)};
+ await s.service.checkout(patient,checkout);const operation=s.rows.billingOperation[0];
+ await s.service.resolveFake(patient,'synthetic@example.invalid',operation.id,'requires_action');
+ const pinned=s.rows.launchSettings[0];pinned.active=false;
+ s.rows.launchSettings.push({...pinned,id:randomUUID(),version:2,active:true,contentVersion:'2.2-pending-review'});
+ const confirmed=await s.service.resolveFake(patient,'synthetic@example.invalid',operation.id,'succeed');
+ assert.equal(confirmed.membership.status,'paid_pending_review');assert.equal(s.rows.careMembership[0].settingsVersion,1);assert.equal(s.rows.launchCase[0].status,'medical_history');
+ assert.equal(s.rows.launchCase[0].revision,4);assert.equal(s.rows.billingPayment.length,1);
+ await s.service.resolveFake(patient,'synthetic@example.invalid',operation.id,'succeed');assert.equal(s.rows.billingPayment.length,1);assert.equal(s.rows.launchCase[0].revision,4);
+});
 test('out-of-order network replies refetch provider truth after a competing webhook wins',async()=>{
  const s=setup();await s.service.checkout(patient,checkout);const o=s.rows.billingOperation[0];await s.service.resolveFake(patient,'synthetic@example.invalid',o.id,'succeed');
  const current=await s.provider.retrieve({id:'seed',type:'checkout.session.completed',objectId:'synthetic',createdAt:at.toISOString()},{membership:s.rows.careMembership[0],operation:o});
