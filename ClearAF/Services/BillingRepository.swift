@@ -8,7 +8,7 @@ enum LaunchBillingURL {
         guard let expiry = LaunchDates.instant(action.expiresAt), expiry > now,
               let components = URLComponents(string: action.url), components.scheme == "https",
               components.host == host, components.user == nil, components.password == nil,
-              components.port == nil, components.fragment == nil, !components.path.isEmpty,
+              components.port == nil, !components.path.isEmpty,
               let url = components.url else { return nil }
         return url
     }

@@ -11,6 +11,8 @@ import XCTest
     func testHostedURLsRejectSpoofingCredentialsPortsAndExpiredSession() {
         let now = Date(timeIntervalSince1970: 0)
         XCTAssertNotNil(LaunchBillingURL.valid(LaunchPaymentAction(url: "https://checkout.stripe.com/c/pay/synthetic", expiresAt: "2026-11-09T12:00:00Z"), purpose: .checkout, now: now))
+        // Stripe Checkout URLs carry a required #fragment (client config); rejecting it blocked every checkout.
+        XCTAssertNotNil(LaunchBillingURL.valid(LaunchPaymentAction(url: "https://checkout.stripe.com/g/pay/cs_test_synthetic#fidkdWxOYHwnPyd1blpxYHZxWjA0", expiresAt: "2026-11-09T12:00:00Z"), purpose: .checkout, now: now))
         XCTAssertNotNil(LaunchBillingURL.valid(LaunchPaymentAction(url: "https://billing.stripe.com/p/session/synthetic", expiresAt: "2026-11-09T12:00:00Z"), purpose: .portal, now: now))
         for url in ["http://checkout.stripe.com/c/pay/x", "https://checkout.stripe.com.evil.invalid/x", "https://evil.invalid/?paid=true", "https://name@checkout.stripe.com/x", "https://checkout.stripe.com:444/x", "https://billing.stripe.com/x"] {
             XCTAssertNil(LaunchBillingURL.valid(LaunchPaymentAction(url: url, expiresAt: "2026-11-09T12:00:00Z"), purpose: .checkout, now: now))
