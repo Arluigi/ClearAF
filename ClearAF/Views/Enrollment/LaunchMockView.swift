@@ -7,6 +7,7 @@ enum LaunchMockRoute: String, CaseIterable {
     case consents, identity, eligibility, plans, medical
     case medicalAcne = "medical-acne", medicalMedicines = "medical-medicines", medicalPreferences = "medical-preferences"
     case photos, pharmacy, shipping, review, submitted, rejected, membership
+    case submitJourney = "submit-journey", submitJourneyReadOnly = "submit-journey-read-only"
     case captureIdentity = "capture-identity", captureIdentityReview = "capture-identity-review"
     case capturePhotos = "capture-photos", captureCheckIn = "capture-check-in", captureRetake = "capture-retake"
     case captureFront = "capture-front", captureLeft = "capture-left", captureRight = "capture-right"
@@ -25,7 +26,7 @@ enum LaunchMockRoute: String, CaseIterable {
     }
     var section: Int { switch self { case .medicalAcne: 1; case .medicalMedicines: 2; case .medicalPreferences: 3; default: 0 } }
     var status: String {
-        switch self { case .consents: "consents"; case .identity: "identity"; case .eligibility: "eligibility"; case .plans: "payment"; case .medical, .medicalAcne, .medicalMedicines, .medicalPreferences: "medical_history"; case .photos: "photos"; case .pharmacy, .shipping, .review: "destination"; case .submitted: "submitted"; case .rejected: "rejected"; case .membership: "approved"; default: "photos" }
+        switch self { case .consents: "consents"; case .identity: "identity"; case .eligibility: "eligibility"; case .plans: "payment"; case .medical, .medicalAcne, .medicalMedicines, .medicalPreferences: "medical_history"; case .photos: "photos"; case .pharmacy, .shipping, .review, .submitJourney, .submitJourneyReadOnly: "destination"; case .submitted: "submitted"; case .rejected: "rejected"; case .membership: "approved"; default: "photos" }
     }
 }
 
@@ -82,9 +83,26 @@ struct LaunchMockRoot: View {
         case .pharmacy: DestinationView(repository: enrollment, ticket: ticket, planId: .care)
         case .shipping: DestinationView(repository: enrollment, ticket: ticket, planId: .allIn)
         case .review: CaseFinalReviewView(repository: enrollment, ticket: ticket)
+        case .submitJourney, .submitJourneyReadOnly: LaunchMockSubmissionJourney(repository: enrollment, ticket: ticket)
         case .submitted, .rejected: CaseSubmittedView(repository: enrollment, ticket: ticket)
         case .membership: MembershipView(billing: session.billing, enrollment: enrollment, ticket: ticket)
         default: EmptyView()
+        }
+    }
+}
+
+/// Retains the production NavigationLink presentation while the root step changes.
+private struct LaunchMockSubmissionJourney: View {
+    @ObservedObject var repository: LaunchEnrollmentRepository
+    let ticket: AccountAccess.Ticket
+    var body: some View {
+        if repository.state?.case.status == .submitted {
+            CaseSubmittedView(repository: repository, ticket: ticket)
+        } else {
+            LaunchPage(title: "Your destination") {
+                NavigationLink("Review and submit case") { CaseFinalReviewView(repository: repository, ticket: ticket) }
+                    .buttonStyle(.letterpress(.outlined, fullWidth: true))
+            }
         }
     }
 }
@@ -93,10 +111,15 @@ struct LaunchMockRoot: View {
     static let patientID = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
     static let caseID = UUID(uuidString: "00000000-0000-4000-8000-000000000002")!
     let route: LaunchMockRoute
+    private var didSubmit = false
     init(route: LaunchMockRoute) { self.route = route }
     private let instant = "2026-11-09T12:00:00Z"
     func send(_ request: LaunchRequest, ticket: AccountAccess.Ticket) async throws -> Data {
         guard ticket.accountID == Self.patientID else { throw AccountFailure.accountChanged }
+        if route == .submitJourney, request.method == "POST", request.path == "/enrollment/\(Self.caseID.uuidString.lowercased())/submit" {
+            didSubmit = true
+            return try bytes(["case": enrollmentCase, "membership": membership, "consents": consents])
+        }
         guard request.method == "GET" else { throw LaunchFailure.server(status: 503, code: "MOCK_READ_ONLY") }
         switch request.path {
         case "/catalog": return try bytes(catalog)
@@ -147,10 +170,10 @@ struct LaunchMockRoot: View {
     }
     private var enrollmentCase: [String: Any] {
         let photoItems = ["front", "left", "right"].enumerated().map { index, slot in ["slot": slot, "photoId": String(format: "00000000-0000-4000-8000-%012d", 10 + index), "captureId": String(format: "00000000-0000-4000-8000-%012d", 20 + index)] }
-        let photos: [String: Any] = ["id": "00000000-0000-4000-8000-000000000004", "purpose": "enrollment", "status": route == .submitted ? "submitted" : "draft", "requiredSlots": ["front", "left", "right"], "items": photoItems]
+        let photos: [String: Any] = ["id": "00000000-0000-4000-8000-000000000004", "purpose": "enrollment", "status": route == .submitted || didSubmit ? "submitted" : "draft", "requiredSlots": ["front", "left", "right"], "items": photoItems]
         let pharmacy: [String: Any] = ["planId": "care", "pharmacy": ["name": "Synthetic Pharmacy", "addressLine1": "1 Example Street", "addressLine2": NSNull(), "city": "Raleigh", "state": "NC", "postalCode": "27601", "phone": "9195550100"]]
         let identity: [String: Any] = ["id": "00000000-0000-4000-8000-000000000005", "status": "uploaded", "fullName": "Synthetic Adult", "dateOfBirth": "1990-01-01", "attestedInNC": true, "attestedAt": instant, "reviewedAt": NSNull(), "reviewedBy": NSNull(), "patientMessage": NSNull()]
-        return ["id": Self.caseID.uuidString.lowercased(), "revision": 1, "status": route.status, "identity": identity, "eligibility": NSNull(), "medicalHistory": ["M1": "female", "M2": "yes", "M3": "no", "M4": ["method": "iud", "details": NSNull()], "M6": ["cheeks"]], "questionnaireVersion": route.isCaptureReview ? "2.2-pending-review" : "0.9-draft", "photoSet": [.review, .submitted, .rejected].contains(route) ? photos as Any : NSNull(), "destination": [.review, .submitted, .rejected].contains(route) ? pharmacy as Any : NSNull(), "planId": plan, "flags": [], "submittedAt": route == .submitted ? instant as Any : NSNull(), "approvedAt": NSNull(), "patientMessage": NSNull()]
+        return ["id": Self.caseID.uuidString.lowercased(), "revision": didSubmit ? 2 : 1, "status": didSubmit ? "submitted" : route.status, "identity": identity, "eligibility": NSNull(), "medicalHistory": ["M1": "female", "M2": "yes", "M3": "no", "M4": ["method": "iud", "details": NSNull()], "M6": ["cheeks"]], "questionnaireVersion": route.isCaptureReview ? "2.2-pending-review" : "0.9-draft", "photoSet": [.review, .submitted, .rejected, .submitJourney, .submitJourneyReadOnly].contains(route) ? photos as Any : NSNull(), "destination": [.review, .submitted, .rejected, .submitJourney, .submitJourneyReadOnly].contains(route) ? pharmacy as Any : NSNull(), "planId": plan, "flags": [], "submittedAt": route == .submitted || didSubmit ? instant as Any : NSNull(), "approvedAt": NSNull(), "patientMessage": NSNull()]
     }
 }
 #endif

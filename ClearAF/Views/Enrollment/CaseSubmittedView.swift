@@ -34,6 +34,7 @@ struct CaseSubmittedView: View {
 struct CaseFinalReviewView: View {
     @ObservedObject var repository: LaunchEnrollmentRepository
     let ticket: AccountAccess.Ticket
+    @Environment(\.dismiss) private var dismiss
     var body: some View {
         LaunchPage(title: "Review and submit") {
             Text("Your clinician will review your identity, health history, photos and destination together.")
@@ -42,7 +43,9 @@ struct CaseFinalReviewView: View {
                 Text(state.case.photoSet.map { "\($0.items.count) photos shared" } ?? "Photos are not complete").font(Letterpress.data(13))
                 Text(state.case.destination == nil ? (!Enrollment22Routing.usesNewOrder(state) && state.case.intakeV2 != nil && state.case.planId == .care ? "Pharmacy can be added before a prescription is sent." : "Destination needed") : "Destination saved")
                 Text("Review within 1 to 2 business days.")
-                Button(repository.saving ? "Submitting…" : "Submit for clinical review") { Task { _ = await repository.submitCase(ticket: ticket) } }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!repository.canSubmitCase || repository.saving)
+                Button(repository.saving ? "Submitting…" : "Submit for clinical review") {
+                    Task { if await repository.submitCase(ticket: ticket) { dismiss() } }
+                }.buttonStyle(.letterpress(.filled, fullWidth: true)).disabled(!repository.canSubmitCase || repository.saving)
                 if !repository.canSubmitCase { Text("Complete the required photos and save your destination before submitting.").font(Letterpress.ui(13)) }
                 if let error = repository.error { Text(error).foregroundStyle(Letterpress.error) }
             }
