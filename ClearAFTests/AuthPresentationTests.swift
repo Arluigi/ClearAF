@@ -4,6 +4,31 @@ import Auth
 @testable import ClearAF
 
 struct AuthPresentationTests {
+    @Test func unconfirmedEmailHasConfirmationGuidanceAndCanReturnToSignIn() throws {
+        let url = try #require(URL(string: "http://127.0.0.1:54321/auth/v1/token"))
+        let response = try #require(HTTPURLResponse(url: url, statusCode: 400, httpVersion: nil, headerFields: nil))
+        let unconfirmed = AuthError.api(message: "Email not confirmed", errorCode: .emailNotConfirmed, underlyingData: Data(), underlyingResponse: response)
+        #expect(AuthForm.needsEmailConfirmation(unconfirmed))
+        #expect(AuthForm.failureMessage(for: unconfirmed, during: .signIn) == AuthForm.confirmationSent)
+        #expect(!AuthForm.needsEmailConfirmation(URLError(.notConnectedToInternet)))
+        #expect(AuthForm.confirmationMessage(email: "sam@example.invalid").contains("sam@example.invalid"))
+        #expect(AuthForm.confirmationMessage(email: "sam@example.invalid").contains("come back and sign in"))
+        let source = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/AuthenticationView.swift"), encoding: .utf8)
+        for marker in ["Check your email", "Resend confirmation email", "Back to sign in", "showConfirmation(email: submittedEmail)", "resendConfirmation(email:"] {
+            #expect(source.contains(marker), "\(marker)")
+        }
+    }
+
+    @Test func confirmationUsesTheSubmittedEmailAcrossAsyncRequests() throws {
+        let source = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Views/AuthenticationView.swift"), encoding: .utf8)
+        #expect(source.components(separatedBy: "let submittedEmail = trimmedEmail").count == 3)
+        #expect(source.contains("signUp(email: submittedEmail"))
+        #expect(source.contains("signIn(email: submittedEmail"))
+        #expect(source.components(separatedBy: "showConfirmation(email: submittedEmail)").count == 3)
+        #expect(source.contains("self.email = email"))
+        #expect(!source.contains("confirmationEmail = trimmedEmail"))
+    }
+
     @Test func validationKeepsTheExistingRules() {
         #expect(AuthForm.isValid(registering: false, name: "", email: "a", password: "b"))
         #expect(!AuthForm.isValid(registering: false, name: "", email: "", password: "b"))
@@ -26,8 +51,9 @@ struct AuthPresentationTests {
     @Test func copyHasNoExclamationsPlaceholdersOrPromises() {
         let copy = [AuthForm.title(registering: false), AuthForm.title(registering: true), AuthForm.intro,
                     AuthForm.disabledReason(registering: false), AuthForm.disabledReason(registering: true),
-                    AuthForm.message(.signIn), AuthForm.message(.register), AuthForm.message(.recovery),
+                    AuthForm.message(.signIn), AuthForm.message(.register), AuthForm.message(.recovery), AuthForm.message(.confirmation),
                     AuthForm.confirmationSent, AuthForm.recoverySent, AuthForm.recoveryNeedsEmail,
+                    AuthForm.confirmationTitle, AuthForm.confirmationResent, AuthForm.confirmationMessage(email: "sam@example.invalid"),
                     AuthForm.offline, AuthForm.wrongCredentials]
         for line in copy {
             #expect(!line.contains("!"), "\(line)")
@@ -44,7 +70,7 @@ struct AuthPresentationTests {
 
     @Test func failuresNameOfflineAndWrongCredentialsAndOtherwiseStayGeneral() throws {
         for code in [URLError.Code.notConnectedToInternet, .networkConnectionLost, .timedOut] {
-            for step in [AuthForm.Failure.signIn, .register, .recovery] {
+            for step in [AuthForm.Failure.signIn, .register, .recovery, .confirmation] {
                 #expect(AuthForm.failureMessage(for: URLError(code), during: step) == "You're offline. Check your connection and try again.")
             }
         }

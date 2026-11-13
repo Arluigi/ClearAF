@@ -3,14 +3,24 @@ import SwiftUI
 
 /// Sign-in copy and validation (spec §6 #1, §5, §7). The rules are the ones the screen already enforced.
 enum AuthForm {
-    enum Failure { case signIn, register, recovery }
+    enum Failure { case signIn, register, recovery, confirmation }
 
     static let intro = "Photos, routines and notes are shared only with the clinician assigned to you."
     static let confirmationSent = "Check your email to confirm your account, then sign in."
+    static let confirmationTitle = "Check your email"
+    static let confirmationResent = "We sent another confirmation email. Open the latest link, then come back and sign in."
     static let recoverySent = "If an account exists, a password reset email is on its way. Open the link on this device."
     static let recoveryNeedsEmail = "Enter your email above, then choose Forgot password."
     static let offline = "You're offline. Check your connection and try again."
     static let wrongCredentials = "That email and password don't match. Check them and try again."
+
+    static func confirmationMessage(email: String) -> String {
+        "We sent a confirmation link to \(email). Open it, then come back and sign in."
+    }
+
+    static func needsEmailConfirmation(_ error: Error) -> Bool {
+        (error as? AuthError)?.errorCode == .emailNotConfirmed
+    }
 
     static func isValid(registering: Bool, name: String, email: String, password: String) -> Bool {
         if registering {
@@ -44,6 +54,7 @@ enum AuthForm {
         case .signIn: "Couldn't sign in. Check your email, password and connection, then try again."
         case .register: "Couldn't create your account. UNZIT is currently open to the closed waitlist only. Check your invitation and try again."
         case .recovery: "Couldn't send a reset email. Check your connection and try again."
+        case .confirmation: "Couldn't resend the confirmation email. Wait a moment, then try again."
         }
     }
 
@@ -57,6 +68,7 @@ enum AuthForm {
         if failure == .signIn, let authError = error as? AuthError, authError.errorCode == .invalidCredentials {
             return wrongCredentials
         }
+        if failure == .signIn, needsEmailConfirmation(error) { return confirmationSent }
         return message(failure)
     }
 }
@@ -74,6 +86,7 @@ struct AuthenticationView: View {
     @State private var name = ""
     @State private var showingPassword = false
     @State private var isLoading = false
+    @State private var confirmationEmail: String?
     @FocusState private var focus: Field?
 
     let onAuthenticationSuccess: () -> Void
@@ -85,32 +98,16 @@ struct AuthenticationView: View {
             VStack(alignment: .leading, spacing: 0) {
                 LetterpressLockup(height: LetterpressLockup.signInHeight)
                     .padding(.top, Letterpress.Space.s28)
-                Text(AuthForm.title(registering: isRegistering))
+                Text(confirmationEmail == nil ? AuthForm.title(registering: isRegistering) : AuthForm.confirmationTitle)
                     .font(Letterpress.display(34, relativeTo: .largeTitle))
                     .foregroundStyle(Letterpress.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Letterpress.Space.s44)
-                Text(AuthForm.intro)
-                    .font(Letterpress.ui(15, relativeTo: .body))
-                    .foregroundStyle(Letterpress.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, Letterpress.Space.s14)
-                fields
-                    .padding(.top, Letterpress.Space.s28)
-                actions
-                    .padding(.top, Letterpress.Space.s28)
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        forgotButton
-                        Spacer(minLength: Letterpress.Space.s10)
-                        modeButton
-                    }
-                    VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
-                        forgotButton
-                        modeButton
-                    }
+                if let confirmationEmail {
+                    confirmationContents(email: confirmationEmail)
+                } else {
+                    signInContents
                 }
-                .padding(.top, Letterpress.Space.s18)
             }
             .padding(.horizontal, Letterpress.Space.s22)
             .padding(.bottom, Letterpress.Space.s28)
@@ -123,6 +120,64 @@ struct AuthenticationView: View {
         .onChange(of: showingPassword) { focus = .password }
         .sensoryFeedback(.error, trigger: failure) { _, new in new != nil }
         .announcing(failure)
+    }
+
+    private var signInContents: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(AuthForm.intro)
+                .font(Letterpress.ui(15, relativeTo: .body))
+                .foregroundStyle(Letterpress.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Letterpress.Space.s14)
+            fields
+                .padding(.top, Letterpress.Space.s28)
+            actions
+                .padding(.top, Letterpress.Space.s28)
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    forgotButton
+                    Spacer(minLength: Letterpress.Space.s10)
+                    modeButton
+                }
+                VStack(alignment: .leading, spacing: Letterpress.Space.s4) {
+                    forgotButton
+                    modeButton
+                }
+            }
+            .padding(.top, Letterpress.Space.s18)
+        }
+    }
+
+    private func confirmationContents(email: String) -> some View {
+        VStack(alignment: .leading, spacing: Letterpress.Space.s18) {
+            Text(AuthForm.confirmationMessage(email: email))
+                .font(Letterpress.ui(16))
+                .foregroundStyle(Letterpress.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("authConfirmationMessage")
+            LetterpressRule(weight: .major)
+            Button(isLoading ? "Sending…" : "Resend confirmation email", action: resendConfirmation)
+                .buttonStyle(.letterpress(.outlined, fullWidth: true))
+                .disabled(isLoading)
+                .accessibilityIdentifier("authResendConfirmation")
+            Button("Back to sign in") {
+                confirmationEmail = nil
+                clearForm()
+                focus = .password
+            }
+            .buttonStyle(.letterpress(.filled, fullWidth: true))
+            .disabled(isLoading)
+            .accessibilityIdentifier("authBackToSignIn")
+            if let failure {
+                Text(failure).font(Letterpress.ui(15)).foregroundStyle(Letterpress.error)
+                    .accessibilityIdentifier("authError")
+            }
+            if !information.isEmpty {
+                Text(information).font(Letterpress.ui(15)).foregroundStyle(Letterpress.ink)
+                    .accessibilityIdentifier("authInformation")
+            }
+        }
+        .padding(.top, Letterpress.Space.s22)
     }
 
     private var fields: some View {
@@ -245,18 +300,17 @@ struct AuthenticationView: View {
     private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func registerUser() {
+        let submittedEmail = trimmedEmail
         isLoading = true
         failure = nil
         information = ""
         Task { @MainActor in
             defer { isLoading = false }
             do {
-                let hasSession = try await supabaseService.signUp(email: trimmedEmail, password: password,
+                let hasSession = try await supabaseService.signUp(email: submittedEmail, password: password,
                                                                   name: name.trimmingCharacters(in: .whitespacesAndNewlines))
                 if !hasSession {
-                    information = AuthForm.confirmationSent
-                    isRegistering = false
-                    password = ""
+                    showConfirmation(email: submittedEmail)
                 }
             } catch {
                 failure = AuthForm.failureMessage(for: error, during: .register)
@@ -265,13 +319,39 @@ struct AuthenticationView: View {
     }
 
     private func loginUser() {
+        let submittedEmail = trimmedEmail
         isLoading = true
         failure = nil
         information = ""
         Task { @MainActor in
             defer { isLoading = false }
-            do { try await supabaseService.signIn(email: trimmedEmail, password: password) }
-            catch { failure = AuthForm.failureMessage(for: error, during: .signIn) }
+            do { try await supabaseService.signIn(email: submittedEmail, password: password) }
+            catch {
+                if AuthForm.needsEmailConfirmation(error) { showConfirmation(email: submittedEmail) }
+                else { failure = AuthForm.failureMessage(for: error, during: .signIn) }
+            }
+        }
+    }
+
+    private func showConfirmation(email: String) {
+        self.email = email
+        confirmationEmail = email
+        isRegistering = false
+        focus = nil
+        clearForm()
+    }
+
+    private func resendConfirmation() {
+        guard !isLoading, let confirmationEmail else { return }
+        isLoading = true
+        failure = nil
+        information = ""
+        Task { @MainActor in
+            defer { isLoading = false }
+            do {
+                try await supabaseService.resendConfirmation(email: confirmationEmail)
+                information = AuthForm.confirmationResent
+            } catch { failure = AuthForm.failureMessage(for: error, during: .confirmation) }
         }
     }
 
