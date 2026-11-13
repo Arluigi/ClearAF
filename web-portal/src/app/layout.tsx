@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/lib/auth";
+import PortalAuthBoundary from "@/components/layout/PortalAuthBoundary";
 
 const newsreader = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], axes: ['opsz'], display: 'swap', variable: "--font-newsreader" });
 const plexSans = IBM_Plex_Sans({ subsets: ["latin"], display: 'swap', variable: "--font-plex-sans" });
@@ -26,9 +26,9 @@ export default function RootLayout({
       <body
         className="antialiased min-h-screen bg-canvas text-ink"
       >
-        <AuthProvider>
+        <PortalAuthBoundary>
           {children}
-        </AuthProvider>
+        </PortalAuthBoundary>
       </body>
     </html>
   );

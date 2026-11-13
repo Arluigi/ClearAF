@@ -96,6 +96,18 @@ test('empty redirect falls back to site_url', () => {
   const [email] = buildAuthEmails(p, env.SUPABASE_URL);
   assert.equal(new URL(email.link!).searchParams.get('redirect_to'), p.email_data.site_url);
 });
+test('signup confirmation honours each app web landing redirect while recovery keeps its deep link', () => {
+  for (const redirect of ['http://localhost:3000/confirmed', 'https://unzit-portal.vercel.app/confirmed']) {
+    const p = payload('signup'); p.email_data.redirect_to = redirect;
+    const [email] = buildAuthEmails(p, env.SUPABASE_URL);
+    const link = new URL(email.link!);
+    assert.equal(link.searchParams.get('redirect_to'), redirect);
+    assert.equal(link.searchParams.get('type'), 'signup');
+    assert.match(email.text, /Confirm your email address/);
+  }
+  const recovery = payload('recovery'); recovery.email_data.redirect_to = 'clearaf://auth';
+  assert.equal(new URL(buildAuthEmails(recovery, env.SUPABASE_URL)[0].link!).searchParams.get('redirect_to'), 'clearaf://auth');
+});
 test('secure email change sends separate messages with reversed Supabase hash mapping', () => {
   const p = payload('email_change');
   Object.assign(p.email_data, { token_hash_new: 'current-hash', token_new: '654321' });

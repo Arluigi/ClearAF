@@ -106,7 +106,7 @@ final class SupabaseService: ObservableObject {
         try await prepareSignIn()
         recoveryPending = false
         let response = try await client.auth.signUp(email: email, password: password,
-            data: Self.registrationMetadata(name: name, skinType: skinType), redirectTo: Self.callbackURL)
+            data: Self.registrationMetadata(name: name, skinType: skinType), redirectTo: AppEnvironment.emailConfirmationURL)
         return response.session != nil
     }
     @MainActor func signIn(email: String, password: String) async throws {

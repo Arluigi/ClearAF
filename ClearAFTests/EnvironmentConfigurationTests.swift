@@ -3,6 +3,20 @@ import Testing
 @testable import ClearAF
 
 struct EnvironmentConfigurationTests {
+    @Test func signupConfirmationRedirectIsAWebPageAndRecoveryKeepsItsDeepLink() throws {
+        #expect(AppEnvironment.emailConfirmationURL(debug: true).absoluteString == "http://localhost:3000/confirmed")
+        #expect(AppEnvironment.emailConfirmationURL(debug: false).absoluteString == "https://unzit-portal.vercel.app/confirmed")
+        #expect(SupabaseService.callbackURL.absoluteString == "clearaf://auth")
+#if DEBUG
+        #expect(AppEnvironment.emailConfirmationURL == AppEnvironment.emailConfirmationURL(debug: true))
+#else
+        #expect(AppEnvironment.emailConfirmationURL == AppEnvironment.emailConfirmationURL(debug: false))
+#endif
+        let source = try String(contentsOf: LetterpressSweepTests.repoRoot.appendingPathComponent("ClearAF/Services/SupabaseService.swift"), encoding: .utf8)
+        #expect(source.contains("redirectTo: AppEnvironment.emailConfirmationURL"))
+        #expect(source.contains("resetPasswordForEmail(email, redirectTo: Self.callbackURL)"))
+    }
+
     @Test func environmentUsesIsolatedEndpoints() {
 #if DEBUG
         #expect(SupabaseConfig.url == "http://127.0.0.1:54321")

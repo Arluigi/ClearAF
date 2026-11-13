@@ -30,6 +30,16 @@ enum AppEnvironment {
     }()
     static let apiURL = selected.api
     static let supabaseURL = selected.supabase
+    static func emailConfirmationURL(debug: Bool) -> URL {
+        URL(string: debug ? "http://localhost:3000/confirmed" : "https://unzit-portal.vercel.app/confirmed")!
+    }
+    static let emailConfirmationURL: URL = {
+#if DEBUG
+        emailConfirmationURL(debug: true)
+#else
+        emailConfirmationURL(debug: false)
+#endif
+    }()
 }
 
 enum SupabaseConfig {
