@@ -90,7 +90,7 @@ test('main never logs raw errors or environment data',async()=>{
  assert.equal(code,1);assert.ok(!output.join('').includes('provider-private'));assert.ok(!output.join('').includes('synthetic-password'));assert.ok(!output.join('').includes('sk_test_synthetic'));
 });
 
-function failedAuthFixture({lostCreate=false,stripeFailure=false,recoveryFailure=false}={}) {
+function failedAuthFixture({lostCreate=false,stripeFailure=false,recoveryFailure=false,nativeNameArrays=false}={}) {
  let storedEmail='',runId='',created=false,profile=false,allowlisted=false;
  const queries:any[]=[],output:string[]=[];
  const db={on:()=>{},connect:async()=>{},end:async()=>{},query:async(sql:string,values:any[]=[])=>{
@@ -98,7 +98,11 @@ function failedAuthFixture({lostCreate=false,stripeFailure=false,recoveryFailure
   if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:true}]};
   if(sql.includes('AS "clinicianCount"'))return {rows:[{clinicianCount:1,allowlistCount:allowlisted?4:3}]};
   if(sql.includes('c.relname AS "table"'))return {rows:columns};
-  if(sql.includes('AS "childColumns"'))return {rows:foreignKeys};
+  if(sql.includes('AS "childColumns"'))return {rows:nativeNameArrays?foreignKeys.map(f=>{
+   // pg supports text[] but deliberately leaves catalog name[] unparsed.
+   const type=sql.includes('a.attname::text')?1009:1003,parse=require('pg').types.getTypeParser(type);
+   return {...f,childColumns:parse('{'+f.childColumns.join(',')+'}'),parentColumns:parse('{'+f.parentColumns.join(',')+'}')};
+  }):foreignKeys};
   if(sql.includes('pg_trigger'))return {rows:[{count:0}]};
   if(sql.includes('AS present'))return {rows:[{present:false}]};
   if(sql.startsWith('INSERT INTO public.launch_allowlist')){storedEmail=values[0];allowlisted=true;return {rows:[],rowCount:1}}
@@ -122,6 +126,10 @@ test('finally cleanup recovers exact Auth identity after lost create response an
  assert.deepEqual(result.final,result.baseline);assert.equal(f.created(),false);assert.equal(f.allowlisted(),false);
  assert.ok(f.queries.some(q=>q.sql.includes("raw_user_meta_data->>'hosted_smoke'=$2")&&q.values[1]===f.runId()));
  const set=f.queries.findIndex(q=>q.sql.includes('SET LOCAL'));const allow=f.queries.findIndex(q=>q.sql.startsWith('INSERT INTO public.launch_allowlist'));assert.ok(set<allow);
+});
+test('Postgres catalog FK name arrays are cast to the text arrays pg actually parses',async()=>{
+ const f=failedAuthFixture({nativeNameArrays:true});const result=await smoke.runHosted(['--project-ref',ref],env,f.deps);
+ assert.equal(result.steps.allowlist,'pass');assert.equal(result.steps.auth,'fail');assert.equal(result.cleanup.authUsersRemoved,1);assert.deepEqual(result.final,result.baseline);
 });
 test('Stripe failure still attempts storage and allowlist, retains membership correlation and reports cleanup failure',async()=>{
  const f=failedAuthFixture({stripeFailure:true});const result=await smoke.runHosted(['--project-ref',ref],env,f.deps);
